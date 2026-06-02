@@ -1,0 +1,308 @@
+{
+  "entities": {
+    "ImportItem": {
+      "title": "ImportItem",
+      "description": "Hàng nhập từ Đồng Tháp / TP HCM",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "mẫu": { "type": "string" },
+        "sốLượng": { "type": "integer" },
+        "đơnGiáMay": { "type": "number" },
+        "vậnChuyểnĐT_TP": { "type": "number" },
+        "vậnChuyểnTP_ĐT": { "type": "number" },
+        "ngày": { "type": "string" },
+        "weekKey": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "mẫu", "sốLượng", "đơnGiáMay"]
+    },
+    "TpDtShippingItem": {
+      "title": "TpDtShippingItem",
+      "description": "Bản ghi ship hàng giữa hai vùng",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ngày": { "type": "string" },
+        "nộiDung": { "type": "string" },
+        "sốTiền": { "type": "number" },
+        "weekKey": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "ngày", "nộiDung", "sốTiền"]
+    },
+    "LaborPayment": {
+      "title": "LaborPayment",
+      "description": "Chi lương / tạm ứng cho thợ may",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "weekKey": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "amount", "date"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Khách sỉ của Xưởng May An",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "initialDebt": { "type": "number" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "name"]
+    },
+    "BillItem": {
+      "title": "BillItem",
+      "description": "Chi tiết mặt hàng trong hóa đơn",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "mẫuMã": { "type": "string" },
+        "sốLượng": { "type": "integer" },
+        "đơnGiá": { "type": "number" },
+        "thànhTiền": { "type": "number" }
+      },
+      "required": ["id", "mẫuMã", "sốLượng", "đơnGiá", "thànhTiền"]
+    },
+    "Bill": {
+      "title": "Bill",
+      "description": "Hoá đơn bán hàng sỉ",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "billNumber": { "type": "string" },
+        "date": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "paymentAmount": { "type": "number" },
+        "previousDebt": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "customerId", "billNumber", "date", "subtotal", "grandTotal"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Lịch sử thu nợ của khách sỉ",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "customerId", "amount", "date"]
+    },
+    "ModelOperationBreakdown": {
+      "title": "ModelOperationBreakdown",
+      "description": "Cơ cấu công đoạn may định mức",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "modelName": { "type": "string" },
+        "operations": { "type": "array" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "modelName", "operations"]
+    },
+    "Worker": {
+      "title": "Worker",
+      "description": "Hồ sơ thợ may xưởng",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "integer" },
+        "taskIds": { "type": "array" }
+      },
+      "required": ["id", "name"]
+    },
+    "WorkerJob": {
+      "title": "WorkerJob",
+      "description": "Nhật ký làm việc / công thợ chi tiết",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "workerName": { "type": "string" },
+        "modelName": { "type": "string" },
+        "quantity": { "type": "integer" },
+        "selectedOperationIds": { "type": "array" },
+        "unitPrice": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "date": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "workerId", "modelName", "quantity", "totalAmount"]
+    },
+    "RawMaterial": {
+      "title": "RawMaterial",
+      "description": "Nguyên vật liệu kho vải thun sỉ",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "unit": { "type": "string" },
+        "currentStock": { "type": "number" },
+        "minAlertLevel": { "type": "number" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "name", "unit", "currentStock"]
+    },
+    "ModelMaterialRecipe": {
+      "title": "ModelMaterialRecipe",
+      "description": "Bảng định mức hao hụt mẫu thiết kế",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "modelName": { "type": "string" },
+        "items": { "type": "array" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "modelName", "items"]
+    },
+    "ProductionBatch": {
+      "title": "ProductionBatch",
+      "description": "Lịch sử đợt chạy sản xuất vải mộc",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "modelName": { "type": "string" },
+        "targetQuantity": { "type": "integer" },
+        "date": { "type": "string" },
+        "materialsUsed": { "type": "array" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "modelName", "targetQuantity", "date"]
+    },
+    "MaterialReimport": {
+      "title": "MaterialReimport",
+      "description": "Lịch sử nhập kho nguyên liệu vải cuộn",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "materialId": { "type": "string" },
+        "materialName": { "type": "string" },
+        "quantityAdded": { "type": "number" },
+        "date": { "type": "string" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "materialId", "quantityAdded", "date"]
+    },
+    "LoginNotification": {
+      "title": "LoginNotification",
+      "description": "Nhật ký đăng nhập và đồng bộ",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "time": { "type": "string" },
+        "ip": { "type": "string" },
+        "location": { "type": "string" },
+        "device": { "type": "string" },
+        "isRead": { "type": "boolean" }
+      },
+      "required": ["id", "time", "ip", "location", "device", "isRead"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Cấu hình giao diện",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string" },
+        "currencySymbol": { "type": "string" },
+        "exportFormat": { "type": "string" },
+        "primaryColor": { "type": "string" }
+      },
+      "required": ["theme", "currencySymbol", "exportFormat"]
+    },
+    "TaskType": {
+      "title": "TaskType",
+      "description": "Danh mục công việc / công đoạn may mẫu",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "name", "createdAt"]
+    }
+  },
+  "firestore": {
+    "import_items/{id}": {
+      "schema": "ImportItem",
+      "description": "Sổ nhật ký đơn hàng nhập sỉ"
+    },
+    "tp_dt_shippings/{id}": {
+      "schema": "TpDtShippingItem",
+      "description": "Cược phí vận chuyển Đồng Tháp - Sài Gòn"
+    },
+    "labor_payments/{id}": {
+      "schema": "LaborPayment",
+      "description": "Chi lương / tạm ứng cho thợ"
+    },
+    "customers/{id}": {
+      "schema": "Customer",
+      "description": "Hồ sơ công nợ khách sỉ"
+    },
+    "bills/{id}": {
+      "schema": "Bill",
+      "description": "Hoá đơn lập bán cho khách"
+    },
+    "payments/{id}": {
+      "schema": "PaymentRecord",
+      "description": "Báo cáo thu nợ khách sỉ hàng ngày"
+    },
+    "operation_breakdowns/{id}": {
+      "schema": "ModelOperationBreakdown",
+      "description": "Hồ sơ định mức mẫu và công đoạn tương ứng"
+    },
+    "workers/{id}": {
+      "schema": "Worker",
+      "description": "Danh sách thợ may xưởng"
+    },
+    "worker_jobs/{id}": {
+      "schema": "WorkerJob",
+      "description": "Nhật ký công thợ giao việc hàng ngày"
+    },
+    "raw_materials/{id}": {
+      "schema": "RawMaterial",
+      "description": "Vật tư kho nguyên liệu thô"
+    },
+    "material_recipes/{id}": {
+      "schema": "ModelMaterialRecipe",
+      "description": "Định mức nguyên vật liệu tiêu hao trên đơn vị thành phẩm"
+    },
+    "production_batches/{id}": {
+      "schema": "ProductionBatch",
+      "description": "Lô sản xuất mộc hao phí"
+    },
+    "material_reimports/{id}": {
+      "schema": "MaterialReimport",
+      "description": "Đơn nhập nguyên vật liệu kho thô"
+    },
+    "login_notifications/{id}": {
+      "schema": "LoginNotification",
+      "description": "Nhật ký truy cập hệ thống bảo mật"
+    },
+    "settings/{id}": {
+      "schema": "AppSettings",
+      "description": "Cài đặt tổng quan"
+    },
+    "tasks/{id}": {
+      "schema": "TaskType",
+      "description": "Danh mục công việc"
+    }
+  }
+}
