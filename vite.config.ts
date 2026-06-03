@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
   return {
-    base: process.env.GITHUB_ACTIONS ? '/App-kho-hang/' : './',
+    base: './',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
