@@ -38,6 +38,11 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    // Input Sanitization specifically for email-based IDs to support dots, @, + symbols
+    function isValidEmailId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\+\\.@]+$');
+    }
+
     // --- COLLECTION PROTECTION ---
 
     match /import_items/{id} {
@@ -106,7 +111,7 @@ service cloud.firestore {
 
     match /user_profiles/{id} {
       allow read: if isAdmin() || (isSignedIn() && (id == request.auth.token.email || id == request.auth.token.email.lower()));
-      allow write: if isAdmin() && isValidId(id);
+      allow write: if isAdmin() && isValidEmailId(id);
     }
   }
 }

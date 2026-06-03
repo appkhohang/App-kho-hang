@@ -237,6 +237,21 @@
         "createdAt": { "type": "integer" }
       },
       "required": ["id", "name", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Hồ sơ phân quyền thành viên hệ thống",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "integer" },
+        "active": { "type": "boolean" },
+        "allowedTabs": { "type": "array" }
+      },
+      "required": ["id", "email", "role", "createdAt", "active"]
     }
   },
   "firestore": {
@@ -303,6 +318,10 @@
     "tasks/{id}": {
       "schema": "TaskType",
       "description": "Danh mục công việc"
+    },
+    "user_profiles/{id}": {
+      "schema": "UserProfile",
+      "description": "Danh sách tài khoản phụ và phân quyền thành viên"
     }
   }
 }
