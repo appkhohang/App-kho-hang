@@ -915,15 +915,21 @@ export default function App() {
           
           {/* Card 1: Nhập hàng */}
           {allowedTabs.includes('import') && (
-            <div 
+            <motion.div 
               id="home_card_nhap_hang"
               onClick={() => setActiveTab('import')}
-              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-slate-800 transition-all duration-200 cursor-pointer flex flex-col justify-between h-[170px] hover:scale-[1.01] hover:shadow-lg active:scale-[0.99]"
+              whileHover={{ 
+                scale: 1.015,
+                y: -5,
+                boxShadow: "0 20px 25px -5px rgba(16, 185, 129, 0.12), 0 8px 10px -6px rgba(16, 185, 129, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-[#10b981]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px]"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
                   <div className="w-11 h-11 rounded-2xl bg-[#10b981] text-white flex items-center justify-center shrink-0 shadow-md">
-                    <svg className="w-5 .5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                       <polyline points="7 10 12 15 17 10" />
                       <line x1="12" y1="15" x2="12" y2="3" />
@@ -934,11 +940,11 @@ export default function App() {
                     <p className="text-[9.5px] md:text-[10.5px] text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Quản lý nhập hàng và nhà cung cấp</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1" />
+                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
-              <p className="text-[9px] text-slate-450 leading-tight truncate sm:hidden -mt-1.5">
+              <p className="text-[9px] text-slate-455 leading-tight truncate sm:hidden -mt-1.5">
                 Quản lý nhập hàng và nhà cung cấp
               </p>
 
@@ -949,19 +955,28 @@ export default function App() {
                   <p className="text-2xl md:text-3xl font-black text-white font-mono leading-none">{currentMonthImportCount}</p>
                   <p className="text-[9.5px] md:text-[10.5px] font-bold text-[#10b981] mt-1.5 font-sans whitespace-nowrap">Đơn nhập tháng này</p>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-[#10b981]/15 text-[#10b981] flex items-center justify-center shrink-0 border border-[#10b981]/10">
-                  <ShoppingCart className="w-4 h-4" />
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/10 text-[#10b981] rounded-xl border border-[#10b981]/25 transition-all duration-300 group-hover:bg-[#10b981]/20 group-hover:border-[#10b981]/40 group-hover:shadow-[0_4px_12px_rgba(16,185,129,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                  <span className="hidden sm:inline">Xem chi tiết</span>
+                  <ShoppingCart className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Card 2: Hóa đơn */}
           {allowedTabs.includes('invoices') && (
-            <div 
+            <motion.div 
               id="home_card_hoa_don"
               onClick={() => setActiveTab('invoices')}
-              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-slate-800 transition-all duration-200 cursor-pointer flex flex-col justify-between h-[170px] hover:scale-[1.01] hover:shadow-lg active:scale-[0.99]"
+              whileHover={{ 
+                scale: 1.015,
+                y: -5,
+                boxShadow: "0 20px 25px -5px rgba(59, 130, 246, 0.12), 0 8px 10px -6px rgba(59, 130, 246, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-[#3b82f6]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px]"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
@@ -978,7 +993,7 @@ export default function App() {
                     <p className="text-[9.5px] md:text-[10.5px] text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Quản lý hóa đơn bán hàng</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1" />
+                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
@@ -993,19 +1008,28 @@ export default function App() {
                   <p className="text-2xl md:text-3xl font-black text-white font-mono leading-none">{currentMonthBillCount}</p>
                   <p className="text-[9.5px] md:text-[10.5px] font-bold text-[#3b82f6] mt-1.5 font-sans whitespace-nowrap">Hóa đơn tháng này</p>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-[#3b82f6]/15 text-[#3b82f6] flex items-center justify-center shrink-0 border border-[#3b82f6]/10">
-                  <FileText className="w-4 h-4" />
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6]/10 text-[#3b82f6] rounded-xl border border-[#3b82f6]/25 transition-all duration-300 group-hover:bg-[#3b82f6]/20 group-hover:border-[#3b82f6]/40 group-hover:shadow-[0_4px_12px_rgba(59,130,246,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                  <span className="hidden sm:inline">Xem chi tiết</span>
+                  <FileText className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Card 3: Doanh thu */}
           {allowedTabs.includes('report') && (
-            <div 
+            <motion.div 
               id="home_card_doanh_thu"
               onClick={() => setActiveTab('report')}
-              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-slate-800 transition-all duration-200 cursor-pointer flex flex-col justify-between h-[170px] hover:scale-[1.01] hover:shadow-lg active:scale-[0.99]"
+              whileHover={{ 
+                scale: 1.015,
+                y: -5,
+                boxShadow: "0 20px 25px -5px rgba(234, 179, 8, 0.12), 0 8px 10px -6px rgba(234, 179, 8, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-[#eab308]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px]"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
@@ -1021,7 +1045,7 @@ export default function App() {
                     <p className="text-[9.5px] md:text-[10.5px] text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Thống kê doanh thu và lợi nhuận</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1" />
+                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
@@ -1036,19 +1060,28 @@ export default function App() {
                   <p className="text-2xl md:text-3xl font-black text-white font-mono leading-none">{totalRevenueFormatted}</p>
                   <p className="text-[9.5px] md:text-[10.5px] font-bold text-[#eab308] mt-1.5 font-sans whitespace-nowrap">Doanh thu tháng này</p>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-[#eab308]/15 text-[#eab308] flex items-center justify-center shrink-0 border border-[#eab308]/10">
-                  <DollarSign className="w-4 h-4" />
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#eab308]/10 text-[#eab308] rounded-xl border border-[#eab308]/25 transition-all duration-300 group-hover:bg-[#eab308]/20 group-hover:border-[#eab308]/40 group-hover:shadow-[0_4px_12px_rgba(234,179,8,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                  <span className="hidden sm:inline">Xem chi tiết</span>
+                  <DollarSign className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Card 4: Quản lý sản xuất */}
           {allowedTabs.includes('production') && (
-            <div 
+            <motion.div 
               id="home_card_san_xuat"
               onClick={() => setActiveTab('production')}
-              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-slate-800 transition-all duration-200 cursor-pointer flex flex-col justify-between h-[170px] hover:scale-[1.01] hover:shadow-lg active:scale-[0.99]"
+              whileHover={{ 
+                scale: 1.015,
+                y: -5,
+                boxShadow: "0 20px 25px -5px rgba(168, 85, 247, 0.12), 0 8px 10px -6px rgba(168, 85, 247, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-[#a855f7]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px]"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
@@ -1065,7 +1098,7 @@ export default function App() {
                     <p className="text-[9.5px] md:text-[10.5px] text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Theo dõi sản xuất và đơn hàng</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1" />
+                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
@@ -1080,14 +1113,16 @@ export default function App() {
                   <p className="text-2xl md:text-3xl font-black text-white font-mono leading-none">{runningBatchesCount}</p>
                   <p className="text-[9.5px] md:text-[10.5px] font-bold text-[#a855f7] mt-1.5 font-sans whitespace-nowrap">Lô sản xuất chạy</p>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-[#a855f7]/15 text-[#a855f7] flex items-center justify-center shrink-0 border border-[#a855f7]/10">
-                  <Calendar className="w-4 h-4" />
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#a855f7]/10 text-[#a855f7] rounded-xl border border-[#a855f7]/25 transition-all duration-300 group-hover:bg-[#a855f7]/20 group-hover:border-[#a855f7]/40 group-hover:shadow-[0_4px_12px_rgba(168, 85, 247, 0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                  <span className="hidden sm:inline">Xem chi tiết</span>
+                  <Calendar className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
-
       </div>
     );
   };
@@ -1377,92 +1412,7 @@ export default function App() {
                   </AnimatePresence>
                 </div>
                 
-                {/* 1. Notifications bell & logs dropdown */}
-                <div className="relative">
-                  <button
-                    id="trigger_notif_dropdown_btn"
-                    onClick={() => {
-                      setShowNotificationsDropdown(!showNotificationsDropdown);
-                      markAllNotificationsAsRead();
-                    }}
-                    className="p-2 bg-white hover:bg-slate-50 dark:bg-black dark:hover:bg-zinc-900 text-slate-600 dark:text-slate-350 rounded-lg transition relative cursor-pointer border border-slate-200 dark:border-slate-800"
-                  >
-                    <Bell className="w-4 h-4" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[8.5px] text-white flex items-center justify-center font-bold font-mono">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Dropdown panel */}
-                  <AnimatePresence>
-                    {showNotificationsDropdown && (
-                      <div className="absolute right-[-12px] sm:right-0 mt-2.5 w-[288px] sm:w-[340px] max-w-[calc(100vw-32px)] bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3 sm:p-4 overflow-hidden z-50">
-                        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2 mb-2">
-                          <span className="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">Nhật ký hoạt động</span>
-                          <button
-                            onClick={() => setShowNotificationsDropdown(false)}
-                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-850 rounded-lg transition"
-                          >
-                            <X className="w-3.5 h-3.5 text-slate-400" />
-                          </button>
-                        </div>
-
-                        <div className="space-y-1.5 max-h-[260px] overflow-y-auto pr-0.5 scrollbar-thin">
-                          {authState.loginNotifications.length === 0 ? (
-                            <p className="text-center py-6 text-xs text-slate-400 italic">Lịch sử trống.</p>
-                          ) : (
-                            authState.loginNotifications.map(notif => (
-                              <div
-                                key={notif.id}
-                                className="p-2 bg-slate-50/70 dark:bg-slate-900/40 hover:bg-slate-50 dark:hover:bg-slate-900/65 border border-slate-150 dark:border-slate-805/80 rounded-xl relative group text-[11px] transition-colors"
-                              >
-                                <div className="flex items-center justify-between gap-1">
-                                  <div className="flex items-center gap-1 text-[9px] text-slate-400 dark:text-slate-500 font-mono">
-                                    {notif.device.includes("Hệ thống tự động") ? (
-                                      <RefreshCw className="w-2.5 h-2.5 text-emerald-500 animate-spin-slow shrink-0" />
-                                    ) : (
-                                      <Shield className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
-                                    )}
-                                    <span>{notif.time}</span>
-                                  </div>
-                                  <button
-                                    onClick={() => deleteNotification(notif.id)}
-                                    className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-red-500 rounded-md transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                                    title="Xoá nhật ký này"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </div>
-                                
-                                <p className="font-bold text-slate-800 dark:text-slate-200 mt-1 leading-tight">
-                                  {notif.device.includes("Hệ thống tự động") ? "🔄 Tự động đồng bộ giờ" : "🔐 Đăng nhập hệ thống"}
-                                </p>
-
-                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                                  <span className="flex items-center gap-0.5">
-                                    <span className="text-emerald-500 text-[8px]">●</span> <span className="font-semibold text-emerald-600 dark:text-emerald-400">{notif.ip}</span>
-                                  </span>
-                                  {notif.location && (
-                                    <span className="opacity-60 font-medium">
-                                      📍 {notif.location}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1 bg-slate-100/50 dark:bg-zinc-950 p-1 rounded-md border border-slate-250/30 dark:border-slate-800/50">
-                                  <span className="opacity-70 shrink-0">📱 DEVICE:</span>
-                                  <span className="truncate max-w-[150px] sm:max-w-[200px]" title={notif.device}>{notif.device}</span>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                {/* Active user details and logout option */}
 
                 {/* 2. Active User badge / Identity details */}
                 <div className="flex items-center gap-2 border-l border-slate-150 dark:border-slate-800 pl-2.5">
