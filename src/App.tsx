@@ -169,6 +169,99 @@ export default function App() {
     };
   }, [authState.email, authState.isAuthenticated]);
 
+  // Automatically pull database from cloud upon successful authentication / session restore
+  useEffect(() => {
+    let active = true;
+    const triggerAutoPull = async () => {
+      if (!authState.isAuthenticated || !authState.email) return;
+      
+      try {
+        setSyncStatus('syncing');
+        const cloudData = await downloadAllFromCloud();
+        if (!active) return;
+        
+        if (cloudData) {
+          if (cloudData.importItems && cloudData.importItems.length > 0) {
+            setItems(cloudData.importItems);
+            saveState("xuongan_import_items", cloudData.importItems);
+          }
+          if (cloudData.laborPayments && cloudData.laborPayments.length > 0) {
+            setLaborPayments(cloudData.laborPayments);
+            saveState("xuongan_labor_payments", cloudData.laborPayments);
+          }
+          if (cloudData.tpDtShippings && cloudData.tpDtShippings.length > 0) {
+            setTpDtShippings(cloudData.tpDtShippings);
+            saveState("xuongan_tp_dt_shippings", cloudData.tpDtShippings);
+          }
+          if (cloudData.customers && cloudData.customers.length > 0) {
+            setCustomers(cloudData.customers);
+            saveState("xuongan_customers", cloudData.customers);
+          }
+          if (cloudData.bills && cloudData.bills.length > 0) {
+            setBills(cloudData.bills);
+            saveState("xuongan_bills", cloudData.bills);
+          }
+          if (cloudData.payments && cloudData.payments.length > 0) {
+            setPayments(cloudData.payments);
+            saveState("xuongan_payments", cloudData.payments);
+          }
+          if (cloudData.operationBreakdowns && cloudData.operationBreakdowns.length > 0) {
+            setOperationBreakdowns(cloudData.operationBreakdowns);
+            saveState("xuongan_operation_breakdowns", cloudData.operationBreakdowns);
+          }
+          if (cloudData.workers && cloudData.workers.length > 0) {
+            setWorkers(cloudData.workers);
+            saveState("xuongan_workers", cloudData.workers);
+          }
+          if (cloudData.workerJobs && cloudData.workerJobs.length > 0) {
+            setWorkerJobs(cloudData.workerJobs);
+            saveState("xuongan_worker_jobs", cloudData.workerJobs);
+          }
+          if (cloudData.rawMaterials && cloudData.rawMaterials.length > 0) {
+            setRawMaterials(cloudData.rawMaterials);
+            saveState("xuongan_raw_materials", cloudData.rawMaterials);
+          }
+          if (cloudData.materialRecipes && cloudData.materialRecipes.length > 0) {
+            setMaterialRecipes(cloudData.materialRecipes);
+            saveState("xuongan_material_recipes", cloudData.materialRecipes);
+          }
+          if (cloudData.productionBatches && cloudData.productionBatches.length > 0) {
+            setProductionBatches(cloudData.productionBatches);
+            saveState("xuongan_production_batches", cloudData.productionBatches);
+          }
+          if (cloudData.materialReimports && cloudData.materialReimports.length > 0) {
+            setMaterialReimports(cloudData.materialReimports);
+            saveState("xuongan_material_reimports", cloudData.materialReimports);
+          }
+          if (cloudData.tasks && cloudData.tasks.length > 0) {
+            setTasks(cloudData.tasks);
+            saveState("xuongan_tasks", cloudData.tasks);
+          }
+          if (cloudData.userProfiles && cloudData.userProfiles.length > 0) {
+            setUserProfiles(cloudData.userProfiles);
+            saveState("xuongan_user_profiles", cloudData.userProfiles);
+          }
+          if (cloudData.settings) {
+            setSettings(cloudData.settings as any);
+            saveState("xuongan_settings", cloudData.settings);
+          }
+          setSyncStatus('success');
+          console.log("Auto-synchronized database from Cloud Firestore successfully");
+        } else {
+          setSyncStatus('idle');
+        }
+      } catch (err) {
+        console.warn("Failed to auto-pull database from Cloud", err);
+        setSyncStatus('error');
+      }
+    };
+
+    triggerAutoPull();
+    return () => {
+      active = false;
+    };
+  }, [authState.email, authState.isAuthenticated]);
+
   // Route protection and dynamic redirection based on page level permissions
   React.useEffect(() => {
     if (authState.isAuthenticated && allowedTabs.length > 0) {

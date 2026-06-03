@@ -501,9 +501,9 @@ export default function SettingsTab({
             <button
               type="button"
               onClick={handleCloudPull}
-              disabled={syncStatus === 'syncing' || userRole !== 'admin'}
+              disabled={syncStatus === 'syncing'}
               className="py-1.5 px-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border border-slate-200 dark:border-slate-700 active:scale-98"
-              title={userRole !== 'admin' ? "Chỉ Quản trị viên mới được tải dữ liệu" : ""}
+              title="Đồng bộ cập nhật cơ sở dữ liệu từ đám mây"
             >
               <Download className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
               <span>Tải dữ liệu từ đám mây</span>

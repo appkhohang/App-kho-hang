@@ -164,6 +164,7 @@ export async function downloadAllFromCloud() {
   }
   
   try {
+    const isMasterOrAdmin = isUserAdmin();
     const [
       importItems,
       laborPayments,
@@ -197,7 +198,9 @@ export async function downloadAllFromCloud() {
       downloadCollectionFromCloud<MaterialReimport>('material_reimports'),
       downloadCollectionFromCloud<LoginNotification>('login_notifications'),
       downloadCollectionFromCloud<TaskType>('tasks'),
-      downloadCollectionFromCloud<UserProfile>('user_profiles')
+      isMasterOrAdmin
+        ? downloadCollectionFromCloud<UserProfile>('user_profiles')
+        : Promise.resolve([])
     ]);
 
     // Pull settings if exist
