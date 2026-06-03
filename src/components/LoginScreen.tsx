@@ -177,7 +177,11 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
     } catch (err: any) {
       setGoogleLoading(false);
       console.error("Google Auth Error: ", err);
-      setErrorMessage(`Lỗi đăng nhập Google: ${err.message || 'Hủy bỏ phiên hạch toán'}`);
+      if (err.code === 'auth/network-request-failed' || String(err.message).includes('network-request-failed')) {
+        setErrorMessage('⚠️ Lỗi chặn kết nối Google Auth (Iframe Sandbox).\n\nDo cửa sổ xem thử (Iframe) của AI Studio chặn popup/cookie từ bên thứ ba theo chính sách bảo mật trình duyệt, bạn hãy làm một trong hai cách:\n1. Bấm nút "Mở trong tab mới" (ở phía góc cao bên phải màn hình) để thao tác đầy đủ.\n2. Hoặc đăng nhập trực tiếp bằng Email & Mật khẩu phụ của bạn.');
+      } else {
+        setErrorMessage(`Lỗi đăng nhập Google: ${err.message || 'Hủy bỏ phiên hạch toán'}`);
+      }
     }
   };
 

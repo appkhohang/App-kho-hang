@@ -58,21 +58,42 @@ export const COLLECTION_MAP = {
  * or possesses an active "admin" role.
  */
 export function isUserAdmin(): boolean {
-  const email = auth.currentUser?.email?.toLowerCase();
-  if (!email) return false;
-  if (email === 'vukuli.123@gmail.com') return true;
+  let email = auth.currentUser?.email?.toLowerCase();
   
-  try {
-    const rawSaved = localStorage.getItem("xuongan_user_profiles");
-    if (rawSaved) {
-      const savedProfiles = JSON.parse(rawSaved);
-      if (Array.isArray(savedProfiles)) {
-        const found = savedProfiles.find((p: any) => p.email?.toLowerCase() === email && p.active !== false);
-        return found?.role === 'admin';
+  if (!email) {
+    try {
+      const savedAuth = localStorage.getItem("xuongan_auth");
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        if (parsed && parsed.isAuthenticated) {
+          email = parsed.email?.toLowerCase();
+        }
       }
+    } catch (e) {
+      console.warn("isUserAdmin: failed to parse local auth", e);
     }
-  } catch (e) {
-    console.error("isUserAdmin local check error", e);
+  }
+
+  if (!email) return false;
+  
+  // To completely remove dynamic permission restrictions/limits (Bỏ chế độ phân quyền),
+  // all authenticated users are granted full Administrator level privileges.
+  return true;
+}
+
+/**
+ * Checks if the current session is authenticated either inside Firebase Auth or via Saved Local Session fallback.
+ */
+export function isUserAuthenticated(): boolean {
+  if (auth.currentUser) return true;
+  try {
+    const savedAuth = localStorage.getItem("xuongan_auth");
+    if (savedAuth) {
+      const parsed = JSON.parse(savedAuth);
+      return !!(parsed && parsed.isAuthenticated && parsed.email);
+    }
+  } catch {
+    // ignore
   }
   return false;
 }
@@ -81,7 +102,7 @@ export function isUserAdmin(): boolean {
  * Save a single document to the cloud
  */
 export async function saveDocumentToCloud(collectionName: string, id: string, data: any) {
-  if (!auth.currentUser || !isUserAdmin()) return;
+  if (!isUserAdmin()) return;
   try {
     const docRef = doc(db, collectionName, id);
     await setDoc(docRef, {
@@ -97,7 +118,7 @@ export async function saveDocumentToCloud(collectionName: string, id: string, da
  * Delete a single document from the cloud
  */
 export async function deleteDocumentFromCloud(collectionName: string, id: string) {
-  if (!auth.currentUser || !isUserAdmin()) return;
+  if (!isUserAdmin()) return;
   try {
     const docRef = doc(db, collectionName, id);
     await deleteDoc(docRef);
@@ -110,7 +131,7 @@ export async function deleteDocumentFromCloud(collectionName: string, id: string
  * Sync entire local collection to Cloud via batch writes (efficient, up to 500 actions per batch)
  */
 export async function uploadCollectionToCloud(collectionName: string, items: any[]) {
-  if (!auth.currentUser || !isUserAdmin()) return;
+  if (!isUserAdmin()) return;
   try {
     const chunks = [];
     // Firestore batch limit is 500 operations
@@ -139,7 +160,7 @@ export async function uploadCollectionToCloud(collectionName: string, items: any
  * Downloads a complete collection from Cloud
  */
 export async function downloadCollectionFromCloud<T>(collectionName: string): Promise<T[]> {
-  if (!auth.currentUser) return [];
+  if (!isUserAuthenticated()) return [];
   try {
     const querySnapshot = await getDocs(collection(db, collectionName));
     const results: T[] = [];
@@ -159,7 +180,7 @@ export async function downloadCollectionFromCloud<T>(collectionName: string): Pr
  * Pull all data layers from Cloud and compile into a standard sync package
  */
 export async function downloadAllFromCloud() {
-  if (!auth.currentUser) {
+  if (!isUserAuthenticated()) {
     throw new Error("Người dùng chưa được xác thực trên đám mây.");
   }
   
@@ -261,7 +282,7 @@ export async function pushAllLocalStateToCloud(localData: {
   userProfiles: UserProfile[];
   settings: AppSettings;
 }) {
-  if (!auth.currentUser || !isUserAdmin()) {
+  if (!isUserAdmin()) {
     throw new Error("Không có quyền tải lên cấu hình hệ thống hoặc chưa đăng nhập.");
   }
 

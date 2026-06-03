@@ -95,7 +95,8 @@ export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   currencySymbol: string;
   exportFormat: 'xlsx' | 'csv';
-  primaryColor?: 'green' | 'blue' | 'purple' | 'red' | 'orange' | 'cyan';
+  primaryColor?: 'green' | 'blue' | 'purple' | 'red' | 'orange' | 'cyan' | 'pink' | 'amber' | 'indigo' | 'custom';
+  customColorHex?: string;
 }
 
 export interface ProcessOperation {
