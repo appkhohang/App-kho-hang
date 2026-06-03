@@ -7,12 +7,8 @@ import {defineConfig} from 'vite';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
-  const isGithubActions = !!process.env.GITHUB_ACTIONS;
-  const repoName = process.env.GITHUB_REPOSITORY ? `/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : './';
-  const basePath = isGithubActions ? repoName : './';
-
   return {
-    base: basePath,
+    base: './',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
