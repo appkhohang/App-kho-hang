@@ -268,7 +268,7 @@ export default function SettingsTab({
   };
 
   const handleUpdateUserRole = async (email: string, newRole: 'admin' | 'staff' | 'viewer') => {
-    if (email.toLowerCase() === 'vukuli.123@gmail.com') {
+    if (email.toLowerCase() === 'vukuli.123@gmail.com' || email.toLowerCase() === 'vukuli123@gmail.com') {
       alert("⚠️ Không thể thay đổi phân quyền của Quản trị viên tối cao!");
       return;
     }
@@ -289,7 +289,7 @@ export default function SettingsTab({
   };
 
   const handleUpdateUserTabs = async (email: string, nextTabs: string[]) => {
-    if (email.toLowerCase() === 'vukuli.123@gmail.com') {
+    if (email.toLowerCase() === 'vukuli.123@gmail.com' || email.toLowerCase() === 'vukuli123@gmail.com') {
       alert("⚠️ Không thể thay đổi phân quyền của Quản trị viên tối cao!");
       return;
     }
@@ -309,7 +309,7 @@ export default function SettingsTab({
   };
 
   const handleToggleUserActive = async (email: string, currentStatus: boolean) => {
-    if (email.toLowerCase() === 'vukuli.123@gmail.com') {
+    if (email.toLowerCase() === 'vukuli.123@gmail.com' || email.toLowerCase() === 'vukuli123@gmail.com') {
       alert("⚠️ Không thể phong tỏa Quản trị viên tối cao!");
       return;
     }
@@ -330,7 +330,7 @@ export default function SettingsTab({
   };
 
   const handleDeleteUserProfile = async (email: string) => {
-    if (email.toLowerCase() === 'vukuli.123@gmail.com') {
+    if (email.toLowerCase() === 'vukuli.123@gmail.com' || email.toLowerCase() === 'vukuli123@gmail.com') {
       alert("⚠️ Không thể xóa Quản trị viên tối cao!");
       return;
     }
@@ -615,10 +615,10 @@ export default function SettingsTab({
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wider">
-                Quản lý thành viên & Phân quyền xưởng
+                Quản lý thành viên xưởng
               </h3>
               <p className="text-xs text-slate-450 dark:text-slate-400">
-                Cấp tài khoản, chỉ định phân quyền (Admin, Nhân viên, Độc giả) và cấp quyền truy cập các trang.
+                Cấp tài khoản và quản lý thành viên truy cập sổ sách của xưởng (Mọi người dùng đều có toàn quyền hạch toán và quản lý, không phân quyền hạn hạn chế).
               </p>
             </div>
           </div>
@@ -635,174 +635,23 @@ export default function SettingsTab({
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden space-y-5 pt-3 border-t border-slate-150 dark:border-slate-800"
             >
-              {/* Form to create user */}
-              <div className="bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-150 dark:border-slate-800 space-y-4">
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
-                  <UserPlus className="w-4 h-4 text-indigo-500" />
-                  <span>Đăng ký Tài khoản Mới</span>
-                </h4>
-
-                <form onSubmit={handleCreateUser} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-550 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">
-                        Tên hiển thị (Ví dụ: Thợ may A, Nhập liệu)
-                      </label>
-                      <input
-                        type="text"
-                        value={createUserDisplayName}
-                        onChange={(e) => setCreateUserDisplayName(e.target.value)}
-                        placeholder="Nhập tên người dùng"
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg py-2 px-3 text-xs text-slate-800 dark:text-slate-200 outline-none transition"
-                        required={isUsersOpen}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-550 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">
-                        Địa chỉ Email đăng nhập
-                      </label>
-                      <input
-                        type="email"
-                        value={createUserEmail}
-                        onChange={(e) => setCreateUserEmail(e.target.value)}
-                        placeholder="user@example.com"
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg py-2 px-3 text-xs text-slate-800 dark:text-slate-200 outline-none transition"
-                        required={isUsersOpen}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-550 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">
-                        Mật khẩu (tối thiểu 6 ký tự)
-                      </label>
-                      <input
-                        type="password"
-                        value={createUserPassword}
-                        onChange={(e) => setCreateUserPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg py-2 px-3 text-xs text-slate-800 dark:text-slate-200 outline-none transition"
-                        required={isUsersOpen}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Role Dropdown Selector */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-550 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">
-                        Chức danh / Vai trò (Phân quyền)
-                      </label>
-                      <select
-                        value={createUserRole}
-                        onChange={(e) => setCreateUserRole(e.target.value as any)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg py-2 px-3 text-xs text-slate-800 dark:text-slate-200 outline-none transition cursor-pointer"
-                      >
-                        <option value="admin">Quản trị viên (Toàn quyền quản trị/sao lưu)</option>
-                        <option value="staff">Nhân viên hạch toán (Nhập thợ may/sỉ lẻ, không được ghi đè Cloud)</option>
-                        <option value="viewer">Báo cáo & Độc giả (Chỉ xem báo cáo, không được phép sửa dữ liệu)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-550 dark:text-slate-400 uppercase tracking-wider mb-1.5 font-sans">
-                        Cấp quyền truy cập các Trang làm việc
-                      </label>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {['home', 'import', 'invoices', 'production', 'report', 'settings'].map((tab) => {
-                          const isChecked = selectedAllowedTabs.includes(tab);
-                          const labels: Record<string, string> = {
-                            home: 'Trang chủ',
-                            import: 'Nhập hàng',
-                            invoices: 'Công nợ sỉ',
-                            production: 'Sổ Thợ',
-                            report: 'Báo cáo',
-                            settings: 'Cài đặt'
-                          };
-                          return (
-                            <button
-                              type="button"
-                              key={tab}
-                              onClick={() => {
-                                if (isChecked) {
-                                  setSelectedAllowedTabs(prev => prev.filter(t => t !== tab));
-                                } else {
-                                  setSelectedAllowedTabs(prev => [...prev, tab]);
-                                }
-                              }}
-                              className={`px-2 py-1 rounded-md border text-[11px] font-bold flex items-center gap-1 cursor-pointer transition ${isChecked ? 'bg-indigo-50/10 border-indigo-400 text-indigo-650 dark:text-indigo-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-450 hover:bg-slate-50'}`}
-                            >
-                              {isChecked && <Check className="w-3 h-3 text-indigo-500" />}
-                              <span>{labels[tab] || tab}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {createError && (
-                    <div className="p-3 bg-red-50 dark:bg-red-955/20 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-655 dark:text-red-400 font-medium leading-relaxed">
-                      {createError}
-                    </div>
-                  )}
-
-                  {createSuccess && (
-                    <div className="p-3 bg-emerald-50/10 dark:bg-emerald-955/20 border border-emerald-250 dark:border-emerald-990/40 rounded-lg text-xs text-emerald-650 dark:text-emerald-450 font-semibold leading-relaxed">
-                      {createSuccess}
-                    </div>
-                  )}
-
-                  <div className="flex justify-end flex-wrap gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleBypassAndSaveToFirestore}
-                      disabled={isCreatingUser}
-                      className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-750 dark:text-slate-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      title="Chỉ ghi dữ liệu User vào Firestore (bỏ qua bước đăng ký Auth, giải quyết lỗi iframe/Brave block Auth)"
-                    >
-                      <span>Cứu hộ: Chỉ tạo hồ sơ Firestore</span>
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={isCreatingUser}
-                      className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98 shadow-xs"
-                    >
-                      {isCreatingUser ? (
-                        <>
-                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Đang đăng ký hệ thống...</span>
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="w-3.5 h-3.5 text-sky-200" />
-                          <span>Tự động Đăng ký qua Firebase Auth</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
-
               {/* Members/Users List */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-700 dark:text-slate-350 uppercase tracking-widest flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-emerald-500" />
-                  <span>Đội ngũ & Phân quyền xưởng thành viên ({userProfiles.length})</span>
+                  <span>Danh sách thành viên xưởng ({userProfiles.length})</span>
                 </h4>
 
                 {userProfiles.length === 0 ? (
-                  <div className="p-6 text-center border-2 border-dashed border-slate-150 dark:border-slate-800 rounded-xl text-slate-400 dark:text-slate-550 text-xs">
-                    Hiện chưa có tài khoản phụ nào được phân quyền. Bấm Đăng ký Tài khoản ở trên để thêm nhân viên hoặc thợ may mới.
+                  <div className="p-6 text-center border-2 border-dashed border-slate-150 dark:border-slate-800 rounded-xl text-slate-400 dark:text-slate-555 text-xs">
+                    Chưa có tài khoản phụ nào được đăng ký.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     {userProfiles.map((p) => {
                       const email = p.email || p.id || '';
                       if (!email) return null;
-                      const isSuperAdmin = email.toLowerCase() === 'vukuli.123@gmail.com';
-                      const allowed = p.allowedTabs || ['home', 'import', 'invoices', 'production', 'report', 'settings'];
+                      const isSuperAdmin = email.toLowerCase() === 'vukuli.123@gmail.com' || email.toLowerCase() === 'vukuli123@gmail.com';
 
                       return (
                         <div 
@@ -820,43 +669,25 @@ export default function SettingsTab({
                                 </p>
                               </div>
 
-                              <span className={`text-[9.5px] font-black uppercase tracking-wider py-0.5 px-2 rounded-full border ${
-                                p.role === 'admin' 
-                                  ? 'bg-red-50 text-red-650 border-red-200/50 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/35' 
-                                  : p.role === 'staff' 
-                                    ? 'bg-blue-50 text-blue-650 border-blue-200/50 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/35' 
-                                    : 'bg-slate-100 text-slate-600 border-slate-200/50 dark:bg-slate-800 dark:text-slate-400'
-                              }`}>
-                                {p.role === 'admin' ? 'Quản trị viên' : p.role === 'staff' ? 'Nhân viên hạch toán' : 'Xem báo cáo'}
+                              <span className="text-[9.5px] font-black uppercase tracking-wider py-0.5 px-2 rounded-full border bg-emerald-50 text-emerald-650 border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/35">
+                                Quản trị viên (Toàn quyền)
                               </span>
                             </div>
 
-                            {/* Show tabs allowed */}
+                            {/* Toàn bộ tính năng hạch toán */}
                             <div className="flex flex-wrap gap-1 pt-0.5">
-                              {['home', 'import', 'invoices', 'production', 'report', 'settings'].map((tab) => {
-                                const isTabAllowed = allowed.includes(tab);
-                                const labels: Record<string, string> = {
-                                  home: 'Nhà',
-                                  import: 'Sỉ',
-                                  invoices: 'Nợ',
-                                  production: 'Thợ',
-                                  report: 'BC',
-                                  settings: 'CĐ'
-                                };
-                                return (
-                                  <span 
-                                    key={tab} 
-                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${
-                                      isTabAllowed 
-                                        ? 'bg-indigo-55/10 text-indigo-650 border border-indigo-200/30 dark:bg-indigo-950/20 dark:text-indigo-400' 
-                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-650 line-through'
-                                    }`}
-                                    title={isTabAllowed ? `Có quyền vào trang: ${tab}` : `Bị chặn trang: ${tab}`}
-                                  >
-                                    {labels[tab] || tab}
-                                  </span>
-                                );
-                              })}
+                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30">
+                                Thợ may
+                              </span>
+                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30">
+                                Công nợ
+                              </span>
+                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-[#1f1712] dark:text-[#fbbf24]/90 border border-indigo-100/50 dark:border-[#fbbf24]/20">
+                                Nhập hàng
+                              </span>
+                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30">
+                                Báo cáo
+                              </span>
                             </div>
                           </div>
 
@@ -879,25 +710,12 @@ export default function SettingsTab({
                             </div>
 
                             <div className="flex items-center gap-1.5">
-                              {/* Change role select menu for non-super admins */}
-                              {!isSuperAdmin && (
-                                <select
-                                  value={p.role}
-                                  onChange={(e) => handleUpdateUserRole(email, e.target.value as any)}
-                                  className="bg-transparent border border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-700 rounded-md py-0.5 px-1.5 text-[10.5px] font-bold text-slate-600 dark:text-slate-350 outline-none cursor-pointer transition"
-                                >
-                                  <option value="admin">Quản trị viên</option>
-                                  <option value="staff">Nhân viên hạch toán</option>
-                                  <option value="viewer">Tôi chỉ xem</option>
-                                </select>
-                              )}
-
                               {!isSuperAdmin && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteUserProfile(email)}
                                   className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 rounded-md cursor-pointer transition"
-                                  title="Xóa phân quyền thành viên"
+                                  title="Xóa tài khoản thành viên"
                                 >
                                   <UserX className="w-3.5 h-3.5" />
                                 </button>

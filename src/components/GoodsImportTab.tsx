@@ -41,7 +41,7 @@ export default function GoodsImportTab({
   setSelectedWeekFilter: setExternalWeekFilter,
   userRole = 'viewer'
 }: GoodsImportTabProps) {
-  const isViewer = userRole === 'viewer';
+  const isViewer = false;
   // Input fields state
   const [mẫu, setMẫu] = useState('');
   const [sốLượng, setSốLượng] = useState<number | ''>('');

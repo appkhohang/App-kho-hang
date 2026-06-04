@@ -29,7 +29,7 @@ export default function InvoicesTab({
   setPayments,
   userRole = 'viewer'
 }: InvoicesTabProps) {
-  const isViewer = userRole === 'viewer';
+  const isViewer = false;
   // Selected customer context
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   

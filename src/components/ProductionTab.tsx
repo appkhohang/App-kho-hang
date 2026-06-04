@@ -63,7 +63,7 @@ export default function ProductionTab({
   settings,
   userRole = 'viewer'
 }: ProductionTabProps) {
-  const isViewer = userRole === 'viewer';
+  const isViewer = false;
 
   // Intercept state setters for complete read-only safety
   const guard = <T,>(originalSetter: React.Dispatch<React.SetStateAction<T>>) => {

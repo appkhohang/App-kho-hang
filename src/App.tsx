@@ -176,7 +176,7 @@ export default function App() {
         return;
       }
       
-      if (email === 'vukuli.123@gmail.com') {
+      if (email === 'vukuli.123@gmail.com' || email === 'vukuli123@gmail.com') {
         if (active) setProfileFetchCompleted(true);
         return;
       }
@@ -891,7 +891,7 @@ export default function App() {
       <div className="space-y-6 font-sans select-none" id="dashboard_home_screen">
         
         {/* Profile Card matching the top dark visual container of the screenshot */}
-        <div className="bg-[#0f1224] text-white rounded-3xl p-6 relative overflow-hidden border border-slate-900/60 flex items-center gap-5 shadow-xl shadow-slate-950/20">
+        <div className="bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-6 relative overflow-hidden border border-slate-150/80 dark:border-slate-900/60 flex items-center gap-5 shadow-lg shadow-slate-100/50 dark:shadow-slate-950/20 transition-all duration-300">
           <div className="absolute right-0 top-0 w-36 h-36 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
           
           {/* Avatar frame */}
@@ -900,11 +900,11 @@ export default function App() {
           </div>
           
           <div className="space-y-0.5">
-            <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase font-mono">XIN CHÀO,</span>
-            <h1 className="text-xl md:text-2xl font-black tracking-tight text-white leading-tight">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tracking-widest uppercase font-mono">XIN CHÀO,</span>
+            <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
               {authState.displayName || 'Demo User'}
             </h1>
-            <p className="text-[11px] font-medium text-slate-400 font-mono">
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono">
               {authState.email || 'demo@khohoadon.app'}
             </p>
           </div>
@@ -924,11 +924,11 @@ export default function App() {
                 boxShadow: "0 20px 25px -5px rgba(16, 185, 129, 0.12), 0 8px 10px -6px rgba(16, 185, 129, 0.12)"
               }}
               whileTap={{ scale: 0.98 }}
-              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-[#10b981]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px]"
+              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-emerald-500/50 dark:hover:border-[#10b981]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-emerald-500/5"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
-                  <div className="w-11 h-11 rounded-2xl bg-[#10b981] text-white flex items-center justify-center shrink-0 shadow-md">
+                  <div className="w-11 h-11 rounded-xl bg-[#10b981] text-white flex items-center justify-center shrink-0 shadow-md">
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                       <polyline points="7 10 12 15 17 10" />
@@ -936,28 +936,28 @@ export default function App() {
                     </svg>
                   </div>
                   <div className="truncate min-w-0 pr-1">
-                    <h3 className="font-extrabold text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Nhập hàng</h3>
-                    <p className="text-[9.5px] md:text-[10.5px] text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Quản lý nhập hàng và nhà cung cấp</p>
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Nhập hàng</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Quản lý nhập hàng và nhà cung cấp</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
-              <p className="text-[9px] text-slate-455 leading-tight truncate sm:hidden -mt-1.5">
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5">
                 Quản lý nhập hàng và nhà cung cấp
               </p>
 
-              <div className="border-t border-slate-800/40 my-1 w-full" />
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
 
               <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-2xl md:text-3xl font-black text-white font-mono leading-none">{currentMonthImportCount}</p>
-                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-[#10b981] mt-1.5 font-sans whitespace-nowrap">Đơn nhập tháng này</p>
+                  <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">{currentMonthImportCount}</p>
+                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 mt-1.5 font-sans whitespace-nowrap">Đơn nhập tháng này</p>
                 </div>
                 
                 {/* View Details Button with Icon */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/10 text-[#10b981] rounded-xl border border-[#10b981]/25 transition-all duration-300 group-hover:bg-[#10b981]/20 group-hover:border-[#10b981]/40 group-hover:shadow-[0_4px_12px_rgba(16,185,129,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-500/25 transition-all duration-300 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-500/20 group-hover:border-emerald-250 dark:group-hover:border-emerald-500/40 group-hover:shadow-[0_4px_12px_rgba(16,185,129,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
                   <span className="hidden sm:inline">Xem chi tiết</span>
                   <ShoppingCart className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
@@ -976,11 +976,11 @@ export default function App() {
                 boxShadow: "0 20px 25px -5px rgba(59, 130, 246, 0.12), 0 8px 10px -6px rgba(59, 130, 246, 0.12)"
               }}
               whileTap={{ scale: 0.98 }}
-              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-[#3b82f6]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px]"
+              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-blue-500/50 dark:hover:border-[#3b82f6]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-blue-500/5"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
-                  <div className="w-11 h-11 rounded-2xl bg-[#3b82f6] text-white flex items-center justify-center shrink-0 shadow-md">
+                  <div className="w-11 h-11 rounded-xl bg-[#3b82f6] text-white flex items-center justify-center shrink-0 shadow-md">
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                       <polyline points="14 2 14 8 20 8" />
@@ -989,28 +989,28 @@ export default function App() {
                     </svg>
                   </div>
                   <div className="truncate min-w-0 pr-1">
-                    <h3 className="font-extrabold text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Hóa đơn</h3>
-                    <p className="text-[9.5px] md:text-[10.5px] text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Quản lý hóa đơn bán hàng</p>
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Hóa đơn</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Quản lý hóa đơn bán hàng</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
-              <p className="text-[9px] text-slate-455 leading-tight truncate sm:hidden -mt-1.5">
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5">
                 Quản lý hóa đơn bán hàng
               </p>
 
-              <div className="border-t border-slate-800/40 my-1 w-full" />
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
 
               <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-2xl md:text-3xl font-black text-white font-mono leading-none">{currentMonthBillCount}</p>
-                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-[#3b82f6] mt-1.5 font-sans whitespace-nowrap">Hóa đơn tháng này</p>
+                  <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">{currentMonthBillCount}</p>
+                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-blue-600 dark:text-blue-400 mt-1.5 font-sans whitespace-nowrap">Hóa đơn tháng này</p>
                 </div>
                 
                 {/* View Details Button with Icon */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3b82f6]/10 text-[#3b82f6] rounded-xl border border-[#3b82f6]/25 transition-all duration-300 group-hover:bg-[#3b82f6]/20 group-hover:border-[#3b82f6]/40 group-hover:shadow-[0_4px_12px_rgba(59,130,246,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-500/25 transition-all duration-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-500/20 group-hover:border-blue-250 dark:group-hover:border-blue-500/40 group-hover:shadow-[0_4px_12px_rgba(59,130,246,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
                   <span className="hidden sm:inline">Xem chi tiết</span>
                   <FileText className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
@@ -1029,11 +1029,11 @@ export default function App() {
                 boxShadow: "0 20px 25px -5px rgba(234, 179, 8, 0.12), 0 8px 10px -6px rgba(234, 179, 8, 0.12)"
               }}
               whileTap={{ scale: 0.98 }}
-              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-[#eab308]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px]"
+              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-amber-500/50 dark:hover:border-[#eab308]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-amber-500/5"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
-                  <div className="w-11 h-11 rounded-2xl bg-[#eab308] text-white flex items-center justify-center shrink-0 shadow-md">
+                  <div className="w-11 h-11 rounded-xl bg-[#eab308] text-white flex items-center justify-center shrink-0 shadow-md">
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="18" y1="20" x2="18" y2="10" />
                       <line x1="12" y1="20" x2="12" y2="4" />
@@ -1041,28 +1041,28 @@ export default function App() {
                     </svg>
                   </div>
                   <div className="truncate min-w-0 pr-1">
-                    <h3 className="font-extrabold text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Doanh thu</h3>
-                    <p className="text-[9.5px] md:text-[10.5px] text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Thống kê doanh thu và lợi nhuận</p>
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Doanh thu</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Thống kê doanh thu và lợi nhuận</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
-              <p className="text-[9px] text-slate-455 leading-tight truncate sm:hidden -mt-1.5">
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5">
                 Thống kê doanh thu và lợi nhuận
               </p>
 
-              <div className="border-t border-slate-800/40 my-1 w-full" />
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
 
               <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-2xl md:text-3xl font-black text-white font-mono leading-none">{totalRevenueFormatted}</p>
-                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-[#eab308] mt-1.5 font-sans whitespace-nowrap">Doanh thu tháng này</p>
+                  <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">{totalRevenueFormatted}</p>
+                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-amber-600 dark:text-amber-400 mt-1.5 font-sans whitespace-nowrap">Doanh thu tháng này</p>
                 </div>
                 
                 {/* View Details Button with Icon */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#eab308]/10 text-[#eab308] rounded-xl border border-[#eab308]/25 transition-all duration-300 group-hover:bg-[#eab308]/20 group-hover:border-[#eab308]/40 group-hover:shadow-[0_4px_12px_rgba(234,179,8,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-100 dark:border-amber-500/25 transition-all duration-300 group-hover:bg-amber-100 dark:group-hover:bg-amber-500/20 group-hover:border-amber-250 dark:group-hover:border-amber-500/40 group-hover:shadow-[0_4px_12px_rgba(234,179,8,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
                   <span className="hidden sm:inline">Xem chi tiết</span>
                   <DollarSign className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
@@ -1081,11 +1081,11 @@ export default function App() {
                 boxShadow: "0 20px 25px -5px rgba(168, 85, 247, 0.12), 0 8px 10px -6px rgba(168, 85, 247, 0.12)"
               }}
               whileTap={{ scale: 0.98 }}
-              className="group relative bg-[#0f1224] text-white rounded-3xl p-5 border border-slate-900 hover:border-[#a855f7]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px]"
+              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-purple-500/50 dark:hover:border-[#a855f7]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-purple-500/5"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
-                  <div className="w-11 h-11 rounded-2xl bg-[#a855f7] text-white flex items-center justify-center shrink-0 shadow-md">
+                  <div className="w-11 h-11 rounded-xl bg-[#a855f7] text-white flex items-center justify-center shrink-0 shadow-md">
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
                       <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
@@ -1094,28 +1094,28 @@ export default function App() {
                     </svg>
                   </div>
                   <div className="truncate min-w-0 pr-1">
-                    <h3 className="font-extrabold text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Sản xuất</h3>
-                    <p className="text-[9.5px] md:text-[10.5px] text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Theo dõi sản xuất và đơn hàng</p>
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Sản xuất</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Theo dõi sản xuất và đơn hàng</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-350 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
-              <p className="text-[9px] text-slate-455 leading-tight truncate sm:hidden -mt-1.5">
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5">
                 Theo dõi sản xuất và đơn hàng
               </p>
 
-              <div className="border-t border-slate-800/40 my-1 w-full" />
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
 
               <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-2xl md:text-3xl font-black text-white font-mono leading-none">{runningBatchesCount}</p>
-                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-[#a855f7] mt-1.5 font-sans whitespace-nowrap">Lô sản xuất chạy</p>
+                  <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">{runningBatchesCount}</p>
+                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-purple-600 dark:text-purple-400 mt-1.5 font-sans whitespace-nowrap">Lô sản xuất chạy</p>
                 </div>
                 
                 {/* View Details Button with Icon */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#a855f7]/10 text-[#a855f7] rounded-xl border border-[#a855f7]/25 transition-all duration-300 group-hover:bg-[#a855f7]/20 group-hover:border-[#a855f7]/40 group-hover:shadow-[0_4px_12px_rgba(168, 85, 247, 0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-100 dark:border-purple-500/25 transition-all duration-300 group-hover:bg-purple-100 dark:group-hover:bg-purple-500/20 group-hover:border-purple-250 dark:group-hover:border-purple-500/40 group-hover:shadow-[0_4px_12px_rgba(168,85,247,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
                   <span className="hidden sm:inline">Xem chi tiết</span>
                   <Calendar className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
@@ -1846,7 +1846,7 @@ export default function App() {
           </AnimatePresence>
 
           {/* Sub-body page wrapper components */}
-          <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full relative">
+          <main className="flex-grow max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-4 sm:py-8 w-full relative">
             
             {/* Display page logs / tab view */}
             <AnimatePresence mode="wait">

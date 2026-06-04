@@ -92,7 +92,7 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
         const activeEmail = user.email.toLowerCase().trim();
         
         // Dynamically check role assignments
-        const isMaster = activeEmail === 'vukuli.123@gmail.com';
+        const isMaster = activeEmail === 'vukuli.123@gmail.com' || activeEmail === 'vukuli123@gmail.com';
         const profile = userProfiles.find(p => p.email.toLowerCase().trim() === activeEmail);
 
         if (profile && profile.active === false) {
@@ -126,7 +126,7 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
       setEmailLoading(false);
       console.error("Firebase Login Error: ", err);
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setErrorMessage('Tài khoản hoặc mật khẩu không chính xác. Hoặc tài khoản của bạn chưa được tạo phân quyền.');
+        setErrorMessage('Tài khoản hoặc mật khẩu không chính xác.');
       } else {
         setErrorMessage(`Lỗi xác thực Firebase: ${err.message || 'Liên kết thất bại'}`);
       }
@@ -143,9 +143,8 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
       const user = result.user;
 
       if (user && user.email) {
-        const adminEmail = "vukuli.123@gmail.com"; // Allowed admin email
         const userEmail = user.email.toLowerCase().trim();
-        const isMaster = userEmail === adminEmail;
+        const isMaster = userEmail === "vukuli.123@gmail.com" || userEmail === "vukuli123@gmail.com";
         const profile = userProfiles.find(p => p.email.toLowerCase().trim() === userEmail);
 
         if (profile && profile.active === false) {
