@@ -20,6 +20,11 @@ import { auth, db } from './utils/firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 
+function getSavedArray<T>(key: string, fallback: T[]): T[] {
+  const value = getSavedState<T[]>(key, fallback);
+  return Array.isArray(value) ? value : fallback;
+}
+
 export default function App() {
   // Initialize LocalStorage with seeds if empty
   useEffect(() => {
@@ -68,22 +73,40 @@ export default function App() {
   }, []);
 
   // Application States
-  const [items, setItems] = useState<ImportItem[]>(() => getSavedState("xuongan_import_items", []));
-  const [laborPayments, setLaborPayments] = useState<LaborPayment[]>(() => getSavedState("xuongan_labor_payments", []));
-  const [tpDtShippings, setTpDtShippings] = useState<TpDtShippingItem[]>(() => getSavedState("xuongan_tp_dt_shippings", []));
-  const [customers, setCustomers] = useState<Customer[]>(() => getSavedState("xuongan_customers", []));
-  const [bills, setBills] = useState<Bill[]>(() => getSavedState("xuongan_bills", []));
-  const [payments, setPayments] = useState<PaymentRecord[]>(() => getSavedState("xuongan_payments", []));
-  const [authState, setAuthState] = useState<AuthState>(() => getSavedState("xuongan_auth", {
-    isAuthenticated: false,
-    email: null,
-    displayName: null,
-    twoFactorEnabled: false,
-    twoFactorSetup: false,
-    twoFactorSecret: null,
-    verified2FA: false,
-    loginNotifications: []
-  }));
+  const [items, setItems] = useState<ImportItem[]>(() => getSavedArray("xuongan_import_items", []));
+  const [laborPayments, setLaborPayments] = useState<LaborPayment[]>(() => getSavedArray("xuongan_labor_payments", []));
+  const [tpDtShippings, setTpDtShippings] = useState<TpDtShippingItem[]>(() => getSavedArray("xuongan_tp_dt_shippings", []));
+  const [customers, setCustomers] = useState<Customer[]>(() => getSavedArray("xuongan_customers", []));
+  const [bills, setBills] = useState<Bill[]>(() => getSavedArray("xuongan_bills", []));
+  const [payments, setPayments] = useState<PaymentRecord[]>(() => getSavedArray("xuongan_payments", []));
+  const [authState, setAuthState] = useState<AuthState>(() => {
+    const saved = getSavedState<AuthState>("xuongan_auth", {
+      isAuthenticated: false,
+      email: null,
+      displayName: null,
+      twoFactorEnabled: false,
+      twoFactorSetup: false,
+      twoFactorSecret: null,
+      verified2FA: false,
+      loginNotifications: []
+    });
+    if (!saved || typeof saved !== 'object') {
+      return {
+        isAuthenticated: false,
+        email: null,
+        displayName: null,
+        twoFactorEnabled: false,
+        twoFactorSetup: false,
+        twoFactorSecret: null,
+        verified2FA: false,
+        loginNotifications: []
+      };
+    }
+    return {
+      ...saved,
+      loginNotifications: Array.isArray(saved.loginNotifications) ? saved.loginNotifications : []
+    };
+  });
   const [settings, setSettings] = useState<AppSettings>(() => getSavedState("xuongan_settings", {
     theme: 'system',
     currencySymbol: 'đ',
@@ -91,9 +114,9 @@ export default function App() {
   }));
 
   // Production Management States
-  const [operationBreakdowns, setOperationBreakdowns] = useState<ModelOperationBreakdown[]>(() => getSavedState("xuongan_operation_breakdowns", []));
-  const [workers, setWorkers] = useState<Worker[]>(() => getSavedState("xuongan_workers", []));
-  const [tasks, setTasks] = useState<TaskType[]>(() => getSavedState("xuongan_tasks", [
+  const [operationBreakdowns, setOperationBreakdowns] = useState<ModelOperationBreakdown[]>(() => getSavedArray("xuongan_operation_breakdowns", []));
+  const [workers, setWorkers] = useState<Worker[]>(() => getSavedArray("xuongan_workers", []));
+  const [tasks, setTasks] = useState<TaskType[]>(() => getSavedArray("xuongan_tasks", [
     { id: 'task_1', name: 'Cắt vải', createdAt: Date.now() },
     { id: 'task_2', name: 'Ráp sườn', createdAt: Date.now() + 1 },
     { id: 'task_3', name: 'May cổ', createdAt: Date.now() + 2 },
@@ -102,12 +125,12 @@ export default function App() {
     { id: 'task_6', name: 'Ủi xếp & Chỉ thừa', createdAt: Date.now() + 5 },
     { id: 'task_7', name: 'Đóng gói', createdAt: Date.now() + 6 }
   ]));
-  const [workerJobs, setWorkerJobs] = useState<WorkerJob[]>(() => getSavedState("xuongan_worker_jobs", []));
-  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>(() => getSavedState("xuongan_raw_materials", []));
-  const [materialRecipes, setMaterialRecipes] = useState<ModelMaterialRecipe[]>(() => getSavedState("xuongan_material_recipes", []));
-  const [productionBatches, setProductionBatches] = useState<ProductionBatch[]>(() => getSavedState("xuongan_production_batches", []));
-  const [materialReimports, setMaterialReimports] = useState<MaterialReimport[]>(() => getSavedState("xuongan_material_reimports", []));
-  const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => getSavedState("xuongan_user_profiles", []));
+  const [workerJobs, setWorkerJobs] = useState<WorkerJob[]>(() => getSavedArray("xuongan_worker_jobs", []));
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>(() => getSavedArray("xuongan_raw_materials", []));
+  const [materialRecipes, setMaterialRecipes] = useState<ModelMaterialRecipe[]>(() => getSavedArray("xuongan_material_recipes", []));
+  const [productionBatches, setProductionBatches] = useState<ProductionBatch[]>(() => getSavedArray("xuongan_production_batches", []));
+  const [materialReimports, setMaterialReimports] = useState<MaterialReimport[]>(() => getSavedArray("xuongan_material_reimports", []));
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => getSavedArray("xuongan_user_profiles", []));
   const [profileFetchCompleted, setProfileFetchCompleted] = useState<boolean>(false);
 
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
@@ -424,7 +447,7 @@ export default function App() {
         };
         setAuthState(prev => ({
           ...prev,
-          loginNotifications: [sysSyncLog, ...prev.loginNotifications].slice(0, 40)
+          loginNotifications: [sysSyncLog, ...(prev?.loginNotifications || [])].slice(0, 40)
         }));
         
         alert("🎉 Đã tải và đồng bộ đám mây toàn bộ cơ sở dữ liệu Xưởng thành công!");
@@ -458,7 +481,7 @@ export default function App() {
         materialRecipes,
         productionBatches,
         materialReimports,
-        loginNotifications: authState.loginNotifications,
+        loginNotifications: authState.loginNotifications || [],
         tasks,
         userProfiles,
         settings
@@ -480,7 +503,7 @@ export default function App() {
       };
       setAuthState(prev => ({
         ...prev,
-        loginNotifications: [sysSyncLog, ...prev.loginNotifications].slice(0, 40)
+        loginNotifications: [sysSyncLog, ...(prev?.loginNotifications || [])].slice(0, 40)
       }));
       
       alert("🎉 Đã đồng bộ đăng tải dữ liệu Xưởng thành công lên cơ sở dữ liệu Firestore đám mây!");
@@ -768,7 +791,7 @@ export default function App() {
   // Login successful side-effect: triggers push-style security alert toast
   const handleLoginSuccess = () => {
     // Read the newest notification
-    const newestLogs = getSavedState("xuongan_auth", authState).loginNotifications;
+    const newestLogs = getSavedState<AuthState>("xuongan_auth", authState)?.loginNotifications;
     const latestLog = newestLogs?.[0];
     
     if (latestLog) {
@@ -784,7 +807,7 @@ export default function App() {
   useEffect(() => {
     if (authState.isAuthenticated) {
       const todayStr = new Date().toLocaleDateString('vi-VN');
-      const alreadyLogged = authState.loginNotifications.some(n => n.device === "Hệ thống tự động cập nhật dữ liệu & ngày mới" && n.time.includes(todayStr));
+      const alreadyLogged = (authState?.loginNotifications || []).some(n => n.device === "Hệ thống tự động cập nhật dữ liệu & ngày mới" && n.time.includes(todayStr));
       
       if (!alreadyLogged) {
         const sysSyncLog: LoginNotification = {
@@ -797,7 +820,7 @@ export default function App() {
         };
         setAuthState(prev => ({
           ...prev,
-          loginNotifications: [sysSyncLog, ...prev.loginNotifications].slice(0, 40)
+          loginNotifications: [sysSyncLog, ...(prev?.loginNotifications || [])].slice(0, 40)
         }));
       }
     }
@@ -823,24 +846,25 @@ export default function App() {
   const markAllNotificationsAsRead = () => {
     setAuthState(prev => ({
       ...prev,
-      loginNotifications: prev.loginNotifications.map(n => ({ ...n, isRead: true }))
+      loginNotifications: (prev?.loginNotifications || []).map(n => ({ ...n, isRead: true }))
     }));
   };
 
   const deleteNotification = (id: string) => {
     setAuthState(prev => ({
       ...prev,
-      loginNotifications: prev.loginNotifications.filter(n => n.id !== id)
+      loginNotifications: (prev?.loginNotifications || []).filter(n => n.id !== id)
     }));
   };
 
   // Calculations for Notification indicators
-  const unreadCount = authState.loginNotifications.filter(n => !n.isRead).length;
+  const unreadCount = (authState?.loginNotifications || []).filter(n => !n.isRead).length;
 
   // Group items by Week in App.tsx to feed the Hamburger filter
   const itemsByWeek: { [weekLabel: string]: any[] } = {};
   items.forEach(item => {
-    const week = item.weekKey;
+    if (!item) return;
+    const week = item.weekKey || "Tuần Không Xác Định";
     if (!itemsByWeek[week]) {
       itemsByWeek[week] = [];
     }
@@ -1988,10 +2012,10 @@ export default function App() {
                     </h2>
                   </div>
                   <div className="space-y-3">
-                    {authState.loginNotifications.length === 0 ? (
+                    {(!authState?.loginNotifications || authState.loginNotifications.length === 0) ? (
                       <p className="text-center py-12 text-slate-405 italic text-xs">Không có lịch sử đăng nhập hay cấu hình bảo mật mới.</p>
                     ) : (
-                      authState.loginNotifications.map(notif => (
+                      (authState?.loginNotifications || []).map(notif => (
                         <div
                           key={notif.id}
                           className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl relative group text-xs shadow-2xs"
