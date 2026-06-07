@@ -147,7 +147,7 @@ export default function SettingsTab({
 
       if (setUserProfiles) {
         setUserProfiles(prev => {
-          const filtered = prev.filter(p => p.email.toLowerCase() !== email);
+          const filtered = prev.filter(p => p?.email?.toLowerCase() !== email);
           return [newProfile, ...filtered];
         });
       }
@@ -230,7 +230,7 @@ export default function SettingsTab({
       // 4. Update local state
       if (setUserProfiles) {
         setUserProfiles(prev => {
-          const filtered = prev.filter(p => p.email.toLowerCase() !== email);
+          const filtered = prev.filter(p => p?.email?.toLowerCase() !== email);
           return [newProfile, ...filtered];
         });
       }
@@ -280,7 +280,7 @@ export default function SettingsTab({
       }, { merge: true });
 
       if (setUserProfiles) {
-        setUserProfiles(prev => prev.map(p => p.email === email ? { ...p, role: newRole } : p));
+        setUserProfiles(prev => prev.map(p => p?.email === email ? { ...p, role: newRole } : p));
       }
       alert(`🎉 Đã đổi phân vai trò tài khoản ${email} thành ${newRole === 'admin' ? 'Quản trị viên' : newRole === 'staff' ? 'Nhân viên sỉ' : 'Ủy viên chỉ xem'} thành công!`);
     } catch (err: any) {
@@ -301,7 +301,7 @@ export default function SettingsTab({
       }, { merge: true });
 
       if (setUserProfiles) {
-        setUserProfiles(prev => prev.map(p => p.email === email ? { ...p, allowedTabs: nextTabs } : p));
+        setUserProfiles(prev => prev.map(p => p?.email === email ? { ...p, allowedTabs: nextTabs } : p));
       }
     } catch (err: any) {
       alert(`⚠️ Không thể thay đổi trang được cấp phép: ${err.message}`);
@@ -321,7 +321,7 @@ export default function SettingsTab({
       }, { merge: true });
 
       if (setUserProfiles) {
-        setUserProfiles(prev => prev.map(p => p.email === email ? { ...p, active: !currentStatus } : p));
+        setUserProfiles(prev => prev.map(p => p?.email === email ? { ...p, active: !currentStatus } : p));
       }
       alert(`🎉 Cập nhật trạng thái hoạt động của tài khoản ${email} thành công!`);
     } catch (err: any) {
@@ -340,7 +340,7 @@ export default function SettingsTab({
     try {
       await deleteDoc(doc(db, 'user_profiles', email));
       if (setUserProfiles) {
-        setUserProfiles(prev => prev.filter(p => p.email !== email));
+        setUserProfiles(prev => prev.filter(p => p?.email !== email));
       }
       alert(`🎉 Đã xóa phân quyền và hồ sơ tài khoản ${email} thành công!`);
     } catch (err: any) {
@@ -649,7 +649,7 @@ export default function SettingsTab({
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     {userProfiles.map((p) => {
-                      const email = p.email || p.id || '';
+                      const email = p?.email || p?.id || '';
                       if (!email) return null;
                       const isSuperAdmin = email.toLowerCase() === 'vukuli.123@gmail.com' || email.toLowerCase() === 'vukuli123@gmail.com';
 

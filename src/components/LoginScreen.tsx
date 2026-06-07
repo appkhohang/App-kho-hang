@@ -93,7 +93,7 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
         
         // Dynamically check role assignments
         const isMaster = activeEmail === 'vukuli.123@gmail.com' || activeEmail === 'vukuli123@gmail.com';
-        const profile = userProfiles.find(p => p.email.toLowerCase().trim() === activeEmail);
+        const profile = userProfiles?.find(p => p?.email?.toLowerCase()?.trim() === activeEmail);
 
         if (profile && profile.active === false) {
           await signOut(auth);
@@ -145,7 +145,7 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
       if (user && user.email) {
         const userEmail = user.email.toLowerCase().trim();
         const isMaster = userEmail === "vukuli.123@gmail.com" || userEmail === "vukuli123@gmail.com";
-        const profile = userProfiles.find(p => p.email.toLowerCase().trim() === userEmail);
+        const profile = userProfiles?.find(p => p?.email?.toLowerCase()?.trim() === userEmail);
 
         if (profile && profile.active === false) {
           // Reject and auto sign out strictly to prevent un-authorized logins

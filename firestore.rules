@@ -1,9 +1,100 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Khôi phục toàn quyền đọc ghi cho tất cả tài khoản đã đăng nhập
+    
+    // Global helper checking if user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Default deny fallback
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
+    }
+
+    // 1. Sổ nhật ký đơn hàng nhập sỉ
+    match /import_items/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 2. Cước phí vận chuyển Đồng Tháp - Sài Gòn
+    match /tp_dt_shippings/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 3. Chi lương / tạm ứng cho thợ
+    match /labor_payments/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 4. Hồ sơ công nợ khách sỉ
+    match /customers/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 5. Hoá đơn lập bán cho khách
+    match /bills/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 6. Báo cáo thu nợ khách sỉ hàng ngày
+    match /payments/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 7. Hồ sơ định mức mẫu và công đoạn tương ứng
+    match /operation_breakdowns/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 8. Danh sách thợ may xưởng
+    match /workers/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 9. Nhật ký công thợ giao việc hàng ngày
+    match /worker_jobs/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 10. Vật tư kho nguyên liệu thô
+    match /raw_materials/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 11. Định mức nguyên vật liệu tiêu hao trên đơn vị thành phẩm
+    match /material_recipes/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 12. Lô sản xuất mộc hao phí
+    match /production_batches/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 13. Đơn nhập nguyên vật liệu kho thô
+    match /material_reimports/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 14. Nhật ký truy cập hệ thống bảo mật
+    match /login_notifications/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 15. Cài đặt tổng quan
+    match /settings/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 16. Danh mục công việc
+    match /tasks/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 17. Danh sách tài khoản phụ và phân quyền thành viên
+    match /user_profiles/{id} {
+      allow read, write: if isSignedIn();
     }
   }
 }
