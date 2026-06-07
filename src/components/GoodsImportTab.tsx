@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag } from 'lucide-react';
+import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet } from 'lucide-react';
 import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietnameseMonthKey } from '../utils/dateUtils';
 import { exportDatabasePackage } from '../utils/storage';
@@ -42,6 +42,59 @@ export default function GoodsImportTab({
   userRole = 'viewer'
 }: GoodsImportTabProps) {
   const isViewer = false;
+
+  // Get unique recent import items for Quick Action shortcuts
+  const recentUniqueItems = React.useMemo(() => {
+    const uniques: ImportItem[] = [];
+    const seen = new Set<string>();
+    // Iterate from newest to oldest
+    for (const item of items) {
+      if (!seen.has(item.mẫu)) {
+        seen.add(item.mẫu);
+        uniques.push(item);
+        if (uniques.length >= 5) break;
+      }
+    }
+    return uniques;
+  }, [items]);
+
+  // Column selector visibility and column options
+  const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_import_visible_columns');
+      return saved ? JSON.parse(saved) : {
+        ngay: true,
+        mau: true,
+        soLuong: true,
+        donGia: true,
+        thanhTien: true,
+        dtTp: true,
+        tpDt: true,
+      };
+    } catch {
+      return {
+        ngay: true,
+        mau: true,
+        soLuong: true,
+        donGia: true,
+        thanhTien: true,
+        dtTp: true,
+        tpDt: true,
+      };
+    }
+  });
+
+  const toggleColumn = (key: 'ngay' | 'mau' | 'soLuong' | 'donGia' | 'thanhTien' | 'dtTp' | 'tpDt') => {
+    const updated = { ...visibleColumns, [key]: !visibleColumns[key] };
+    setVisibleColumns(updated);
+    try {
+      localStorage.setItem('xuongan_import_visible_columns', JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Input fields state
   const [mẫu, setMẫu] = useState('');
   const [sốLượng, setSốLượng] = useState<number | ''>('');
@@ -88,6 +141,16 @@ export default function GoodsImportTab({
   // Filter mode & month selection states
   const [filterMode, setFilterMode] = useState<'week' | 'month'>('week');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('all');
+
+  // Track which weeks' labor details panels are expanded
+  const [openLaborPanelWeeks, setOpenLaborPanelWeeks] = useState<{ [key: string]: boolean }>({});
+
+  const toggleLaborPanel = (weekLabel: string) => {
+    setOpenLaborPanelWeeks(prev => ({
+      ...prev,
+      [weekLabel]: !prev[weekLabel]
+    }));
+  };
 
   // Submit labor payment
   const handleAddLaborPayment = (e: React.FormEvent, weekKey: string) => {
@@ -419,184 +482,275 @@ export default function GoodsImportTab({
         </div>
       )}
 
-      {/* Collapsible Input Form */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden transition-all">
-        <button
+      {/* Floating Action Button (FAB) for adding new record */}
+      <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-40">
+        <motion.button
+          id="fab_add_import"
           type="button"
-          onClick={() => setIsFormExpanded(!isFormExpanded)}
-          className="w-full text-left p-4 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-850/40 transition cursor-pointer font-sans"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => {
+            setIsFormExpanded(true);
+            // Default to 'goods' form
+            setActiveFormType('goods');
+          }}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-lg cursor-pointer flex items-center justify-center border border-indigo-400/20 active:scale-95 transition"
+          title="Thêm dữ liệu nhập hàng mới"
         >
-          <div className="flex items-center gap-2 text-slate-705 dark:text-slate-200 font-bold text-xs uppercase tracking-wider font-mono">
-            <Plus className={`w-4 h-4 text-indigo-500 transition-transform duration-300 ${isFormExpanded ? 'rotate-45' : ''}`} />
-            <span>Thêm dữ liệu nhập hàng mới</span>
-          </div>
-          <span className="text-[10px] text-indigo-650 dark:text-indigo-400 bg-indigo-50/70 dark:bg-indigo-950/40 px-2.5 py-1 rounded-lg font-bold">
-            {isFormExpanded ? 'Thu gọn ▲' : 'Click để nhập mới ▼'}
-          </span>
-        </button>
+          <Plus className="w-6 h-6" />
+        </motion.button>
+      </div>
 
+      {/* Floating Input Modal */}
+      <AnimatePresence>
         {isFormExpanded && (
-          <div className="border-t border-slate-100 dark:border-slate-800/80">
-            {/* Form Toggle Segment */}
-            <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center">
-              <span className="text-[10px] font-bold text-slate-450 dark:text-slate-550 uppercase tracking-widest font-mono">CHỌN LOẠI DỮ LIỆU NHẬP</span>
-              <div className="flex bg-slate-200/40 dark:bg-slate-950 p-1 rounded-xl w-full sm:w-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Overlay backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsFormExpanded(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
+            />
+
+            {/* Modal Body */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 30 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden relative border border-slate-150 dark:border-slate-800 z-10 flex flex-col max-h-[85vh]"
+            >
+              <div className="p-4 bg-slate-50 dark:bg-zinc-950 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-500" />
+                  <span className="text-xs font-bold text-slate-705 dark:text-slate-200 uppercase tracking-wider font-mono">
+                    Nhập thông tin kho hàng mới
+                  </span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setActiveFormType('goods')}
-                  className={`flex-1 sm:flex-none py-1.5 px-4 rounded-lg text-xs font-semibold select-none transition cursor-pointer text-center ${
-                    activeFormType === 'goods' 
-                      ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs' 
-                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
-                  }`}
+                  onClick={() => setIsFormExpanded(false)}
+                  className="p-1 px-1.5 rounded-lg hover:bg-slate-205 dark:hover:bg-slate-800 text-slate-450 hover:text-slate-705 dark:hover:text-slate-200 transition cursor-pointer"
                 >
-                  📦 Nhập Mẫu Sản Xuất
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveFormType('shipping')}
-                  className={`flex-1 sm:flex-none py-1.5 px-4 rounded-lg text-xs font-semibold select-none transition cursor-pointer text-center ${
-                    activeFormType === 'shipping' 
-                      ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs' 
-                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
-                  }`}
-                >
-                  🚚 Tách Riêng Ship TP ➔ ĐT (Vải, Mẫu...)
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </div>
 
-            {activeFormType === 'goods' ? (
-              /* FORM 1: STANDARD GOODS IMPORT */
-              <form onSubmit={handleAddItem} className="p-5 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Mẫu mã sản phẩm</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="VD: Đầm Hoa Vintage"
-                      value={mẫu}
-                      onChange={e => setMẫu(e.target.value)}
-                      className="w-full text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-sans shadow-2xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Số lượng may (chiếc)</label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      placeholder="VD: 500"
-                      value={sốLượng}
-                      onChange={e => setSốLượng(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Đơn giá may (đ / chiếc)</label>
-                    <input
-                      type="number"
-                      required
-                      min={0}
-                      placeholder="VD: 15000"
-                      value={đơnGiáMay}
-                      onChange={e => setĐơnGiáMay(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">ĐT ➔ TP Ship sản lượng (đ)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="Vận chuyển lên TP (ĐT -> TP)"
-                      value={shipĐT_TP}
-                      onChange={e => setShipĐT_TP(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
-                    />
+              <div className="overflow-y-auto flex-1 p-1">
+                {/* Form Toggle Segment */}
+                <div className="px-5 py-3.5 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center">
+                  <span className="text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-widest font-mono">CHỌN LOẠI DỮ LIỆU NHẬP</span>
+                  <div className="flex bg-slate-200/40 dark:bg-slate-950 p-1 rounded-xl w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setActiveFormType('goods')}
+                      className={`flex-1 sm:flex-none py-1.5 px-4 rounded-lg text-xs font-semibold select-none transition cursor-pointer text-center ${
+                        activeFormType === 'goods' 
+                          ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs' 
+                          : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                      }`}
+                    >
+                      📦 Nhập Mẫu Sản Xuất
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveFormType('shipping')}
+                      className={`flex-1 sm:flex-none py-1.5 px-4 rounded-lg text-xs font-semibold select-none transition cursor-pointer text-center ${
+                        activeFormType === 'shipping' 
+                          ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs' 
+                          : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                      }`}
+                    >
+                      🚚 Tách Riêng Ship TP ➔ ĐT (Vải, Mẫu...)
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-between items-center pt-2 gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-400">Ngày nhập hàng:</span>
-                    <input
-                      type="date"
-                      value={ngàyNhập}
-                      onChange={e => setNgàyNhập(e.target.value)}
-                      className="text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-700 dark:text-slate-350 font-mono outline-none shadow-2xs"
-                    />
-                  </div>
-                  
-                  <button
-                    id="add_import_item_btn"
-                    type="submit"
-                    className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium py-2 px-6 rounded-lg flex items-center justify-center gap-2 shadow-sm cursor-pointer transition active:scale-[0.98]"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Xác nhận nhập kho</span>
-                  </button>
-                </div>
-              </form>
-            ) : (
-              /* FORM 2: SEPARATE TP -> DT SHIPPING LOGICAL TRACKER */
-              <form onSubmit={handleAddTpDtShipping} className="p-5 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Nội dung chuyến hàng (Vải, mốc mẫu, phụ liệu...)</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="VD: Nhập 4 cây vải, hàng mẫu thử"
-                      value={shipNộiDung}
-                      onChange={e => setShipNộiDung(e.target.value)}
-                      className="w-full text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-sans shadow-2xs"
-                    />
-                  </div>
+                {activeFormType === 'goods' ? (
+                  /* FORM 1: STANDARD GOODS IMPORT */
+                  <form onSubmit={(e) => { handleAddItem(e); setIsFormExpanded(false); }} className="p-5 space-y-4">
+                    {/* Quick Action Shortcuts for Recent Items */}
+                    {recentUniqueItems.length > 0 && (
+                      <div className="bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-150 dark:border-slate-800/80 space-y-2">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-505 dark:text-slate-400 uppercase tracking-wider font-mono">
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                          <span>Phím tắt nhanh (Bản ghi gần đây):</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {recentUniqueItems.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setMẫu(item.mẫu);
+                                setĐơnGiáMay(item.đơnGiáMay);
+                                setShipĐT_TP(item.vậnChuyểnĐT_TP || '');
+                                setShipTP_ĐT(item.vậnChuyểnTP_ĐT || '');
+                              }}
+                              className="flex items-center gap-1.5 py-1 px-2 bg-white dark:bg-slate-900 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20 border border-slate-200 dark:border-slate-850 hover:border-indigo-400 dark:hover:border-indigo-850 rounded-lg text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-450 transition cursor-pointer text-left shadow-2xs"
+                              title={`Click để tự động nhập Mẫu ${item.mẫu} với đơn giá ${item.đơnGiáMay.toLocaleString()} đ`}
+                            >
+                              <span className="font-semibold">{item.mẫu}</span>
+                              <span className="text-slate-350 dark:text-slate-650">|</span>
+                              <span className="font-mono text-[9px] bg-indigo-50 dark:bg-indigo-950/50 px-1 py-0.5 rounded text-indigo-650 dark:text-indigo-400 font-bold">
+                                {item.đơnGiáMay.toLocaleString()}đ
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Số tiền thanh toán ship TP ➔ ĐT (đ)</label>
-                    <input
-                      type="number"
-                      required
-                      min={0}
-                      placeholder="VD: 250000"
-                      value={shipSốTiền}
-                      onChange={e => setShipSốTiền(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
-                    />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Mẫu mã sản phẩm</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="VD: Đầm Hoa Vintage"
+                          value={mẫu}
+                          onChange={e => setMẫu(e.target.value)}
+                          className="w-full text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-sans shadow-2xs"
+                        />
+                      </div>
 
-                <div className="flex flex-col sm:flex-row justify-between items-center pt-2 gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-400">Ngày ghi nhận:</span>
-                    <input
-                      type="date"
-                      value={shipNgày}
-                      onChange={e => setShipNgày(e.target.value)}
-                      className="text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-700 dark:text-slate-350 font-mono outline-none shadow-2xs"
-                    />
-                  </div>
-                  
-                  <button
-                    id="add_tp_dt_ship_btn"
-                    type="submit"
-                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium py-2 px-6 rounded-lg flex items-center justify-center gap-2 shadow-sm cursor-pointer transition active:scale-[0.98]"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Xác nhận nhập tiền ship</span>
-                  </button>
-                </div>
-              </form>
-            )}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Số lượng may (chiếc)</label>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          placeholder="VD: 500"
+                          value={sốLượng}
+                          onChange={e => setSốLượng(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Đơn giá may (đ / chiếc)</label>
+                        <input
+                          type="number"
+                          required
+                          min={0}
+                          placeholder="VD: 15000"
+                          value={đơnGiáMay}
+                          onChange={e => setĐơnGiáMay(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">ĐT ➔ TP Ship sản lượng (đ)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          placeholder="Vận chuyển lên TP (ĐT -> TP)"
+                          value={shipĐT_TP}
+                          onChange={e => setShipĐT_TP(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-center pt-2 gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-slate-400">Ngày nhập hàng:</span>
+                        <input
+                          type="date"
+                          value={ngàyNhập}
+                          onChange={e => setNgàyNhập(e.target.value)}
+                          className="text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-700 dark:text-slate-350 font-mono outline-none shadow-2xs"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => setIsFormExpanded(false)}
+                          className="flex-1 sm:flex-none border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium py-2 px-4 rounded-lg cursor-pointer transition text-center"
+                        >
+                          Đóng
+                        </button>
+                        <button
+                          id="add_import_item_btn"
+                          type="submit"
+                          className="flex-1 sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium py-2 px-6 rounded-lg flex items-center justify-center gap-2 shadow-sm cursor-pointer transition active:scale-[0.98]"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Xác nhận nhập kho</span>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  /* FORM 2: SEPARATE TP -> DT SHIPPING LOGICAL TRACKER */
+                  <form onSubmit={(e) => { handleAddTpDtShipping(e); setIsFormExpanded(false); }} className="p-5 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Nội dung chuyến hàng (Vải, mốc mẫu, phụ liệu...)</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="VD: Nhập 4 cây vải, hàng mẫu thử"
+                          value={shipNộiDung}
+                          onChange={e => setShipNộiDung(e.target.value)}
+                          className="w-full text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-sans shadow-2xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Số tiền thanh toán ship TP ➔ ĐT (đ)</label>
+                        <input
+                          type="number"
+                          required
+                          min={0}
+                          placeholder="VD: 250000"
+                          value={shipSốTiền}
+                          onChange={e => setShipSốTiền(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-center pt-2 gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-slate-400">Ngày ghi nhận:</span>
+                        <input
+                          type="date"
+                          value={shipNgày}
+                          onChange={e => setShipNgày(e.target.value)}
+                          className="text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-700 dark:text-slate-350 font-mono outline-none shadow-2xs"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => setIsFormExpanded(false)}
+                          className="flex-1 sm:flex-none border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium py-2 px-4 rounded-lg cursor-pointer transition text-center"
+                        >
+                          Đóng
+                        </button>
+                        <button
+                          id="add_tp_dt_ship_btn"
+                          type="submit"
+                          className="flex-1 sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium py-2 px-6 rounded-lg flex items-center justify-center gap-2 shadow-sm cursor-pointer transition active:scale-[0.98]"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Xác nhận nhập tiền ship</span>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </motion.div>
           </div>
         )}
-      </div>
+      </AnimatePresence>
 
       {items.length > 0 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-xs space-y-4">
@@ -679,6 +833,120 @@ export default function GoodsImportTab({
                   })}
               </select>
             )}
+          </div>
+
+          {/* Custom Columns Customizer Panel */}
+          <div className="border-t border-slate-100 dark:border-slate-800/60 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowColumnCustomizer(!showColumnCustomizer)}
+              className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer font-sans"
+            >
+              <Settings className={`w-3.5 h-3.5 text-indigo-505 transition-transform ${showColumnCustomizer ? 'rotate-45' : ''}`} />
+              <span>Cấu hình hiện/ẩn cột dữ liệu (cho thiết bị di động)</span>
+            </button>
+            
+            <AnimatePresence>
+              {showColumnCustomizer && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden mt-3"
+                >
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-150 dark:border-slate-800/80 space-y-2">
+                    <p className="text-[10px] text-slate-450 dark:text-slate-500 font-medium">
+                      Bật/tắt các cột bên dưới để tối ưu hiển thị trên màn hình nhỏ. Hệ thống sẽ tự động ghi nhớ tùy chọn của bạn.
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleColumn('ngay')}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                          visibleColumns.ngay 
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                        }`}
+                      >
+                        {visibleColumns.ngay ? '✓ Ngày Nhập' : '✗ Ngày Nhập'}
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={() => toggleColumn('mau')}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                          visibleColumns.mau 
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                        }`}
+                      >
+                        {visibleColumns.mau ? '✓ Tên Mẫu' : '✗ Tên Mẫu'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleColumn('soLuong')}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                          visibleColumns.soLuong 
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                        }`}
+                      >
+                        {visibleColumns.soLuong ? '✓ Số Lượng' : '✗ Số Lượng'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleColumn('donGia')}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                          visibleColumns.donGia 
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                        }`}
+                      >
+                        {visibleColumns.donGia ? '✓ Đơn Giá' : '✗ Đơn Giá'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleColumn('thanhTien')}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                          visibleColumns.thanhTien 
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                        }`}
+                      >
+                        {visibleColumns.thanhTien ? '✓ Thành Tiền' : '✗ Thành Tiền'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleColumn('dtTp')}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                          visibleColumns.dtTp 
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                        }`}
+                      >
+                        {visibleColumns.dtTp ? '✓ Ship ĐT→TP' : '✗ Ship ĐT→TP'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleColumn('tpDt')}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                          visibleColumns.tpDt 
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                        }`}
+                      >
+                        {visibleColumns.tpDt ? '✓ Ship TP→ĐT' : '✗ Ship TP→ĐT'}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       )}
@@ -766,93 +1034,187 @@ export default function GoodsImportTab({
                     </button>
                   </div>
 
+                  {/* Bento Square summaries at the top */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-slate-50/50 dark:bg-slate-950/25 border-b border-slate-150 dark:border-slate-850">
+                    {/* Box 1: Tổng số lượng may */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 sm:p-4 rounded-xl flex items-center justify-between shadow-xs">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider leading-none">Số lượng may</span>
+                        <p className="text-sm sm:text-base font-extrabold text-slate-800 dark:text-slate-100 font-mono tracking-tight pt-1">
+                          {totalQty.toLocaleString()} <span className="text-xs font-normal text-slate-500">chiếc</span>
+                        </p>
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                        <ShoppingBag className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    {/* Box 2: Tổng tiền hàng */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 sm:p-4 rounded-xl flex items-center justify-between shadow-xs">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider leading-none">Tổng tiền hàng</span>
+                        <p className="text-sm sm:text-base font-extrabold text-indigo-650 dark:text-indigo-455 font-mono tracking-tight pt-1">
+                          {totalAmount.toLocaleString()} <span className="text-xs font-normal">đ</span>
+                        </p>
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                        <Database className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    {/* Box 3: Tổng tiền ship */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 sm:p-4 rounded-xl flex items-center justify-between shadow-xs">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider leading-none">Tổng tiền ship</span>
+                        <p className="text-sm sm:text-base font-extrabold text-slate-705 dark:text-slate-200 font-mono tracking-tight pt-1">
+                          {(totalShipĐT_TP + totalShipTP_ĐT).toLocaleString()} <span className="text-xs font-normal">đ</span>
+                        </p>
+                        <p className="text-[9px] text-slate-400 dark:text-slate-400 font-mono pt-1 leading-none">
+                          ĐT➔TP: {totalShipĐT_TP.toLocaleString()}đ | TP➔ĐT: {totalShipTP_ĐT.toLocaleString()}đ
+                        </p>
+                      </div>
+                      <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
+                        <Truck className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    {/* Box 4: Nhân công & Thanh toán */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 sm:p-4 rounded-xl flex items-center justify-between shadow-xs relative overflow-hidden">
+                      <div className="space-y-0.5 pr-8">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider leading-none">Thanh toán công thợ</span>
+                        <p className={`text-sm sm:text-base font-extrabold font-mono tracking-tight pt-1 ${remainingLaborDebt > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                          {remainingLaborDebt.toLocaleString()} <span className="text-xs font-normal">đ</span>
+                        </p>
+                        <p className="text-[9px] text-slate-400 dark:text-slate-400 font-mono pt-1 leading-none">
+                          Còn nợ (Tổng thợ: {totalAmount.toLocaleString()}đ)
+                        </p>
+                      </div>
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+                        <button
+                          type="button"
+                          onClick={() => toggleLaborPanel(weekLabel)}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center shadow-sm cursor-pointer transition-all duration-300 ${
+                            openLaborPanelWeeks[weekLabel]
+                              ? 'bg-indigo-650 text-white shadow-md scale-105'
+                              : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 hover:bg-indigo-100'
+                          }`}
+                          title="Quản lý / Thanh toán nhân công"
+                        >
+                          <Wallet className="w-4.5 h-4.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                 {/* Week Items Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 dark:bg-[#111827] text-slate-505 border-b border-slate-200 dark:border-slate-800">
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto scroll-smooth relative border border-slate-150 dark:border-slate-800/80 rounded-b-xl">
+                  <table className="w-full text-left text-xs border-collapse relative">
+                    <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-[#111827] text-slate-505 border-b border-slate-200 dark:border-slate-800">
                       <tr>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold font-mono text-[10px] sm:text-[11px]">STT</th>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px]">Ngày Nhập</th>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px]">Mẫu</th>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px]">Số Lượng</th>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px]">Đơn Giá May</th>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px]">Thành Tiền (đ)</th>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px]">ĐT {"->"} TP</th>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px]">TP {"->"} ĐT</th>
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 text-right font-semibold text-[10px] sm:text-[11px]">Hành Động</th>
+                        <th className="sticky left-0 z-30 min-w-[44px] max-w-[44px] w-[44px] bg-slate-50 dark:bg-[#111827] py-2.5 sm:py-3 px-2 sm:px-4 font-semibold font-mono text-[10px] sm:text-[11px] border-r border-slate-100 dark:border-slate-800/50">STT</th>
+                        {visibleColumns.mau && <th className="sticky left-[44px] z-30 bg-slate-50 dark:bg-[#111827] border-r border-slate-200 dark:border-slate-800/80 py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] min-w-[110px] sm:min-w-[140px]">Mẫu</th>}
+                        {visibleColumns.ngay && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">Ngày Nhập</th>}
+                        {visibleColumns.soLuong && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">Số Lượng</th>}
+                        {visibleColumns.donGia && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">Đơn Giá May</th>}
+                        {visibleColumns.thanhTien && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">Thành Tiền (đ)</th>}
+                        {visibleColumns.dtTp && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">ĐT {"->"} TP</th>}
+                        {visibleColumns.tpDt && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">TP {"->"} ĐT</th>}
+                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 text-right font-semibold text-[10px] sm:text-[11px] sticky right-0 bg-slate-50 dark:bg-[#111827] z-20 border-l border-slate-100 dark:border-slate-800/50 whitespace-nowrap">Hành Động</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-105 dark:divide-slate-800">
                       {weekItems.map((item, index) => {
                         const isEditing = editingId === item.id;
                         return (
-                          <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition">
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-400 text-[10px] sm:text-xs">{index + 1}</td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-550 dark:text-slate-450 text-[10px] sm:text-xs">{formatVietnameseDate(item.ngày)}</td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 font-medium text-slate-850 dark:text-slate-100 text-[10px] sm:text-xs">
-                              {isEditing ? (
-                                <input
-                                  type="text"
-                                  value={editMẫu}
-                                  onChange={e => setEditMẫu(e.target.value)}
-                                  className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-full min-w-[70px]"
-                                />
-                              ) : (
-                                item.mẫu
-                              )}
-                            </td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-[10px] sm:text-xs">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={editSốLượng}
-                                  onChange={e => setEditSốLượng(Number(e.target.value))}
-                                  className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
-                                />
-                              ) : (
-                                item.sốLượng.toLocaleString()
-                              )}
-                            </td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-[10px] sm:text-xs">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={editĐơnGiá}
-                                  onChange={e => setEditĐơnGiá(Number(e.target.value))}
-                                  className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
-                                />
-                              ) : (
-                                `${item.đơnGiáMay.toLocaleString()} đ`
-                              )}
-                            </td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-xs">
-                              {(isEditing ? editSốLượng * editĐơnGiá : item.sốLượng * item.đơnGiáMay).toLocaleString()}
-                            </td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-500 text-[10px] sm:text-xs">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={editĐT_TP}
-                                  onChange={e => setEditĐT_TP(Number(e.target.value))}
-                                  className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
-                                />
-                              ) : (
-                                item.vậnChuyểnĐT_TP ? `${item.vậnChuyểnĐT_TP.toLocaleString()} đ` : '0 đ'
-                              )}
-                            </td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-500 text-[10px] sm:text-xs">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={editTP_ĐT}
-                                  onChange={e => setEditTP_ĐT(Number(e.target.value))}
-                                  className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
-                                />
-                              ) : (
-                                item.vậnChuyểnTP_ĐT ? `${item.vậnChuyểnTP_ĐT.toLocaleString()} đ` : '0 đ'
-                              )}
-                            </td>
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 text-right">
+                          <tr key={item.id} className="group hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition">
+                            <td className="sticky left-0 z-10 min-w-[44px] max-w-[44px] w-[44px] bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-850/80 transition py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-400 text-[10px] sm:text-xs border-r border-slate-100 dark:border-slate-800/50">{index + 1}</td>
+                            
+                            {visibleColumns.mau && (
+                              <td className="sticky left-[44px] z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-850/80 border-r border-slate-200 dark:border-slate-800/80 transition min-w-[110px] sm:min-w-[140px] py-2 sm:py-3 px-2 sm:px-4 font-medium text-slate-850 dark:text-slate-100 text-[10px] sm:text-xs">
+                                {isEditing ? (
+                                  <input
+                                    type="text"
+                                    value={editMẫu}
+                                    onChange={e => setEditMẫu(e.target.value)}
+                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-full min-w-[70px]"
+                                  />
+                                ) : (
+                                  item.mẫu
+                                )}
+                              </td>
+                            )}
+
+                            {visibleColumns.ngay && (
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-550 dark:text-slate-450 text-[10px] sm:text-xs whitespace-nowrap">{formatVietnameseDate(item.ngày)}</td>
+                            )}
+                            
+                            {visibleColumns.soLuong && (
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-[10px] sm:text-xs">
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    value={editSốLượng}
+                                    onChange={e => setEditSốLượng(Number(e.target.value))}
+                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
+                                  />
+                                ) : (
+                                  item.sốLượng.toLocaleString()
+                                )}
+                              </td>
+                            )}
+                            
+                            {visibleColumns.donGia && (
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-[10px] sm:text-xs whitespace-nowrap">
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    value={editĐơnGiá}
+                                    onChange={e => setEditĐơnGiá(Number(e.target.value))}
+                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
+                                  />
+                                ) : (
+                                  `${item.đơnGiáMay.toLocaleString()} đ`
+                                )}
+                              </td>
+                            )}
+                            
+                            {visibleColumns.thanhTien && (
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-xs whitespace-nowrap">
+                                {(isEditing ? editSốLượng * editĐơnGiá : item.sốLượng * item.đơnGiáMay).toLocaleString()}
+                              </td>
+                            )}
+                            
+                            {visibleColumns.dtTp && (
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-500 text-[10px] sm:text-xs whitespace-nowrap">
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    value={editĐT_TP}
+                                    onChange={e => setEditĐT_TP(Number(e.target.value))}
+                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
+                                  />
+                                ) : (
+                                  item.vậnChuyểnĐT_TP ? `${item.vậnChuyểnĐT_TP.toLocaleString()} đ` : '0 đ'
+                                )}
+                              </td>
+                            )}
+                            
+                            {visibleColumns.tpDt && (
+                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-500 text-[10px] sm:text-xs whitespace-nowrap">
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    value={editTP_ĐT}
+                                    onChange={e => setEditTP_ĐT(Number(e.target.value))}
+                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
+                                  />
+                                ) : (
+                                  item.vậnChuyểnTP_ĐT ? `${item.vậnChuyểnTP_ĐT.toLocaleString()} đ` : '0 đ'
+                                )}
+                              </td>
+                            )}
+                            
+                            <td className="py-2 sm:py-3 px-2 sm:px-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-850/80 transition border-l border-slate-100 dark:border-slate-800/50 z-10 whitespace-nowrap">
                               {isEditing ? (
                                 <div className="flex justify-end gap-1">
                                   <button
@@ -1024,181 +1386,162 @@ export default function GoodsImportTab({
                   )}
                 </div>
 
-                {/* Calculations Summary at the Bottom */}
-                <div className="bg-slate-50/40 dark:bg-slate-950/20 px-5 py-4 border-t border-slate-150 dark:border-slate-850">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] text-slate-400 font-medium uppercase font-mono">TỔNG SỐ LƯỢNG MAY</span>
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 font-mono">{totalQty.toLocaleString()} chiếc</p>
-                    </div>
+                {/* Section Theo dõi và Thanh toán nhân công (Collapsible dropdown) */}
+                <AnimatePresence>
+                  {openLaborPanelWeeks[weekLabel] && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeInOut' }}
+                      className="border-t border-slate-150 dark:border-slate-850 bg-indigo-50/15 dark:bg-indigo-950/20 px-5 py-4 overflow-hidden"
+                    >
+                      <div className="flex flex-col lg:flex-row justify-between gap-6">
+                        {/* Sổ quỹ nhân công */}
+                        <div className="flex-1 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-extrabold tracking-wider text-indigo-700 dark:text-indigo-400 uppercase font-mono">
+                              💸 Theo dõi & Thanh toán nhân công (Thợ)
+                            </span>
+                          </div>
 
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] text-slate-400 font-medium uppercase font-mono">LOẠI 1: TỔNG TIỀN HÀNG (SL x Đơn Giá)</span>
-                      <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 font-mono">{totalAmount.toLocaleString()} đ</p>
-                    </div>
-
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] text-slate-400 font-medium uppercase font-mono">VẬN CHUYỂN (ĐT ➔ TP / TP ➔ ĐT)</span>
-                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-350 font-mono">
-                        {totalShipĐT_TP.toLocaleString()} đ ➔ {totalShipTP_ĐT.toLocaleString()} đ
-                      </p>
-                    </div>
-
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] text-slate-400 font-medium uppercase font-mono">LOẠI 2: CHÊNH LỆCH SHIP (TP➔ĐT TRỪ ĐT➔TP)</span>
-                      <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                        {netBackShipValue >= 0 ? '+' : ''}{netBackShipValue.toLocaleString()} đ
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section Theo dõi và Thanh toán nhân công */}
-                <div className="border-t border-slate-150 dark:border-slate-850 bg-indigo-50/15 dark:bg-indigo-950/20 px-5 py-4">
-                  <div className="flex flex-col lg:flex-row justify-between gap-6">
-                    {/* Sổ quỹ nhân công */}
-                    <div className="flex-1 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-extrabold tracking-wider text-indigo-700 dark:text-indigo-400 uppercase font-mono">
-                          💸 Theo dõi & Thanh toán nhân công (Thợ)
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-1.5 sm:gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 sm:p-3 rounded-xl shadow-xs">
-                        <div>
-                          <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase block tracking-wider leading-tight">Tiền công thợ</span>
-                          <span className="text-[10px] sm:text-xs font-bold text-slate-800 dark:text-slate-100 font-mono">
-                            {totalAmount.toLocaleString()}đ
-                          </span>
-                        </div>
-                        <div className="border-l border-slate-150 dark:border-slate-800 pl-2 sm:pl-3">
-                          <span className="text-[8px] sm:text-[9px] text-emerald-500 font-bold uppercase block tracking-wider leading-tight">Đã trả thợ</span>
-                          <span className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                            {totalLaborPaid.toLocaleString()}đ
-                          </span>
-                        </div>
-                        <div className="border-l border-slate-150 dark:border-slate-800 pl-2 sm:pl-3">
-                          <span className="text-[8px] sm:text-[9px] text-rose-500 font-bold uppercase block tracking-wider leading-tight">Còn nợ thợ</span>
-                          <span className={`text-[10px] sm:text-xs font-bold font-mono ${remainingLaborDebt > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                            {remainingLaborDebt.toLocaleString()}đ
-                          </span>
-                        </div>
-                      </div>
-
-                      <div>
-                        {activeWeekForLaborPay === weekLabel ? (
-                          <form 
-                            onSubmit={(e) => handleAddLaborPayment(e, weekLabel)}
-                            className="bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 p-3.5 rounded-xl space-y-2.5 shadow-md mt-2"
-                          >
-                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase block font-mono">Chi tiết phiếu thanh toán công thợ</span>
-                            
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-[10px] text-slate-400 mb-0.5">Số tiền trả thợ (đ)</label>
-                                <input
-                                  type="number"
-                                  required
-                                  min={1}
-                                  placeholder="Nhập số tiền"
-                                  value={laborPayAmount}
-                                  onChange={e => setLaborPayAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                                  className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-2 rounded-lg text-slate-800 dark:text-slate-200 outline-none font-mono focus:border-indigo-500"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] text-slate-400 mb-0.5">Ghi chú thanh toán</label>
-                                <input
-                                  type="text"
-                                  placeholder="VD: Trả nợ công hoặc tạm ứng"
-                                  value={laborPayNote}
-                                  onChange={e => setLaborPayNote(e.target.value)}
-                                  className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-2 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
-                                />
-                              </div>
+                          <div className="grid grid-cols-3 gap-1.5 sm:gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 sm:p-3 rounded-xl shadow-xs">
+                            <div>
+                              <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase block tracking-wider leading-tight">Tiền công thợ</span>
+                              <span className="text-[10px] sm:text-xs font-bold text-slate-800 dark:text-slate-100 font-mono">
+                                {totalAmount.toLocaleString()}đ
+                              </span>
                             </div>
+                            <div className="border-l border-slate-150 dark:border-slate-800 pl-2 sm:pl-3">
+                              <span className="text-[8px] sm:text-[9px] text-emerald-500 font-bold uppercase block tracking-wider leading-tight">Đã trả thợ</span>
+                              <span className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                                {totalLaborPaid.toLocaleString()}đ
+                              </span>
+                            </div>
+                            <div className="border-l border-slate-150 dark:border-slate-800 pl-2 sm:pl-3">
+                              <span className="text-[8px] sm:text-[9px] text-rose-500 font-bold uppercase block tracking-wider leading-tight">Còn nợ thợ</span>
+                              <span className={`text-[10px] sm:text-xs font-bold font-mono ${remainingLaborDebt > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                {remainingLaborDebt.toLocaleString()}đ
+                              </span>
+                            </div>
+                          </div>
 
-                            <div className="flex gap-2 justify-end pt-1">
+                          <div>
+                            {activeWeekForLaborPay === weekLabel ? (
+                              <form 
+                                onSubmit={(e) => handleAddLaborPayment(e, weekLabel)}
+                                className="bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900 p-3.5 rounded-xl space-y-2.5 shadow-md mt-2"
+                              >
+                                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase block font-mono">Chi tiết phiếu thanh toán công thợ</span>
+                                
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-[10px] text-slate-400 mb-0.5">Số tiền trả thợ (đ)</label>
+                                    <input
+                                      type="number"
+                                      required
+                                      min={1}
+                                      placeholder="Nhập số tiền"
+                                      value={laborPayAmount}
+                                      onChange={e => setLaborPayAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                                      className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-2 rounded-lg text-slate-800 dark:text-slate-200 outline-none font-mono focus:border-indigo-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] text-slate-400 mb-0.5">Ghi chú thanh toán</label>
+                                    <input
+                                      type="text"
+                                      placeholder="VD: Trả nợ công hoặc tạm ứng"
+                                      value={laborPayNote}
+                                      onChange={e => setLaborPayNote(e.target.value)}
+                                      className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-2 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-2 justify-end pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveWeekForLaborPay(null)}
+                                    className="text-[10px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-1 px-3 rounded text-slate-600 dark:text-slate-400 cursor-pointer"
+                                  >
+                                    Thoát
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    className="text-[10px] bg-indigo-650 hover:bg-indigo-700 text-white font-semibold py-1 px-3.5 rounded shadow cursor-pointer transition"
+                                  >
+                                    Xác nhận thanh toán
+                                  </button>
+                                </div>
+                              </form>
+                            ) : (
                               <button
                                 type="button"
-                                onClick={() => setActiveWeekForLaborPay(null)}
-                                className="text-[10px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-1 px-3 rounded text-slate-600 dark:text-slate-400 cursor-pointer"
+                                onClick={() => {
+                                  setActiveWeekForLaborPay(weekLabel);
+                                  setLaborPayAmount(remainingLaborDebt > 0 ? remainingLaborDebt : '');
+                                  setLaborPayNote('Thanh toán tiền công thợ');
+                                }}
+                                className="bg-indigo-650 hover:bg-indigo-700 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition shadow-sm active:scale-95 cursor-pointer"
                               >
-                                Thoát
+                                + Ghi nhận thanh toán công thợ
                               </button>
-                              <button
-                                type="submit"
-                                className="text-[10px] bg-indigo-650 hover:bg-indigo-700 text-white font-semibold py-1 px-3.5 rounded shadow cursor-pointer transition"
-                              >
-                                Xác nhận thanh toán
-                              </button>
-                            </div>
-                          </form>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveWeekForLaborPay(weekLabel);
-                              setLaborPayAmount(remainingLaborDebt > 0 ? remainingLaborDebt : '');
-                              setLaborPayNote('Thanh toán tiền công thợ');
-                            }}
-                            className="bg-indigo-650 hover:bg-indigo-700 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition shadow-sm active:scale-95 cursor-pointer"
-                          >
-                            + Ghi nhận thanh toán công thợ
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Lịch sử thanh toán thợ */}
-                    <div className="flex-1 space-y-2 border-t lg:border-t-0 lg:border-l border-slate-200/60 dark:border-slate-850 pt-3 lg:pt-0 lg:pl-6">
-                      <span className="text-[10px] font-extrabold tracking-wider text-emerald-600 dark:text-emerald-400 uppercase font-mono block">
-                        📅 Phiếu thanh toán công thợ {isWeekMode ? 'tuần này' : 'tháng này'}
-                      </span>
-
-                      {weekLaborPayments.length === 0 ? (
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500 italic pt-1">
-                          Chưa có phiếu thanh toán nào cho thợ {isWeekMode ? 'tuần này' : 'tháng này'}.
-                        </p>
-                      ) : (
-                        <div className="space-y-1.5 max-h-45 overflow-y-auto pr-1">
-                          {weekLaborPayments.map((p) => (
-                            <div 
-                              key={p.id} 
-                              className="flex justify-between items-center text-[11px] bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs hover:border-indigo-300 transition"
-                            >
-                              <div className="space-y-0.5">
-                                <p className="font-extrabold text-[#4f46e5] dark:text-indigo-400 font-mono">
-                                  -{p.amount.toLocaleString()}đ
-                                </p>
-                                <p className="text-[9px] text-slate-400 dark:text-slate-500">
-                                  📅 {formatVietnameseDate(p.date)} - {p.note}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1.5 pl-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedLaborPaymentForModal(p)}
-                                  className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-455 dark:hover:text-indigo-305 hover:bg-indigo-50 dark:hover:bg-slate-800/60 rounded px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition select-none border border-indigo-100 dark:border-indigo-900/30"
-                                >
-                                  Xem phiếu
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteLaborPayment(p.id)}
-                                  className="text-slate-450 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded transition p-1 cursor-pointer"
-                                  title="Xoá phiếu này"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+
+                        {/* Lịch sử thanh toán thợ */}
+                        <div className="flex-1 space-y-2 border-t lg:border-t-0 lg:border-l border-slate-200/60 dark:border-slate-850 pt-3 lg:pt-0 lg:pl-6">
+                          <span className="text-[10px] font-extrabold tracking-wider text-emerald-600 dark:text-emerald-400 uppercase font-mono block">
+                            📅 Phiếu thanh toán công thợ {isWeekMode ? 'tuần này' : 'tháng này'}
+                          </span>
+
+                          {weekLaborPayments.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic pt-1">
+                              Chưa có phiếu thanh toán nào cho thợ {isWeekMode ? 'tuần này' : 'tháng này'}.
+                            </p>
+                          ) : (
+                            <div className="space-y-1.5 max-h-45 overflow-y-auto pr-1">
+                              {weekLaborPayments.map((p) => (
+                                <div 
+                                  key={p.id} 
+                                  className="flex justify-between items-center text-[11px] bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-lg px-2.5 py-1.5 shadow-2xs hover:border-indigo-300 transition"
+                                >
+                                  <div className="space-y-0.5">
+                                    <p className="font-extrabold text-[#4f46e5] dark:text-indigo-400 font-mono">
+                                      -{p.amount.toLocaleString()}đ
+                                    </p>
+                                    <p className="text-[9px] text-slate-400 dark:text-slate-500">
+                                      📅 {formatVietnameseDate(p.date)} - {p.note}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 pl-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedLaborPaymentForModal(p)}
+                                      className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-455 dark:hover:text-indigo-305 hover:bg-indigo-50 dark:hover:bg-slate-800/60 rounded px-1.5 py-0.5 text-[9px] font-bold cursor-pointer transition select-none border border-indigo-100 dark:border-indigo-900/30"
+                                    >
+                                      Xem phiếu
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteLaborPayment(p.id)}
+                                      className="text-slate-450 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded transition p-1 cursor-pointer"
+                                      title="Xoá phiếu này"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             );
           });
