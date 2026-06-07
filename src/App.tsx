@@ -107,11 +107,26 @@ export default function App() {
       loginNotifications: Array.isArray(saved.loginNotifications) ? saved.loginNotifications : []
     };
   });
-  const [settings, setSettings] = useState<AppSettings>(() => getSavedState("xuongan_settings", {
-    theme: 'system',
-    currencySymbol: 'đ',
-    exportFormat: 'xlsx'
-  }));
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const saved = getSavedState<AppSettings>("xuongan_settings", {
+      theme: 'system',
+      currencySymbol: 'đ',
+      exportFormat: 'xlsx'
+    });
+    if (!saved || typeof saved !== 'object') {
+      return {
+        theme: 'system',
+        currencySymbol: 'đ',
+        exportFormat: 'xlsx'
+      };
+    }
+    return {
+      ...saved,
+      theme: saved.theme || 'system',
+      currencySymbol: saved.currencySymbol || 'đ',
+      exportFormat: saved.exportFormat || 'xlsx'
+    };
+  });
 
   // Production Management States
   const [operationBreakdowns, setOperationBreakdowns] = useState<ModelOperationBreakdown[]>(() => getSavedArray("xuongan_operation_breakdowns", []));
@@ -874,9 +889,9 @@ export default function App() {
 
   // Calculate statistics for operating charts inside the drawer
   const weekStatsForChart = weekKeys.map(weekKey => {
-    const list = itemsByWeek[weekKey];
-    const qty = list.reduce((a, b) => a + b.sốLượng, 0);
-    const val = list.reduce((a, b) => a + (b.sốLượng * b.đơnGiáMay), 0);
+    const list = itemsByWeek[weekKey] || [];
+    const qty = list.reduce((a, b) => a + (b?.sốLượng || 0), 0);
+    const val = list.reduce((a, b) => a + ((b?.sốLượng || 0) * (b?.đơnGiáMay || 0)), 0);
     return { name: weekKey.split(" ")[1] || "W", qty, val };
   }).reverse().slice(0, 5); // Limit 5 weeks
 
@@ -904,7 +919,7 @@ export default function App() {
     const currentMonthImportCount = items.length || 18;
     const currentMonthBillCount = bills.length || 24;
     
-    const rawRevenue = bills.reduce((sum, b) => sum + b.subtotal, 0);
+    const rawRevenue = (bills || []).reduce((sum, b) => sum + (b?.subtotal || 0), 0);
     const totalRevenueFormatted = rawRevenue > 0 
       ? (rawRevenue / 1000000).toFixed(1) + "M" 
       : "48.5M";
@@ -1590,8 +1605,9 @@ export default function App() {
                           </button>
 
                           {weekKeys.map((weekKey) => {
-                            const qty = itemsByWeek[weekKey].reduce((sum, item) => sum + item.sốLượng, 0);
-                            const count = itemsByWeek[weekKey].length;
+                            const list = itemsByWeek[weekKey] || [];
+                            const qty = list.reduce((sum, item) => sum + (item?.sốLượng || 0), 0);
+                            const count = list.length;
                             const isSelected = selectedWeekFilter === weekKey;
                             return (
                               <button
