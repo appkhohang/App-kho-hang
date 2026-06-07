@@ -150,7 +150,7 @@ export default function InvoiceDetailModal({
               </table>
             </div>
 
-            {/* Summary math and cumulative debts */}
+             {/* Summary math and cumulative debts */}
             <div className="w-2/3 ml-auto space-y-2 text-xs font-sans border-t border-slate-200 pt-3.5 text-slate-700">
               <div className="flex justify-between items-center">
                 <span className="text-slate-500 font-medium">1. Tổng trị giá đơn hàng cũ dồn lại:</span>
@@ -162,22 +162,26 @@ export default function InvoiceDetailModal({
                 <span className="font-extrabold font-mono text-slate-900 block bg-slate-100/60 px-2 py-0.5 rounded">{bill.subtotal.toLocaleString()}đ</span>
               </div>
 
-              <div className="flex justify-between items-center text-emerald-600">
-                <span className="font-bold">3. Khách đã thanh toán:</span>
-                <span className="font-extrabold font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">-{bill.paymentAmount.toLocaleString()}đ</span>
-              </div>
+              {(bill.hasPaid || bill.paymentAmount > 0) && (
+                <>
+                  <div className="flex justify-between items-center text-emerald-600">
+                    <span className="font-bold">3. Khách đã thanh toán:</span>
+                    <span className="font-extrabold font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">-{bill.paymentAmount.toLocaleString()}đ</span>
+                  </div>
 
-              {/* Other payments since the previous bill */}
-              {cyclePayments && cyclePayments.map((p, idx) => (
-                <div key={p.id} className="flex justify-between items-center text-emerald-600 text-[10.5px]">
-                  <span className="italic pl-3 text-slate-500 font-medium">↳ Đã thanh toán ({p.date} - {p.note || "Thu dồn sỉ"}):</span>
-                  <span className="font-extrabold font-mono bg-emerald-50/75 text-emerald-700 px-1.5 py-0.2 rounded">-{p.amount.toLocaleString()}đ</span>
-                </div>
-              ))}
+                  {/* Other payments since the previous bill */}
+                  {cyclePayments && cyclePayments.map((p, idx) => (
+                    <div key={p.id} className="flex justify-between items-center text-emerald-600 text-[10.5px]">
+                      <span className="italic pl-3 text-slate-500 font-medium">↳ Đã thanh toán ({p.date} - {p.note || "Thu dồn sỉ"}):</span>
+                      <span className="font-extrabold font-mono bg-emerald-50/75 text-emerald-700 px-1.5 py-0.2 rounded">-{p.amount.toLocaleString()}đ</span>
+                    </div>
+                  ))}
+                </>
+              )}
 
               <div className="flex justify-between items-center border-t-2 border-dashed border-slate-350 pt-3 text-sm font-black text-rose-600">
-                <span>4. TỔNG:</span>
-                <span className="text-base font-extrabold font-mono text-red-650 bg-red-50 px-2.5 py-1 rounded-xl">
+                <span>{(bill.hasPaid || bill.paymentAmount > 0) ? "4. TỔNG CÒN LẠI:" : "3. TỔNG BILL:"}</span>
+                <span className="font-extrabold font-mono text-red-650 bg-red-50 px-2.5 py-1 rounded-xl text-base">
                   {bill.grandTotal.toLocaleString()}đ
                 </span>
               </div>

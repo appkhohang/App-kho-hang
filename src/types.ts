@@ -52,6 +52,7 @@ export interface Bill {
   previousDebt: number; // Số tiền nợ dồn cũ
   grandTotal: number; // Tổng cộng = subtotal + previousDebt - paymentAmount
   createdAt: number;
+  hasPaid?: boolean; // toggle state
 }
 
 export interface Customer {

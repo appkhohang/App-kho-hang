@@ -41,6 +41,7 @@ export default function InvoicesTab({
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
   const [newCustomerInitialDebt, setNewCustomerInitialDebt] = useState<number | ''>('');
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+  const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
 
   // Toggle invoice writer drawer & statistics overlay
   const [isWritingInvoice, setIsWritingInvoice] = useState(false);
@@ -52,6 +53,7 @@ export default function InvoicesTab({
   ]);
   const [billGhiChú, setBillGhiChú] = useState('');
   const [modalPaymentAmount, setModalPaymentAmount] = useState<number | ''>('');
+  const [modalHasPaid, setModalHasPaid] = useState<boolean>(false);
 
   // Specialized save logic for the high-fidelity modal
   const handleSaveModalBill = () => {
@@ -77,7 +79,7 @@ export default function InvoicesTab({
 
     const subtotal = activeItems.reduce((sum, item) => sum + (Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)), 0);
     const previousDebt = calculateCustomerCumulativeDebt(selectedCustomerId);
-    const payment = Number(modalPaymentAmount || 0);
+    const payment = modalHasPaid ? Number(modalPaymentAmount || 0) : 0;
 
     const newBill: Bill = {
       id: "bill-" + Date.now(),
@@ -95,7 +97,8 @@ export default function InvoicesTab({
       paymentAmount: payment,
       previousDebt,
       grandTotal: subtotal + previousDebt - payment,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      hasPaid: modalHasPaid
     };
 
     setBills(prev => [...prev, newBill]);
@@ -104,6 +107,7 @@ export default function InvoicesTab({
     setModalDraftItems([{ mẫuMã: '', sốLượng: '', đơnGiá: '', thànhTiền: 0 } as any]);
     setBillGhiChú('');
     setModalPaymentAmount('');
+    setModalHasPaid(false);
     setIsWritingInvoice(false);
     alert("Ghi sổ hóa đơn thành công!");
   };
@@ -436,55 +440,68 @@ export default function InvoicesTab({
           </div>
 
           {/* Quick overall statistical cards row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 px-1 pt-1">
+          <div className="flex md:grid md:grid-cols-5 overflow-x-auto md:overflow-x-visible gap-3 px-1 pt-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             
-            {/* Metric 1 */}
-            <div className="bg-[#101915] border border-[#15261f] p-3.5 rounded-2xl flex items-center gap-3">
+            {/* Metric 1: Tổng nợ phải thu */}
+            <div className="bg-[#101915] border border-[#15261f] p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start">
               <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400 border border-orange-500/20">
                 <TrendingUp className="w-4.5 h-4.5" />
               </div>
-              <div className="space-y-0.5">
-                <span className="text-[9px] text-[#657f76] font-extrabold uppercase tracking-widest block font-mono">1. Tổng nợ phải thu</span>
-                <p className="text-sm font-black text-orange-400 font-mono">
+              <div className="space-y-0.5 min-w-0">
+                <span className="text-[8.5px] text-[#657f76] font-extrabold uppercase tracking-wider block font-mono truncate">1. Tổng nợ phải thu</span>
+                <p className="text-xs sm:text-sm font-black text-orange-400 font-mono truncate">
                   {customers.reduce((sum, c) => sum + calculateCustomerCumulativeDebt(c.id), 0).toLocaleString()}đ
                 </p>
               </div>
             </div>
 
-            {/* Metric 2 */}
-            <div className="bg-[#101915] border border-[#15261f] p-3.5 rounded-2xl flex items-center gap-3">
+            {/* Metric 2: Tổng lợi nhuận */}
+            <div className="bg-[#101915] border border-[#15261f] p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+                <DollarSign className="w-4.5 h-4.5" />
+              </div>
+              <div className="space-y-0.5 min-w-0">
+                <span className="text-[8.5px] text-[#657f76] font-extrabold uppercase tracking-wider block font-mono truncate">2. Tổng lợi nhuận</span>
+                <p className="text-xs sm:text-sm font-black text-emerald-400 font-mono truncate">
+                  {customers.reduce((sum, c) => sum + getCustomerTotalCharges(c.id), 0).toLocaleString()}đ
+                </p>
+              </div>
+            </div>
+
+            {/* Metric 3: Đã bán luỹ kế */}
+            <div className="bg-[#101915] border border-[#15261f] p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start">
               <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
                 <Receipt className="w-4.5 h-4.5" />
               </div>
-              <div className="space-y-0.5">
-                <span className="text-[9px] text-[#657f76] font-extrabold uppercase tracking-widest block font-mono">2. Đã bán luỹ kế</span>
-                <p className="text-sm font-black text-indigo-300 font-mono">
+              <div className="space-y-0.5 min-w-0">
+                <span className="text-[8.5px] text-[#657f76] font-extrabold uppercase tracking-wider block font-mono truncate">3. Đã bán luỹ kế</span>
+                <p className="text-xs sm:text-sm font-black text-indigo-300 font-mono truncate">
                   {bills.reduce((sum, b) => sum + b.subtotal, 0).toLocaleString()}đ
                 </p>
               </div>
             </div>
 
-            {/* Metric 3 */}
-            <div className="bg-[#101915] border border-[#15261f] p-3.5 rounded-2xl flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#10b981]/10 flex items-center justify-center text-[#10b981] border border-[#10b981]/20">
-                <DollarSign className="w-4.5 h-4.5" />
+            {/* Metric 4: Đã thu cash sỉ */}
+            <div className="bg-[#101915] border border-[#15261f] p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start">
+              <div className="w-9 h-9 rounded-xl bg-teal-500/10 flex items-center justify-center text-teal-400 border border-teal-500/20">
+                <Activity className="w-4.5 h-4.5" />
               </div>
-              <div className="space-y-0.5">
-                <span className="text-[9px] text-[#657f76] font-extrabold uppercase tracking-widest block font-mono">3. Đã thu cash sỉ</span>
-                <p className="text-sm font-black text-[#10b981] font-mono">
+              <div className="space-y-0.5 min-w-0">
+                <span className="text-[8.5px] text-[#657f76] font-extrabold uppercase tracking-wider block font-mono truncate">4. Đã thu cash sỉ</span>
+                <p className="text-xs sm:text-sm font-black text-[#10b981] font-mono truncate">
                   {(bills.reduce((sum, b) => sum + b.paymentAmount, 0) + payments.reduce((sum, p) => sum + p.amount, 0)).toLocaleString()}đ
                 </p>
               </div>
             </div>
 
-            {/* Metric 4 */}
-            <div className="bg-[#101915] border border-[#15261f] p-3.5 rounded-2xl flex items-center gap-3">
+            {/* Metric 5: Số đối tác sỉ */}
+            <div className="bg-[#101915] border border-[#15261f] p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start">
               <div className="w-9 h-9 rounded-xl bg-slate-500/10 flex items-center justify-center text-slate-400 border border-slate-500/20">
-                <Activity className="w-4.5 h-4.5" />
+                <UserPlus className="w-4.5 h-4.5" />
               </div>
-              <div className="space-y-0.5">
-                <span className="text-[9px] text-[#657f76] font-extrabold uppercase tracking-widest block font-mono">4. Số đối tác sỉ</span>
-                <p className="text-sm font-black text-slate-200 font-mono">
+              <div className="space-y-0.5 min-w-0">
+                <span className="text-[8.5px] text-[#657f76] font-extrabold uppercase tracking-wider block font-mono truncate">5. Số đối tác sỉ</span>
+                <p className="text-xs sm:text-sm font-black text-slate-200 font-mono truncate">
                   {customers.length} khách hàng
                 </p>
               </div>
@@ -575,6 +592,17 @@ export default function InvoicesTab({
                             Hoàn tất
                           </span>
                         )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCustomerId(cust.id);
+                            setIsWritingInvoice(true);
+                          }}
+                          className="mr-0.5 p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full flex items-center justify-center transition shadow-md active:scale-90 cursor-pointer"
+                          title="Tạo nhanh hoá đơn"
+                        >
+                          <Plus className="w-3 h-3 font-extrabold" />
+                        </button>
                         <ChevronRight className="w-4 h-4 text-[#657f76]" />
                       </div>
                     </div>
@@ -691,30 +719,74 @@ export default function InvoicesTab({
             )}
           </AnimatePresence>
 
-          {/* Bottom navigation bar matching Image 2 */}
-          <div className="fixed bottom-0 left-0 right-0 z-45 bg-[#070b09]/95 border-t border-[#14231d] p-3.5 backdrop-blur-md max-w-7xl mx-auto flex items-center justify-between gap-4">
-            <button
-              onClick={() => setIsAddingCustomer(true)}
-              className="w-1/2 bg-[#101915] border border-[#1b2f27] hover:bg-[#15231e] text-white text-xs font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition active:scale-[0.98] shadow-lg cursor-pointer"
-            >
-              <UserPlus className="w-4 h-4 text-[#10b981]" />
-              <span>+ Khách hàng</span>
-            </button>
+          {/* Elegant speed dial backdrop */}
+          {isSpeedDialOpen && (
+            <div 
+              className="fixed inset-0 z-45 bg-slate-950/40 backdrop-blur-[2px] transition-opacity" 
+              onClick={() => setIsSpeedDialOpen(false)}
+            />
+          )}
 
-            <button
-              onClick={() => {
-                if (customers.length > 0) {
-                  setSelectedCustomerId(customers[0].id);
-                  setIsWritingInvoice(true);
-                } else {
-                  setIsAddingCustomer(true);
-                }
-              }}
-              className="w-1/2 bg-[#6366f1] hover:bg-[#5053e1] text-white text-xs font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition active:scale-[0.98] shadow-lg shadow-indigo-950/40 cursor-pointer"
+          {/* Floating plus button speed-dial menu at bottom-right of Screen A */}
+          <div className="fixed bottom-24 right-5 md:right-8 z-50 flex flex-col items-end gap-3 font-sans">
+            <AnimatePresence>
+              {isSpeedDialOpen && (
+                <div className="flex flex-col items-end gap-3.5 pb-1">
+                  {/* Option 1: Tạo hoá đơn sỉ mới */}
+                  <motion.button
+                    initial={{ opacity: 0, y: 15, scale: 0.92 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 15, scale: 0.92 }}
+                    onClick={() => {
+                      setIsSpeedDialOpen(false);
+                      if (customers.length > 0) {
+                        setSelectedCustomerId(customers[0].id);
+                        setIsWritingInvoice(true);
+                      } else {
+                        setIsAddingCustomer(true);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4.5 py-3 rounded-2xl bg-[#6366f1] hover:bg-[#5053e1] text-white text-xs font-bold shadow-2xl border border-indigo-500/20 active:scale-95 transition cursor-pointer select-none"
+                  >
+                    <FileText className="w-4 h-4 text-white" />
+                    <span>Tạo hoá đơn sỉ mới</span>
+                  </motion.button>
+
+                  {/* Option 2: Thêm đối tác sỉ */}
+                  <motion.button
+                    initial={{ opacity: 0, y: 15, scale: 0.92 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 15, scale: 0.92 }}
+                    onClick={() => {
+                      setIsSpeedDialOpen(false);
+                      setIsAddingCustomer(true);
+                    }}
+                    className="flex items-center gap-2 px-4.5 py-3 rounded-2xl bg-[#101915]/95 border border-[#1b2f27] hover:bg-[#15231e] text-white text-xs font-bold shadow-2xl active:scale-95 transition cursor-pointer select-none"
+                  >
+                    <UserPlus className="w-4 h-4 text-[#10b981]" />
+                    <span>Thêm khách hàng sỉ</span>
+                  </motion.button>
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* Main Floating Trigger Button with premium animations */}
+            <motion.button
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setIsSpeedDialOpen(!isSpeedDialOpen)}
+              className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-2xl shadow-emerald-950/50 border border-emerald-500/25 cursor-pointer active:scale-95 transition relative group"
+              title="Menu Phác Thảo Hoá Đơn"
             >
-              <FileText className="w-4 h-4" />
-              <span>📄 Tạo hoá đơn</span>
-            </button>
+              {/* Outer pulsing ring effect to attract focus */}
+              <span className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping pointer-events-none group-hover:bg-emerald-500/25" />
+              <motion.div
+                animate={{ rotate: isSpeedDialOpen ? 135 : 0 }}
+                transition={{ type: "spring", stiffness: 260, damping: 20 }}
+              >
+                <Plus className="w-7 h-7 font-black" />
+              </motion.div>
+            </motion.button>
           </div>
 
         </div>
@@ -862,145 +934,68 @@ export default function InvoicesTab({
                 return (
                   <div
                     key={bill.id}
-                    className="bg-[#111c17] border border-[#1c2d27] p-4 rounded-xl space-y-3.5 relative overflow-hidden transition-all duration-200 hover:border-emerald-500/35 hover:bg-[#13231e] hover:shadow-lg hover:shadow-emerald-950/20 group/bill"
+                    className="bg-[#111c17] border border-[#1c2d27] p-3.5 rounded-xl flex items-center justify-between gap-4 transition-all duration-200 hover:border-emerald-500/35 hover:bg-[#13231e] hover:shadow-lg hover:shadow-emerald-950/20 group/bill"
                   >
-                    
-                    {/* Header bar of bill card */}
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-black text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-lg border border-indigo-400/20 font-mono">
-                          Bill #{billNum}
+                    <div className="flex items-center gap-3">
+                      {/* Left representation: Bill abbreviation */}
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col items-center justify-center select-none">
+                        <span className="text-[7.5px] uppercase text-indigo-400 font-extrabold tracking-wider font-mono">Bill</span>
+                        <span className="text-xs font-black text-white font-mono leading-none">#{billNum}</span>
+                      </div>
+                      
+                      {/* Middle: Label / Date details */}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-extrabold text-white font-mono">{bill.billNumber || `HD-${billNum}`}</span>
+                          
+                          {/* Nợ/Completed pill */}
+                          {grandTotalLeft > 0 ? (
+                            <span className="px-1.5 py-0.2 rounded text-[7.5px] font-bold text-amber-500 bg-amber-500/10 border border-amber-500/25 uppercase font-mono">
+                              CÒN NỢ
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.2 rounded text-[7.5px] font-bold text-[#10b981] bg-[#10b981]/15 border border-[#10b981]/30 uppercase font-mono">
+                              ĐÃ TT
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-[#657f76] font-mono">
+                          <Calendar className="w-3.5 h-3.5 text-rose-500/80" />
+                          <span>{bill.date}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Revenue total + instant triggers */}
+                    <div className="flex items-center gap-4">
+                      {/* Total bill price */}
+                      <div className="text-right">
+                        <span className="text-[9px] text-[#657f76] block uppercase tracking-wider font-extrabold font-mono">TỔNG BILL</span>
+                        <span className="text-xs sm:text-sm font-black text-emerald-400 font-mono">
+                          {bill.subtotal.toLocaleString()}đ
                         </span>
-                        
-                        {/* Custom Amber status pill in image 1 */}
-                        {grandTotalLeft > 0 ? (
-                          <span className="px-2 py-0.5 rounded text-[8.5px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/25 uppercase font-mono">
-                            ⚡ CÒN NỢ
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded text-[8.5px] font-black text-[#10b981] bg-[#10b981]/15 border border-[#10b981]/30 uppercase font-mono">
-                            ✓ ĐÃ TT
-                          </span>
-                        )}
                       </div>
 
-                      {/* Right actions */}
-                      <div className="flex items-center gap-2">
-                        {/* Screen Image Capture trigger */}
+                      {/* Clean micro-triggers wrap */}
+                      <div className="flex items-center gap-1.5">
+                        {/* Detail Trigger */}
                         <button
                           onClick={() => setSelectedInvoiceForModal(bill)}
-                          className="p-1 bg-[#10b981]/15 text-[#10b981] hover:text-white hover:bg-emerald-600 rounded border border-emerald-500/10 transition cursor-pointer active:scale-[0.92]"
-                          title="Nhấp xem và chụp ảnh gửi bill Zalo khách"
+                          className="p-2 bg-[#10b981]/15 text-[#10b981] hover:text-white hover:bg-emerald-600 rounded-lg border border-emerald-500/10 transition cursor-pointer active:scale-90"
+                          title="Xem chi tiết & chụp ảnh hoá đơn"
                         >
-                          <Image className="w-3.5 h-3.5" />
+                          <FileText className="w-4 h-4" />
                         </button>
                         
                         <button
                           onClick={() => deleteBill(bill.id)}
-                          className="p-1 bg-red-500/10 text-rose-500 hover:text-white hover:bg-red-600 rounded border border-rose-500/10 transition cursor-pointer active:scale-[0.92]"
+                          className="p-2 bg-red-500/10 text-rose-500 hover:text-white hover:bg-red-600 rounded-lg border border-rose-500/10 transition cursor-pointer active:scale-90"
+                          title="Xoá hóa đơn này"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
-
-                    {/* Date row with small red calendar icon */}
-                    <div className="flex items-center gap-1.5 text-[10.5px] text-[#657f76] font-mono leading-none">
-                      <Calendar className="w-3.5 h-3.5 text-rose-500/80" />
-                      <span>{bill.date}</span>
-                    </div>
-
-                    {/* Detailed tabular items */}
-                    <div className="border border-[#1c2d27] rounded-xl overflow-hidden bg-[#0e1613]">
-                      <table className="w-full text-left text-[11px] border-collapse">
-                        <thead>
-                          <tr className="bg-[#121f1a] text-[#557e6d] font-bold uppercase text-[9px] border-b border-[#1c2d27]">
-                            <th className="py-2 px-3 text-center w-10 border-r border-[#1c2d27]/30">STT</th>
-                            <th className="py-2 px-3 border-r border-[#1c2d27]/30">MẪU MÃ</th>
-                            <th className="py-2 px-3 text-center w-14 border-r border-[#1c2d27]/30">SL</th>
-                            <th className="py-2 px-3 text-right w-20 border-r border-[#1c2d27]/30">ĐƠN GIÁ</th>
-                            <th className="py-2 px-3 text-right w-24">T.TIỀN</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#1c2d27]/40 text-[#b5cbbf] font-mono">
-                          {bill.items.map((item, idx) => (
-                            <tr 
-                              key={item.id || idx} 
-                              className="even:bg-[#111c18]/25 odd:bg-transparent hover:bg-emerald-500/15 hover:text-emerald-350 transition-all duration-150 group/tr"
-                            >
-                              <td className="py-2 px-3 text-center text-[#557e6d] group-hover/tr:text-emerald-400 font-bold border-r border-[#1c2d27]/30 transition-colors">{idx + 1}</td>
-                              <td className="py-2 px-3 font-sans font-bold text-white group-hover/tr:text-emerald-300 border-r border-[#1c2d27]/30 transition-colors">{item.mẫuMã}</td>
-                              <td className="py-2 px-3 text-center border-r border-[#1c2d27]/30 font-bold">{item.sốLượng}</td>
-                              <td className="py-2 px-3 text-right border-r border-[#1c2d27]/30 text-slate-300 group-hover/tr:text-emerald-350 transition-colors">{item.đơnGiá.toLocaleString()}đ</td>
-                              <td className="py-2 px-3 text-right text-white font-black group-hover/tr:text-emerald-300 transition-colors">{item.thànhTiền.toLocaleString()}đ</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Bill summaries listed neatly matching Image 1 */}
-                    <div className="space-y-1.5 text-xs text-[#657f76] font-semibold pt-1">
-                      <div className="flex justify-between items-center text-slate-100">
-                        <span>💰 Tổng bill</span>
-                        <span className="font-extrabold font-mono text-emerald-400">{bill.subtotal.toLocaleString()}đ</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center text-[#f87171]/90">
-                        <span>📋 Nợ tích luỹ</span>
-                        <span className="font-extrabold font-mono">{bill.previousDebt.toLocaleString()}đ</span>
-                      </div>
-
-                      <div className="flex justify-between items-center text-[#10b981]">
-                        <span>✅ Đã TT</span>
-                        <span className="font-extrabold font-mono">-{bill.paymentAmount.toLocaleString()}đ</span>
-                      </div>
-                    </div>
-
-                    {/* LỊCH SỬ THANH TOÁN */}
-                    <div className="bg-[#0c1310] border border-[#1a2c25] rounded-xl p-3 space-y-1 text-[11px] font-mono shadow-inner">
-                      <span className="text-[8.5px] uppercase text-[#657f76] font-black tracking-widest font-sans block mb-1">
-                        LỊCH SỬ THANH TOÁN
-                      </span>
-                      {cyclePayments.length > 0 || bill.paymentAmount > 0 ? (
-                        <div className="space-y-1">
-                          {bill.paymentAmount > 0 && (
-                            <div className="flex justify-between text-[#10b981]">
-                              <span>📅 {bill.date} (Kèm đợt sỉ)</span>
-                              <span className="font-extrabold">+{bill.paymentAmount.toLocaleString()}đ</span>
-                            </div>
-                          )}
-                          {cyclePayments
-                            .map(p => (
-                              <div 
-                                key={p.id} 
-                                className="flex justify-between items-center text-[#10b981] group hover:bg-[#10b981]/10 rounded px-1 -mx-1 transition cursor-pointer"
-                                onClick={() => setSelectedPaymentForModal(p)}
-                                title="Click xem chi tiết thanh toán sỉ"
-                              >
-                                <span className="flex items-center gap-1.5">
-                                  <span>🧾 📅 {p.date} ({p.note})</span>
-                                </span>
-                                <span className="font-extrabold font-mono">+{p.amount.toLocaleString()}đ</span>
-                              </div>
-                            ))}
-                        </div>
-                      ) : (
-                        <span className="text-[#657f76] italic text-[10px]">Chưa có TT</span>
-                      )}
-                    </div>
-
-                    {/* Bottom main chốt nợ line */}
-                    <div className="border-t border-[#1a2d24] pt-3 flex justify-between items-center">
-                      <div className="flex items-center gap-1.5 text-xs text-[#657f76] font-bold">
-                        <Activity className="w-4 h-4 text-rose-500" />
-                        <span>Còn phải trả</span>
-                      </div>
-                      <span className="text-xs sm:text-sm font-black text-rose-500 font-mono">
-                        {bill.grandTotal.toLocaleString()}đ
-                      </span>
-                    </div>
-
                   </div>
                 );
               });
@@ -1093,7 +1088,8 @@ export default function InvoicesTab({
             {isWritingInvoice && (() => {
               const modalSubtotal = modalDraftItems.reduce((sum, item) => sum + (Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)), 0);
               const modalPrevDebt = selectedCustomerId ? calculateCustomerCumulativeDebt(selectedCustomerId) : 0;
-              const modalGrandTotal = modalSubtotal + modalPrevDebt - Number(modalPaymentAmount || 0);
+              const modalPaymentValue = modalHasPaid ? Number(modalPaymentAmount || 0) : 0;
+              const modalGrandTotal = modalSubtotal + modalPrevDebt - modalPaymentValue;
 
               return (
                 <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
@@ -1102,18 +1098,18 @@ export default function InvoicesTab({
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white dark:bg-[#09110d] border border-[#cbd5e1] dark:border-[#14231d] w-full max-w-lg p-6 rounded-3xl shadow-2xl z-20 space-y-4.5 max-h-[92vh] overflow-y-auto font-sans"
+                    className="bg-white text-slate-800 border border-slate-200 w-full max-w-lg p-6 rounded-3xl shadow-2xl z-20 space-y-4.5 max-h-[92vh] overflow-y-auto font-sans"
                   >
                     {/* Header Row */}
-                    <div className="border-b border-[#e2e8f0] dark:border-[#14231d]/60 pb-3 flex justify-between items-center text-xs">
+                    <div className="border-b border-slate-200 pb-3 flex justify-between items-center text-xs">
                       <div className="flex items-center gap-2">
-                        <span className="text-[#10b981] font-black text-sm uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="text-emerald-600 font-black text-sm uppercase tracking-wider flex items-center gap-1.5">
                           📄 Tạo hoá đơn sỉ mới
                         </span>
                       </div>
                       <button 
                         onClick={() => setIsWritingInvoice(false)} 
-                        className="text-slate-500 dark:text-[#10b981]/80 hover:text-slate-800 dark:hover:text-white p-1.5 hover:bg-slate-100 dark:hover:bg-emerald-950/50 rounded-full transition cursor-pointer"
+                        className="text-slate-400 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-full transition cursor-pointer"
                       >
                         <X className="w-5 h-5" />
                       </button>
@@ -1123,38 +1119,38 @@ export default function InvoicesTab({
                     <div className="space-y-4.5">
                       {/* Date Block */}
                       <div>
-                        <label className="block text-[10px] uppercase font-bold text-slate-500 dark:text-[#657f76] mb-1.5 tracking-wider">
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 tracking-wider">
                           📆 NGÀY GHI SỔ
                         </label>
-                        <div className="bg-slate-50 dark:bg-[#060b09] border border-slate-200 dark:border-[#14221d] rounded-2xl px-4 py-3 flex items-center focus-within:border-emerald-500 dark:focus-within:border-[#10b981]/50 transition">
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 flex items-center focus-within:border-emerald-500 transition">
                           <input
                             type="date"
                             value={billDate}
                             onChange={e => setBillDate(e.target.value)}
-                            className="w-full bg-transparent border-none text-slate-800 dark:text-white font-mono outline-none text-sm cursor-pointer"
+                            className="w-full bg-transparent border-none text-slate-800 font-mono outline-none text-sm cursor-pointer"
                           />
                         </div>
                       </div>
 
                       {/* Note Block */}
                       <div>
-                        <label className="block text-[10px] uppercase font-bold text-slate-500 dark:text-[#657f76] mb-1.5 tracking-wider">
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 tracking-wider">
                           📝 GHI CHÚ ĐƠN HÀNG
                         </label>
-                        <div className="bg-slate-50 dark:bg-[#060b09] border border-slate-200 dark:border-[#14221d] rounded-2xl px-4 py-3">
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
                           <input
                             type="text"
                             placeholder="Nhập ghi chú vận chuyển, hàng tặng..."
                             value={billGhiChú}
                             onChange={e => setBillGhiChú(e.target.value)}
-                            className="w-full bg-transparent border-none text-slate-800 dark:text-white outline-none text-sm placeholder-slate-400 dark:placeholder-[#375247]"
+                            className="w-full bg-transparent border-none text-slate-800 outline-none text-sm placeholder-slate-400"
                           />
                         </div>
                       </div>
 
                       {/* Items List */}
                       <div className="space-y-4" id="modalDraftItems">
-                        <label className="block text-[10px] uppercase font-extrabold text-slate-500 dark:text-[#657f76] tracking-wider mb-2">
+                        <label className="block text-[10px] uppercase font-extrabold text-slate-500 mb-2 tracking-wider">
                           📦 DANH SÁCH MẶT HÀNG SỈ
                         </label>
 
@@ -1164,18 +1160,18 @@ export default function InvoicesTab({
                           return (
                             <div 
                               key={idx} 
-                              className="bg-slate-50/50 dark:bg-[#0d1613] border border-[#a7f3d0]/60 dark:border-[#1c2d27]/70 rounded-2xl p-5 space-y-4.5 relative transition-all duration-200 shadow-sm"
+                              className="bg-slate-50/50 border border-slate-200 rounded-2xl p-5 space-y-4.5 relative transition-all duration-200 shadow-sm"
                             >
                               {/* Inner Header Row */}
-                              <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-200 dark:border-slate-800/40">
-                                <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 capitalize flex items-center gap-1">
+                              <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-200">
+                                <span className="text-xs font-black text-indigo-600 capitalize flex items-center gap-1">
                                   🧥 Mặt hàng {idx + 1}
                                 </span>
                                 {modalDraftItems.length > 1 && (
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveModalDraftItem(idx)}
-                                    className="text-rose-500 hover:text-red-500 hover:bg-rose-50 dark:hover:bg-red-950/20 font-black text-xs transition px-2.5 py-1 rounded-lg cursor-pointer"
+                                    className="text-rose-500 hover:text-red-500 hover:bg-rose-50 font-black text-xs transition px-2.5 py-1 rounded-lg cursor-pointer"
                                   >
                                     ✕ Gỡ mặt hàng
                                   </button>
@@ -1184,7 +1180,7 @@ export default function InvoicesTab({
 
                               {/* Section 1: MẪU MÃ */}
                               <div className="space-y-1.5">
-                                <label className="block text-[9.5px] uppercase font-bold text-slate-500 dark:text-[#657f76] tracking-tight">
+                                <label className="block text-[9.5px] uppercase font-bold text-slate-500 tracking-tight">
                                   👗 Tên mẫu mã thiết kế May sỉ *
                                 </label>
                                 <input
@@ -1192,14 +1188,14 @@ export default function InvoicesTab({
                                   placeholder="Tên mẫu, mã vạch..."
                                   value={item.mẫuMã}
                                   onChange={e => handleUpdateModalDraftItem(idx, 'mẫuMã', e.target.value)}
-                                  className="w-full bg-white dark:bg-[#060b09] border border-slate-200 dark:border-[#14221d] rounded-2xl px-4 py-3 text-slate-900 dark:text-white text-sm font-semibold outline-none transition focus:border-indigo-500 dark:focus:border-emerald-600/50"
+                                  className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-slate-900 text-sm font-semibold outline-none transition focus:border-indigo-500"
                                 />
                               </div>
 
                               {/* Section 2: SL & ĐƠN GIÁ inside split touch container */}
                               <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                  <label className="block text-[9.5px] uppercase font-bold text-slate-500 dark:text-[#657f76] tracking-tight">
+                                  <label className="block text-[9.5px] uppercase font-bold text-slate-500 tracking-tight">
                                     📦 Số lượng đại sỉ (SL) *
                                   </label>
                                   <input
@@ -1207,12 +1203,12 @@ export default function InvoicesTab({
                                     placeholder="0"
                                     value={item.sốLượng === 0 ? '' : item.sốLượng}
                                     onChange={e => handleUpdateModalDraftItem(idx, 'sốLượng', e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full bg-white dark:bg-[#060b09] border border-slate-200 dark:border-[#14221d] rounded-2xl px-4 py-3 text-slate-900 dark:text-white font-mono text-sm font-bold outline-none transition focus:border-indigo-500 dark:focus:border-emerald-600/50"
+                                    className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-slate-900 font-mono text-sm font-bold outline-none transition focus:border-indigo-500"
                                   />
                                 </div>
 
                                 <div className="space-y-1.5">
-                                  <label className="block text-[9.5px] uppercase font-bold text-slate-500 dark:text-[#657f76] tracking-tight">
+                                  <label className="block text-[9.5px] uppercase font-bold text-slate-500 tracking-tight">
                                     💵 Đơn giá May sỉ (đ) *
                                   </label>
                                   <input
@@ -1220,14 +1216,14 @@ export default function InvoicesTab({
                                     placeholder="0"
                                     value={item.đơnGiá === 0 ? '' : item.đơnGiá}
                                     onChange={e => handleUpdateModalDraftItem(idx, 'đơnGiá', e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full bg-white dark:bg-[#060b09] border border-slate-200 dark:border-[#14221d] rounded-2xl px-4 py-3 text-slate-900 dark:text-white font-mono text-sm font-bold outline-none text-right transition focus:border-indigo-500 dark:focus:border-emerald-600/50"
+                                    className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-slate-900 font-mono text-sm font-bold outline-none text-right transition focus:border-indigo-500"
                                   />
                                 </div>
                               </div>
 
                               {/* Section 3: Calculated Item Subtotal Styled Box */}
-                              <div className="border border-emerald-200 dark:border-emerald-600/30 bg-emerald-50/20 dark:bg-[#070b09] h-12 rounded-2xl flex items-center justify-between px-4 text-emerald-600 dark:text-emerald-400 font-mono font-black text-xs shadow-inner">
-                                <span className="uppercase text-[9.5px] font-bold tracking-wider font-sans text-slate-500 dark:text-slate-400">Thành tiền dòng này:</span>
+                              <div className="border border-emerald-250 bg-emerald-50/20 h-12 rounded-2xl flex items-center justify-between px-4 text-emerald-600 font-mono font-black text-xs shadow-inner">
+                                <span className="uppercase text-[9.5px] font-bold tracking-wider font-sans text-slate-500">Thành tiền dòng này:</span>
                                 <span className="text-[13px]">{sub.toLocaleString()}đ</span>
                               </div>
                             </div>
@@ -1238,26 +1234,60 @@ export default function InvoicesTab({
                         <button
                           type="button"
                           onClick={handleAddModalDraftItem}
-                          className="w-full border-2 border-dashed border-slate-200 hover:border-indigo-400 dark:border-emerald-600/30 dark:hover:border-emerald-500 h-12 bg-slate-50 hover:bg-slate-100 dark:bg-[#09110d] dark:hover:bg-emerald-950/10 text-indigo-600 dark:text-[#10b981] font-bold rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition select-none text-xs"
+                          className="w-full border-2 border-dashed border-slate-200 hover:border-indigo-400 h-12 bg-slate-50 hover:bg-slate-100 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition select-none text-xs"
                         >
                           <span>+ Thêm đại sỉ dòng mặt hàng mới</span>
                         </button>
                       </div>
 
                       {/* Payment Amount Direct Box */}
-                      <div>
-                        <label className="block text-[10px] uppercase font-bold text-[#10b981] mb-1.5 tracking-wider flex items-center gap-1">
-                          💳 KHÁCH THANH TOÁN ĐỢT NÀY (Đ) <span className="text-[9px] text-[#657f76] font-normal lowercase">(Tuỳ chọn - giảm trực tiếp nợ sỉ)</span>
-                        </label>
-                        <div className="bg-white dark:bg-[#060b09] border border-emerald-500/30 dark:border-[#14221d] rounded-2xl px-4 py-3 flex items-center focus-within:border-emerald-500 dark:focus-within:border-[#10b981]/60 focus-within:ring-2 focus-within:ring-emerald-100 dark:focus-within:ring-emerald-950/20 transition">
-                          <input
-                            type="number"
-                            placeholder="Nhập số tiền khách thanh toán liền cho hóa đơn này (nếu có)..."
-                            value={modalPaymentAmount === '' ? '' : modalPaymentAmount}
-                            onChange={e => setModalPaymentAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                            className="w-full bg-transparent border-none text-[#10b981] dark:text-emerald-400 font-mono font-bold text-sm outline-none"
-                          />
+                      <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                        <div className="flex justify-between items-center focus-within:ring-0">
+                          <label className="text-[10px] uppercase font-bold text-[#10b981] tracking-wider flex items-center gap-1.5 selection:bg-transparent">
+                            💳 Khách hàng đã thanh toán
+                          </label>
+                          {/* Premium iOS-Style Switch Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextVal = !modalHasPaid;
+                              setModalHasPaid(nextVal);
+                              if (!nextVal) {
+                                setModalPaymentAmount('');
+                              }
+                            }}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              modalHasPaid ? 'bg-[#10b981]' : 'bg-slate-300'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                modalHasPaid ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
                         </div>
+
+                        <AnimatePresence>
+                          {modalHasPaid && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="bg-white border border-emerald-500/30 rounded-2xl px-4 py-3 flex items-center focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100 transition duration-150 mt-1">
+                                <input
+                                  type="number"
+                                  placeholder="Nhập số tiền khách thanh toán liền..."
+                                  value={modalPaymentAmount === '' ? '' : modalPaymentAmount}
+                                  onChange={e => setModalPaymentAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full bg-transparent border-none text-[#10b981] font-mono font-bold text-sm outline-none"
+                                />
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
 
                       {/* Customer Recent Pay & Bills Timeline feed in-place inside dialog */}
@@ -1282,22 +1312,22 @@ export default function InvoicesTab({
                         if (recentTxs.length === 0) return null;
 
                         return (
-                          <div className="border border-slate-150 dark:border-[#14231d]/20 bg-slate-50/50 dark:bg-[#060b09]/40 rounded-2xl p-4.5 space-y-2 font-sans">
-                            <span className="block text-[9.5px] uppercase font-bold text-slate-500 dark:text-[#657f76] tracking-wider mb-1">
+                          <div className="border border-slate-150 bg-slate-50/50 rounded-2xl p-4.5 space-y-2 font-sans">
+                            <span className="block text-[9.5px] uppercase font-bold text-slate-500 tracking-wider mb-1">
                               📜 Lịch sử thanh toán & giao dịch gần đây của khách sỉ
                             </span>
-                            <div className="space-y-2 divide-y divide-slate-200/50 dark:divide-[#14231d]/30 font-sans">
+                            <div className="space-y-2 divide-y divide-slate-200/50 font-sans">
                               {recentTxs.map((tx, tIdx) => (
                                 <div key={tIdx} className="flex justify-between items-center text-xs pt-2 first:pt-0">
                                   <div className="flex flex-col">
-                                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                                    <span className="font-bold text-slate-700">
                                       {tx.label}
                                     </span>
                                     <span className="text-[10px] text-slate-400 font-mono mt-0.5">
                                       📅 {tx.date}
                                     </span>
                                   </div>
-                                  <span className={`font-mono font-bold text-xs ${tx.type === 'payment' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-500'}`}>
+                                  <span className={`font-mono font-bold text-xs ${tx.type === 'payment' ? 'text-emerald-600' : 'text-amber-600'}`}>
                                     {tx.type === 'payment' ? `+${tx.amount.toLocaleString()}` : `-${tx.amount.toLocaleString()}`}đ
                                   </span>
                                 </div>
@@ -1308,31 +1338,31 @@ export default function InvoicesTab({
                       })()}
 
                       {/* Summary statistics inside custom container */}
-                      <div className="border border-slate-200 dark:border-emerald-600/20 bg-slate-50/85 dark:bg-[#070e0b] rounded-2xl p-5 space-y-3 text-xs font-semibold shadow-inner">
-                        <div className="flex justify-between items-center text-slate-500 dark:text-[#657f76]">
+                      <div className="border border-slate-200 bg-slate-50 rounded-2xl p-5 space-y-3 text-xs font-semibold shadow-inner">
+                        <div className="flex justify-between items-center text-slate-500">
                           <span>💰 Tổng bill hàng sỉ mới này:</span>
                           <span className="font-mono font-extrabold text-[#10b981] text-sm">
                             {modalSubtotal.toLocaleString()}đ
                           </span>
                         </div>
 
-                        <div className="flex justify-between items-center text-slate-500 dark:text-[#657f76]">
+                        <div className="flex justify-between items-center text-slate-500">
                           <span>📋 Nợ cũ luỹ kế trước đây dồn qua:</span>
                           <span className="font-mono font-extrabold text-[#f87171] text-sm">
                             +{modalPrevDebt.toLocaleString()}đ
                           </span>
                         </div>
 
-                        {Number(modalPaymentAmount || 0) > 0 && (
+                        {modalHasPaid && Number(modalPaymentAmount || 0) > 0 && (
                           <div className="flex justify-between items-center text-[#10b981]">
                             <span>💳 Khách thanh toán kèm hoá đơn này:</span>
-                            <span className="font-mono font-black text-sm text-[#10b981] dark:text-emerald-400">
+                            <span className="font-mono font-black text-sm text-[#10b981]">
                               -{Number(modalPaymentAmount || 0).toLocaleString()}đ
                             </span>
                           </div>
                         )}
 
-                        <div className="flex justify-between items-center text-slate-800 dark:text-[#657f76] border-t border-slate-200/60 dark:border-[#14231d] pt-3">
+                        <div className="flex justify-between items-center text-slate-800 border-t border-slate-200/60 pt-3">
                           <span className="font-bold">📊 CÒN PHẢI TRẢ (NỢ LUỸ KẾ CHỐT SỔ):</span>
                           <span className="font-mono font-black text-rose-500 text-sm sm:text-base">
                             {modalGrandTotal.toLocaleString()}đ
@@ -1345,7 +1375,7 @@ export default function InvoicesTab({
                         <button
                           type="button"
                           onClick={() => setIsWritingInvoice(false)}
-                          className="w-1/4 bg-slate-100 hover:bg-slate-200 dark:bg-[#101915] border border-slate-250 dark:border-[#1b2f27] text-slate-500 dark:text-[#657f76] transition hover:text-slate-800 dark:hover:text-white rounded-2xl py-3.5 text-xs font-bold cursor-pointer"
+                          className="w-1/4 bg-slate-100 hover:bg-slate-200 border border-slate-250 text-slate-500 transition hover:text-slate-800 rounded-2xl py-3.5 text-xs font-bold cursor-pointer"
                         >
                           Huỷ
                         </button>
@@ -1364,6 +1394,21 @@ export default function InvoicesTab({
               );
             })()}
           </AnimatePresence>
+
+          {/* Floating plus button at bottom-right corner of detailed customer view */}
+          <div className="fixed bottom-24 right-5 md:right-8 z-40">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setIsWritingInvoice(true)}
+              className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-2xl shadow-emerald-950/50 border border-emerald-500/25 cursor-pointer active:scale-95 transition relative group"
+              title="Tạo hoá đơn mới cho khách hàng này"
+            >
+              {/* Outer pulsing ring effect to draw attention */}
+              <span className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping pointer-events-none group-hover:bg-emerald-500/30" />
+              <Plus className="w-7 h-7 font-black" />
+            </motion.button>
+          </div>
 
           {/* Bottom Persistent Action Bar matching Image 1 */}
           <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#070b09]/95 border-t border-[#14231d] p-3.5 backdrop-blur-md max-w-7xl mx-auto flex items-center justify-between gap-4">
