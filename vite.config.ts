@@ -7,10 +7,12 @@ import {defineConfig} from 'vite';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
-  // Use relative base path './' for both local and production (GitHub Pages).
-  // Relative paths are extremely portable, allowing the build to work on any custom domain,
-  // user organization page, or repository sub-folder without blank screen issues.
-  const base = './';
+  // Respect Repo Name if building on GitHub Actions for GH Pages.
+  // This avoids blank screens on GitHub Pages by ensuring assets are loaded correctly
+  // even when visited without a trailing slash (e.g. /repository-name).
+  const isGithubActions = process.env.GITHUB_ACTIONS === 'true';
+  const repoName = process.env.GITHUB_REPOSITORY ? process.env.GITHUB_REPOSITORY.split('/')[1] : '';
+  const base = isGithubActions ? `/${repoName}/` : './';
 
   return {
     base: base,
