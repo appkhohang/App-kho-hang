@@ -285,58 +285,60 @@ export default function App() {
         if (!active) return;
         
         if (cloudData) {
-          if (cloudData.importItems && cloudData.importItems.length > 0) {
-            setItems(cloudData.importItems);
-            saveState("xuongan_import_items", cloudData.importItems);
-          }
-          if (cloudData.laborPayments && cloudData.laborPayments.length > 0) {
-            setLaborPayments(cloudData.laborPayments);
-            saveState("xuongan_labor_payments", cloudData.laborPayments);
-          }
-          if (cloudData.tpDtShippings && cloudData.tpDtShippings.length > 0) {
-            setTpDtShippings(cloudData.tpDtShippings);
-            saveState("xuongan_tp_dt_shippings", cloudData.tpDtShippings);
-          }
-          if (cloudData.customers && cloudData.customers.length > 0) {
-            setCustomers(cloudData.customers);
-            saveState("xuongan_customers", cloudData.customers);
-          }
-          if (cloudData.bills && cloudData.bills.length > 0) {
-            setBills(cloudData.bills);
-            saveState("xuongan_bills", cloudData.bills);
-          }
-          if (cloudData.payments && cloudData.payments.length > 0) {
-            setPayments(cloudData.payments);
-            saveState("xuongan_payments", cloudData.payments);
-          }
-          if (cloudData.operationBreakdowns && cloudData.operationBreakdowns.length > 0) {
-            setOperationBreakdowns(cloudData.operationBreakdowns);
-            saveState("xuongan_operation_breakdowns", cloudData.operationBreakdowns);
-          }
-          if (cloudData.workers && cloudData.workers.length > 0) {
-            setWorkers(cloudData.workers);
-            saveState("xuongan_workers", cloudData.workers);
-          }
-          if (cloudData.workerJobs && cloudData.workerJobs.length > 0) {
-            setWorkerJobs(cloudData.workerJobs);
-            saveState("xuongan_worker_jobs", cloudData.workerJobs);
-          }
-          if (cloudData.rawMaterials && cloudData.rawMaterials.length > 0) {
-            setRawMaterials(cloudData.rawMaterials);
-            saveState("xuongan_raw_materials", cloudData.rawMaterials);
-          }
-          if (cloudData.materialRecipes && cloudData.materialRecipes.length > 0) {
-            setMaterialRecipes(cloudData.materialRecipes);
-            saveState("xuongan_material_recipes", cloudData.materialRecipes);
-          }
-          if (cloudData.productionBatches && cloudData.productionBatches.length > 0) {
-            setProductionBatches(cloudData.productionBatches);
-            saveState("xuongan_production_batches", cloudData.productionBatches);
-          }
-          if (cloudData.materialReimports && cloudData.materialReimports.length > 0) {
-            setMaterialReimports(cloudData.materialReimports);
-            saveState("xuongan_material_reimports", cloudData.materialReimports);
-          }
+          // Sync all database collections from Cloud. If a collection is empty, overwrite locally as empty list 
+          // to fully support newly registered/created accounts on other devices or fresh database clearings.
+          const freshItems = cloudData.importItems || [];
+          setItems(freshItems);
+          saveState("xuongan_import_items", freshItems);
+
+          const freshLaborPayments = cloudData.laborPayments || [];
+          setLaborPayments(freshLaborPayments);
+          saveState("xuongan_labor_payments", freshLaborPayments);
+
+          const freshTpDtShippings = cloudData.tpDtShippings || [];
+          setTpDtShippings(freshTpDtShippings);
+          saveState("xuongan_tp_dt_shippings", freshTpDtShippings);
+
+          const freshCustomers = cloudData.customers || [];
+          setCustomers(freshCustomers);
+          saveState("xuongan_customers", freshCustomers);
+
+          const freshBills = cloudData.bills || [];
+          setBills(freshBills);
+          saveState("xuongan_bills", freshBills);
+
+          const freshPayments = cloudData.payments || [];
+          setPayments(freshPayments);
+          saveState("xuongan_payments", freshPayments);
+
+          const freshOperationBreakdowns = cloudData.operationBreakdowns || [];
+          setOperationBreakdowns(freshOperationBreakdowns);
+          saveState("xuongan_operation_breakdowns", freshOperationBreakdowns);
+
+          const freshWorkers = cloudData.workers || [];
+          setWorkers(freshWorkers);
+          saveState("xuongan_workers", freshWorkers);
+
+          const freshWorkerJobs = cloudData.workerJobs || [];
+          setWorkerJobs(freshWorkerJobs);
+          saveState("xuongan_worker_jobs", freshWorkerJobs);
+
+          const freshRawMaterials = cloudData.rawMaterials || [];
+          setRawMaterials(freshRawMaterials);
+          saveState("xuongan_raw_materials", freshRawMaterials);
+
+          const freshMaterialRecipes = cloudData.materialRecipes || [];
+          setMaterialRecipes(freshMaterialRecipes);
+          saveState("xuongan_material_recipes", freshMaterialRecipes);
+
+          const freshProductionBatches = cloudData.productionBatches || [];
+          setProductionBatches(freshProductionBatches);
+          saveState("xuongan_production_batches", freshProductionBatches);
+
+          const freshMaterialReimports = cloudData.materialReimports || [];
+          setMaterialReimports(freshMaterialReimports);
+          saveState("xuongan_material_reimports", freshMaterialReimports);
+
           if (cloudData.tasks && cloudData.tasks.length > 0) {
             setTasks(cloudData.tasks);
             saveState("xuongan_tasks", cloudData.tasks);
@@ -856,6 +858,20 @@ export default function App() {
         displayName: null,
         verified2FA: false
       }));
+      // Reset all custom local states to clear user data on logging out
+      setItems([]);
+      setLaborPayments([]);
+      setTpDtShippings([]);
+      setCustomers([]);
+      setBills([]);
+      setPayments([]);
+      setOperationBreakdowns([]);
+      setWorkers([]);
+      setWorkerJobs([]);
+      setRawMaterials([]);
+      setMaterialRecipes([]);
+      setProductionBatches([]);
+      setMaterialReimports([]);
     }
   };
 
@@ -917,8 +933,9 @@ export default function App() {
       : "DU";
 
     // Dynamic metrics or fallbacks exactly matching the image mockup values
-    const currentMonthImportCount = items.length || 18;
-    const currentMonthBillCount = bills.length || 24;
+    const isUserDbActive = authState.isAuthenticated && authState.email;
+    const currentMonthImportCount = isUserDbActive ? items.length : (items.length || 18);
+    const currentMonthBillCount = isUserDbActive ? bills.length : (bills.length || 24);
 
     const latestImportItem = items.length > 0 
       ? [...items].filter(i => i.ngày).sort((a, b) => b.ngày.localeCompare(a.ngày))[0] 
@@ -935,11 +952,11 @@ export default function App() {
       : "";
     
     const rawRevenue = (bills || []).reduce((sum, b) => sum + (b?.subtotal || 0), 0);
-    const totalRevenueFormatted = rawRevenue > 0 
-      ? (rawRevenue / 1000000).toFixed(1) + "M" 
-      : "48.5M";
+    const totalRevenueFormatted = isUserDbActive
+      ? (rawRevenue / 1000000).toFixed(1) + "M"
+      : (rawRevenue > 0 ? (rawRevenue / 1000000).toFixed(1) + "M" : "48.5M");
 
-    const runningBatchesCount = productionBatches.length || 12;
+    const runningBatchesCount = isUserDbActive ? productionBatches.length : (productionBatches.length || 12);
 
     return (
       <div className="space-y-6 font-sans select-none" id="dashboard_home_screen">
