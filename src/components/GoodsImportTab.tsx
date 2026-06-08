@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet } from 'lucide-react';
+import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal } from 'lucide-react';
 import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietnameseMonthKey } from '../utils/dateUtils';
 import { exportDatabasePackage } from '../utils/storage';
@@ -60,6 +60,7 @@ export default function GoodsImportTab({
 
   // Column selector visibility and column options
   const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(() => {
     try {
       const saved = localStorage.getItem('xuongan_import_visible_columns');
@@ -753,203 +754,276 @@ export default function GoodsImportTab({
       </AnimatePresence>
 
       {items.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 block animate-pulse" />
-              <span className="text-xs font-bold text-slate-755 dark:text-slate-300 uppercase tracking-wider font-sans">
-                Chọn chế độ xem báo cáo nhập hàng:
-              </span>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs gap-3">
+          <div className="flex items-center gap-2.5 font-sans">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold font-mono">
+              <BarChart3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             </div>
-            
-            {/* Filter mode dynamic selector */}
-            <div className="flex bg-slate-100 dark:bg-zinc-900 p-0.5 rounded-lg text-xs font-semibold gap-0.5 self-stretch sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setFilterMode('week')}
-                className={`flex-1 sm:flex-initial py-1 px-3 rounded-md transition cursor-pointer font-sans ${filterMode === 'week' ? 'bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 font-extrabold shadow-sm border border-slate-200/50 dark:border-slate-700' : 'text-slate-500 hover:text-slate-850 dark:hover:text-slate-250'}`}
-              >
-                Tuần 📅
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterMode('month')}
-                className={`flex-1 sm:flex-initial py-1 px-3 rounded-md transition cursor-pointer font-sans ${filterMode === 'month' ? 'bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 font-extrabold shadow-sm border border-slate-200/50 dark:border-slate-700' : 'text-slate-500 hover:text-slate-850 dark:hover:text-slate-250'}`}
-              >
-                Tháng 🗓️
-              </button>
+            <div>
+              <p className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Danh sách lô nhập kho</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                Chế độ xem: {filterMode === 'week' ? `Lọc theo Tuần (${selectedWeekFilter === 'all' ? 'Tất cả' : selectedWeekFilter})` : `Lọc theo Tháng (${selectedMonthFilter === 'all' ? 'Tất cả' : selectedMonthFilter})`}
+              </p>
             </div>
           </div>
 
-          <div className="relative w-full">
-            {filterMode === 'week' ? (
-              <select
-                value={selectedWeekFilter}
-                onChange={(e) => setSelectedWeekFilter(e.target.value)}
-                className="w-full text-xs font-medium bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-900 border border-slate-250 dark:border-slate-800 py-2.5 px-3 pr-8 rounded-xl text-slate-855 dark:text-slate-150 outline-none focus:border-indigo-500 font-sans cursor-pointer transition appearance-none"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%234f46e5' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
-                  backgroundPosition: 'right 0.6rem center',
-                  backgroundSize: '1.25rem 1.25rem',
-                  backgroundRepeat: 'no-repeat'
-                }}
-              >
-                <option value="all">📅 Hiện tất cả các tuần ({Object.keys(itemsByWeek).length} tuần)</option>
-                {Object.keys(itemsByWeek)
-                  .sort((a, b) => b.localeCompare(a))
-                  .map((weekKey) => {
-                    const qty = itemsByWeek[weekKey].reduce((sum, item) => sum + item.sốLượng, 0);
-                    const itemsCount = itemsByWeek[weekKey].length;
-                    return (
-                      <option key={weekKey} value={weekKey}>
-                        {weekKey} ({itemsCount} lô - {qty.toLocaleString()} cái)
-                      </option>
-                    );
-                  })}
-              </select>
-            ) : (
-              <select
-                value={selectedMonthFilter}
-                onChange={(e) => setSelectedMonthFilter(e.target.value)}
-                className="w-full text-xs font-medium bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-905 border border-slate-250 dark:border-slate-800 py-2.5 px-3 pr-8 rounded-xl text-slate-855 dark:text-slate-150 outline-none focus:border-indigo-500 font-sans cursor-pointer transition appearance-none"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%234f46e5' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
-                  backgroundPosition: 'right 0.6rem center',
-                  backgroundSize: '1.25rem 1.25rem',
-                  backgroundRepeat: 'no-repeat'
-                }}
-              >
-                <option value="all">🗓️ Hiện tất cả các tháng ({Object.keys(itemsByMonth).length} tháng)</option>
-                {Object.keys(itemsByMonth)
-                  .sort((a, b) => b.localeCompare(a))
-                  .map((monthKey) => {
-                    const qty = itemsByMonth[monthKey].reduce((sum, item) => sum + item.sốLượng, 0);
-                    const itemsCount = itemsByMonth[monthKey].length;
-                    return (
-                      <option key={monthKey} value={monthKey}>
-                        {monthKey} ({itemsCount} lô - {qty.toLocaleString()} cái)
-                      </option>
-                    );
-                  })}
-              </select>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsFilterModalOpen(true)}
+            className="flex items-center gap-2 bg-indigo-650 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            title="Nhấn để mở Bộ lọc và Cấu hình bảng số liệu"
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span>Bộ Lọc & Báo Cáo</span>
+          </button>
+        </div>
+      )}
 
-          {/* Custom Columns Customizer Panel */}
-          <div className="border-t border-slate-100 dark:border-slate-800/60 pt-3">
-            <button
-              type="button"
-              onClick={() => setShowColumnCustomizer(!showColumnCustomizer)}
-              className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer font-sans"
+      {/* Filter and column config Modal Page */}
+      <AnimatePresence>
+        {isFilterModalOpen && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsFilterModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 30 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden relative border border-slate-150 dark:border-slate-800 z-10 flex flex-col max-h-[85vh]"
             >
-              <Settings className={`w-3.5 h-3.5 text-indigo-505 transition-transform ${showColumnCustomizer ? 'rotate-45' : ''}`} />
-              <span>Cấu hình hiện/ẩn cột dữ liệu (cho thiết bị di động)</span>
-            </button>
-            
-            <AnimatePresence>
-              {showColumnCustomizer && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden mt-3"
+              <div className="p-5 bg-slate-50 dark:bg-zinc-950 border-b border-slate-200 dark:border-slate-850 flex justify-between items-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                    <SlidersHorizontal className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide">
+                      Bộ Lọc & Cấu Hình Cột
+                    </h3>
+                    <p className="text-[10px] text-slate-450 dark:text-slate-500 mt-0.5 font-medium">Chọn chế độ xem báo cáo phù hợp cho bảng nhập kho</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFilterModalOpen(false)}
+                  className="p-1 px-1.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-450 hover:text-slate-800 dark:hover:text-slate-200 transition cursor-pointer"
                 >
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-150 dark:border-slate-800/80 space-y-2">
-                    <p className="text-[10px] text-slate-450 dark:text-slate-500 font-medium">
-                      Bật/tắt các cột bên dưới để tối ưu hiển thị trên màn hình nhỏ. Hệ thống sẽ tự động ghi nhớ tùy chọn của bạn.
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto p-5 space-y-6">
+                {/* 1. Filter Mode Select */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    1. Đơn vị lọc báo cáo:
+                  </label>
+                  <div className="flex bg-slate-100 dark:bg-zinc-900 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode('week')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer font-sans ${filterMode === 'week' ? 'bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700' : 'text-slate-550 hover:text-slate-800'}`}
+                    >
+                      Báo Cáo Theo Tuần 📅
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode('month')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer font-sans ${filterMode === 'month' ? 'bg-white dark:bg-slate-800 text-indigo-650 dark:text-indigo-400 shadow-xs border border-slate-200/50 dark:border-slate-700' : 'text-slate-550 hover:text-slate-800'}`}
+                    >
+                      Báo Cáo Theo Tháng 🗓️
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Select Week/Month Dropdown */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    2. Chọn mốc thời gian chi tiết:
+                  </label>
+                  <div className="relative w-full">
+                    {filterMode === 'week' ? (
+                      <select
+                        value={selectedWeekFilter}
+                        onChange={(e) => setSelectedWeekFilter(e.target.value)}
+                        className="w-full text-xs font-semibold bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-900 border border-slate-250 dark:border-slate-800 py-3 px-3 pr-8 rounded-xl text-slate-800 dark:text-slate-150 outline-none focus:border-indigo-500 font-sans cursor-pointer transition appearance-none"
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%234f46e5' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
+                          backgroundPosition: 'right 0.6rem center',
+                          backgroundSize: '1.25rem 1.25rem',
+                          backgroundRepeat: 'no-repeat'
+                        }}
+                      >
+                        <option value="all">📅 Hiện tất cả các tuần ({Object.keys(itemsByWeek).length} tuần)</option>
+                        {Object.keys(itemsByWeek)
+                          .sort((a, b) => b.localeCompare(a))
+                          .map((weekKey) => {
+                            const qty = itemsByWeek[weekKey].reduce((sum, item) => sum + item.sốLượng, 0);
+                            const itemsCount = itemsByWeek[weekKey].length;
+                            return (
+                              <option key={weekKey} value={weekKey}>
+                                {weekKey} ({itemsCount} lô - {qty.toLocaleString()} cái)
+                              </option>
+                            );
+                          })}
+                      </select>
+                    ) : (
+                      <select
+                        value={selectedMonthFilter}
+                        onChange={(e) => setSelectedMonthFilter(e.target.value)}
+                        className="w-full text-xs font-semibold bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-905 border border-slate-250 dark:border-slate-800 py-3 px-3 pr-8 rounded-xl text-slate-800 dark:text-slate-150 outline-none focus:border-indigo-505 font-sans cursor-pointer transition appearance-none"
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%234f46e5' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
+                          backgroundPosition: 'right 0.6rem center',
+                          backgroundSize: '1.25rem 1.25rem',
+                          backgroundRepeat: 'no-repeat'
+                        }}
+                      >
+                        <option value="all">🗓️ Hiện tất cả các tháng ({Object.keys(itemsByMonth).length} tháng)</option>
+                        {Object.keys(itemsByMonth)
+                          .sort((a, b) => b.localeCompare(a))
+                          .map((monthKey) => {
+                            const qty = itemsByMonth[monthKey].reduce((sum, item) => sum + item.sốLượng, 0);
+                            const itemsCount = itemsByMonth[monthKey].length;
+                            return (
+                              <option key={monthKey} value={monthKey}>
+                                {monthKey} ({itemsCount} lô - {qty.toLocaleString()} cái)
+                              </option>
+                            );
+                          })}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Column Visibility Customizer inside Report drawer page */}
+                <div className="space-y-3 pt-3 border-t border-slate-150 dark:border-slate-800/80">
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>3. Hiện/ẩn cột dữ liệu chi tiết:</span>
+                  </label>
+                  
+                  <div className="p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-150 dark:border-slate-800/80 space-y-2">
+                    <p className="text-[10px] text-slate-450 dark:text-slate-500 font-bold leading-normal mb-2">
+                      Chọn các cột bạn muốn hiển thị ở bảng nhập hàng. Thay đổi sẽ tự động ghi nhớ:
                     </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1">
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => toggleColumn('ngay')}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold text-center transition cursor-pointer font-sans border flex items-center justify-center gap-1.5 ${
                           visibleColumns.ngay 
                             ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
-                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-600'
                         }`}
                       >
-                        {visibleColumns.ngay ? '✓ Ngày Nhập' : '✗ Ngày Nhập'}
+                        <span>{visibleColumns.ngay ? '✓' : '✗'}</span>
+                        <span>Mốc ngày nhập</span>
                       </button>
-                      
+
                       <button
                         type="button"
                         onClick={() => toggleColumn('mau')}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold text-center transition cursor-pointer font-sans border flex items-center justify-center gap-1.5 ${
                           visibleColumns.mau 
                             ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
-                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-600'
                         }`}
                       >
-                        {visibleColumns.mau ? '✓ Tên Mẫu' : '✗ Tên Mẫu'}
+                        <span>{visibleColumns.mau ? '✓' : '✗'}</span>
+                        <span>Tên mẫu mã</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => toggleColumn('soLuong')}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold text-center transition cursor-pointer font-sans border flex items-center justify-center gap-1.5 ${
                           visibleColumns.soLuong 
                             ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
-                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-600'
                         }`}
                       >
-                        {visibleColumns.soLuong ? '✓ Số Lượng' : '✗ Số Lượng'}
+                        <span>{visibleColumns.soLuong ? '✓' : '✗'}</span>
+                        <span>Sản lượng (SL)</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => toggleColumn('donGia')}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold text-center transition cursor-pointer font-sans border flex items-center justify-center gap-1.5 ${
                           visibleColumns.donGia 
                             ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
-                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-600'
                         }`}
                       >
-                        {visibleColumns.donGia ? '✓ Đơn Giá' : '✗ Đơn Giá'}
+                        <span>{visibleColumns.donGia ? '✓' : '✗'}</span>
+                        <span>Đơn giá may</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => toggleColumn('thanhTien')}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold text-center transition cursor-pointer font-sans border flex items-center justify-center gap-1.5 ${
                           visibleColumns.thanhTien 
                             ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
-                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-600'
                         }`}
                       >
-                        {visibleColumns.thanhTien ? '✓ Thành Tiền' : '✗ Thành Tiền'}
+                        <span>{visibleColumns.thanhTien ? '✓' : '✗'}</span>
+                        <span>Thành tiền</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => toggleColumn('dtTp')}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold text-center transition cursor-pointer font-sans border flex items-center justify-center gap-1.5 ${
                           visibleColumns.dtTp 
                             ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
-                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-600'
                         }`}
                       >
-                        {visibleColumns.dtTp ? '✓ Ship ĐT→TP' : '✗ Ship ĐT→TP'}
+                        <span>{visibleColumns.dtTp ? '✓' : '✗'}</span>
+                        <span>Ship ĐT➔TP</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => toggleColumn('tpDt')}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition cursor-pointer font-sans border ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold text-center transition cursor-pointer font-sans border flex items-center justify-center gap-1.5 ${
                           visibleColumns.tpDt 
                             ? 'bg-indigo-50 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/60 dark:text-indigo-400' 
-                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-605'
+                            : 'bg-white border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-850 dark:text-slate-600'
                         }`}
                       >
-                        {visibleColumns.tpDt ? '✓ Ship TP→ĐT' : '✗ Ship TP→ĐT'}
+                        <span>{visibleColumns.tpDt ? '✓' : '✗'}</span>
+                        <span>Ship TP➔ĐT</span>
                       </button>
                     </div>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-slate-50 dark:bg-zinc-950 border-t border-slate-205 dark:border-slate-850 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsFilterModalOpen(false)}
+                  className="bg-indigo-650 hover:bg-indigo-750 text-white font-extrabold text-xs py-2 px-6 rounded-xl shadow-md transition active:scale-98 cursor-pointer"
+                >
+                  Áp Dụng bộ lọc & Xem
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Week grouped tables display */}
       <div className="space-y-8">

@@ -19,6 +19,7 @@ import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncServ
 import { auth, db } from './utils/firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { formatVietnameseDate } from './utils/dateUtils';
 
 function getSavedArray<T>(key: string, fallback: T[]): T[] {
   const value = getSavedState<T[]>(key, fallback);
@@ -918,6 +919,20 @@ export default function App() {
     // Dynamic metrics or fallbacks exactly matching the image mockup values
     const currentMonthImportCount = items.length || 18;
     const currentMonthBillCount = bills.length || 24;
+
+    const latestImportItem = items.length > 0 
+      ? [...items].filter(i => i.ngày).sort((a, b) => b.ngày.localeCompare(a.ngày))[0] 
+      : null;
+    const latestImportDate = latestImportItem 
+      ? formatVietnameseDate(latestImportItem.ngày) 
+      : "";
+
+    const latestBillItem = (bills || []).length > 0 
+      ? [...bills].filter(b => b.date).sort((a, b) => b.date.localeCompare(a.date))[0] 
+      : null;
+    const latestBillDate = latestBillItem 
+      ? formatVietnameseDate(latestBillItem.date) 
+      : "";
     
     const rawRevenue = (bills || []).reduce((sum, b) => sum + (b?.subtotal || 0), 0);
     const totalRevenueFormatted = rawRevenue > 0 
@@ -944,7 +959,7 @@ export default function App() {
               {authState.displayName || 'Demo User'}
             </h1>
             <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono">
-              {authState.email || 'demo@khohoadon.app'}
+              {authState.email || 'demo@nhapkho.app'}
             </p>
           </div>
         </div>
@@ -993,6 +1008,14 @@ export default function App() {
                 <div>
                   <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">{currentMonthImportCount}</p>
                   <p className="text-[9.5px] md:text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 mt-1.5 font-sans whitespace-nowrap">Đơn nhập tháng này</p>
+                  {latestImportDate && (
+                    <div 
+                      title={`Ngày nhập lô hàng gần nhất: ${latestImportDate}`}
+                      className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-[9px] md:text-[10px] font-extrabold uppercase tracking-wide rounded-md border-none shadow-xs shadow-emerald-500/10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md group-hover:shadow-emerald-500/35"
+                    >
+                      <span>Mới nhất: {latestImportDate}</span>
+                    </div>
+                  )}
                 </div>
                 
                 {/* View Details Button with Icon */}
@@ -1046,6 +1069,14 @@ export default function App() {
                 <div>
                   <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">{currentMonthBillCount}</p>
                   <p className="text-[9.5px] md:text-[10.5px] font-bold text-blue-600 dark:text-blue-400 mt-1.5 font-sans whitespace-nowrap">Hóa đơn tháng này</p>
+                  {latestBillDate && (
+                    <div 
+                      title={`Ngày tạo hoá đơn gần nhất: ${latestBillDate}`}
+                      className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-[9px] md:text-[10px] font-extrabold uppercase tracking-wide rounded-md border-none shadow-xs shadow-emerald-500/10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md group-hover:shadow-emerald-500/35"
+                    >
+                      <span>Mới nhất: {latestBillDate}</span>
+                    </div>
+                  )}
                 </div>
                 
                 {/* View Details Button with Icon */}
@@ -1257,7 +1288,7 @@ export default function App() {
                     <Layers className="w-4.5 h-4.5" />
                   </div>
                   <div>
-                    <span className="text-xs sm:text-base font-black tracking-tight text-slate-850 dark:text-slate-105 font-sans block leading-none">Kho Hóa Đơn</span>
+                    <span className="text-xs sm:text-base font-black tracking-tight text-slate-850 dark:text-slate-105 font-sans block leading-none">Nhập Kho</span>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-1">
                       <div className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -2059,8 +2090,7 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            {/* Draggable system Floating stats capsule. Only mounted on the import tab! */}
-            {activeTab === 'import' && <FloatingStats items={items} />}
+            {/* Floating stats is now placed inside ReportTab as a dedicated tab icon button */}
 
           </main>
 

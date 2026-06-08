@@ -12,9 +12,10 @@ import html2canvas from 'html2canvas';
 
 interface FloatingStatsProps {
   items: ImportItem[];
+  isFloating?: boolean;
 }
 
-export default function FloatingStats({ items }: FloatingStatsProps) {
+export default function FloatingStats({ items, isFloating = true }: FloatingStatsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -74,43 +75,55 @@ export default function FloatingStats({ items }: FloatingStatsProps) {
 
   return (
     <>
-      {/* Floating Capsule - Draggable anywhere in viewport */}
-      <motion.div
-        drag
-        dragMomentum={false}
-        dragElastic={0.08}
-        dragTransition={{ power: 0.1, timeConstant: 100 }}
-        className="fixed bottom-6 right-6 z-40 touch-none select-none"
-        title="Nhấn để phóng to thống kê - Giữ chuột để di chuyển"
-      >
-        <AnimatePresence mode="wait">
-          {!isExpanded && (
-            <motion.button
-              key="collapsed-badge"
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              onClick={() => setIsExpanded(true)}
-              className="bg-slate-900/90 dark:bg-slate-900 border border-indigo-500/30 text-white rounded-2xl p-4 shadow-2xl flex items-center gap-3 backdrop-blur-xl cursor-pointer hover:border-indigo-500 hover:shadow-indigo-500/10 transition active:scale-[0.98]"
-            >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-sky-400 flex items-center justify-center shadow-lg relative">
-                <AreaChart className="w-4.5 h-4.5 text-slate-950 animate-bounce-slow" />
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-slate-900" />
-              </div>
-              
-              <div className="text-left pr-2 font-sans">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono flex items-center gap-1">
-                  <Move className="w-3 h-3 text-slate-500" />
-                  <span>Kéo di dời ➔</span>
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs font-extrabold text-white font-mono">{(wQty).toLocaleString()} Sl/Tuần</span>
+      {isFloating ? (
+        /* Floating Capsule - Draggable anywhere in viewport */
+        <motion.div
+          drag
+          dragMomentum={false}
+          dragElastic={0.08}
+          dragTransition={{ power: 0.1, timeConstant: 100 }}
+          className="fixed bottom-6 right-6 z-40 touch-none select-none"
+          title="Nhấn để phóng to thống kê - Giữ chuột để di chuyển"
+        >
+          <AnimatePresence mode="wait">
+            {!isExpanded && (
+              <motion.button
+                key="collapsed-badge"
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                onClick={() => setIsExpanded(true)}
+                className="bg-slate-900/90 dark:bg-slate-900 border border-indigo-500/30 text-white rounded-2xl p-4 shadow-2xl flex items-center gap-3 backdrop-blur-xl cursor-pointer hover:border-indigo-500 hover:shadow-indigo-500/10 transition active:scale-[0.98]"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-sky-400 flex items-center justify-center shadow-lg relative">
+                  <AreaChart className="w-4.5 h-4.5 text-slate-950 animate-bounce-slow" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-slate-900" />
                 </div>
-              </div>
-            </motion.button>
-          )}
-        </AnimatePresence>
-      </motion.div>
+                
+                <div className="text-left pr-2 font-sans">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono flex items-center gap-1">
+                    <Move className="w-3 h-3 text-slate-500" />
+                    <span>Kéo di dời ➔</span>
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs font-extrabold text-white font-mono">{(wQty).toLocaleString()} Sl/Tuần</span>
+                  </div>
+                </div>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      ) : (
+        /* Static button to trigger detailed report popup */
+        <button
+          onClick={() => setIsExpanded(true)}
+          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 hover:scale-[1.02] active:scale-[0.98] cursor-pointer border border-indigo-500/30"
+          title="Xem báo cáo thống kê chi tiết"
+        >
+          <AreaChart className="w-4 h-4 text-white" />
+          <span>Thống Kê Chi Tiết</span>
+        </button>
+      )}
 
       {/* Expanded Stats Overlay Modal */}
       <AnimatePresence>
