@@ -934,18 +934,22 @@ export default function App() {
 
     // Dynamic metrics or fallbacks exactly matching the image mockup values
     const isUserDbActive = authState.isAuthenticated && authState.email;
-    const currentMonthImportCount = isUserDbActive ? items.length : (items.length || 18);
-    const currentMonthBillCount = isUserDbActive ? bills.length : (bills.length || 24);
+    const currentMonthImportCount = isUserDbActive ? (items || []).length : ((items || []).length || 18);
+    const currentMonthBillCount = isUserDbActive ? (bills || []).length : ((bills || []).length || 24);
 
-    const latestImportItem = items.length > 0 
-      ? [...items].filter(i => i.ngày).sort((a, b) => b.ngày.localeCompare(a.ngày))[0] 
+    const latestImportItem = (items || []).length > 0 
+      ? [...items]
+          .filter(i => i && typeof i.ngày === 'string')
+          .sort((a, b) => (b.ngày || '').localeCompare(a.ngày || ''))[0] || null
       : null;
     const latestImportDate = latestImportItem 
       ? formatVietnameseDate(latestImportItem.ngày) 
       : "";
 
     const latestBillItem = (bills || []).length > 0 
-      ? [...bills].filter(b => b.date).sort((a, b) => b.date.localeCompare(a.date))[0] 
+      ? [...bills]
+          .filter(b => b && typeof b.date === 'string')
+          .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0] || null
       : null;
     const latestBillDate = latestBillItem 
       ? formatVietnameseDate(latestBillItem.date) 
@@ -956,7 +960,7 @@ export default function App() {
       ? (rawRevenue / 1000000).toFixed(1) + "M"
       : (rawRevenue > 0 ? (rawRevenue / 1000000).toFixed(1) + "M" : "48.5M");
 
-    const runningBatchesCount = isUserDbActive ? productionBatches.length : (productionBatches.length || 12);
+    const runningBatchesCount = isUserDbActive ? (productionBatches || []).length : ((productionBatches || []).length || 12);
 
     return (
       <div className="space-y-6 font-sans select-none" id="dashboard_home_screen">
