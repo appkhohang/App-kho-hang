@@ -2,9 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Global helper checking if user is signed in with a Google verified email
+    // Global helper checking if user is signed in
     function isSignedIn() {
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null;
     }
 
     // Checks if the document ID is valid to safeguard against ID Poisoning and resource abuse
