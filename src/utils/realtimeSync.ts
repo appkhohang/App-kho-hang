@@ -227,41 +227,14 @@ export function useRealtimeSync({
               try {
                 const localArray = Array.isArray(prevLocal) ? prevLocal.filter(Boolean) : [];
                 
-                if (isInitial) {
-                  const remoteMap = new Map(remoteList.map(item => [item?.id, item]));
-                  const localOnlyItems = localArray.filter(locItem => locItem && locItem.id && !remoteMap.has(locItem.id));
-                  
-                  if (localOnlyItems.length > 0) {
-                    console.log(`[Realtime Sync] Found ${localOnlyItems.length} local-only items in '${key}'. Auto-pushing to cloud...`);
-                    // Upload local-only items in backend
-                    localOnlyItems.forEach(async (item) => {
-                      try {
-                        const docRef = doc(db, colName, item.id);
-                        await setDoc(docRef, { ...item, syncedAt: Date.now() });
-                        console.log(`[Realtime Sync] Auto-published offline-only item: ${colName}/${item.id}`);
-                      } catch (err) {
-                        console.warn(`[Realtime Sync] Auto-publish failed for ${colName}/${item.id}`, err);
-                      }
-                    });
-                  }
-                }
-
-                // Construct merged array: remote items always win for shared IDs, local-only items are preserved
-                const remoteMap = new Map(remoteList.map(item => [item?.id, item]));
-                const mergedList = [...remoteList];
-                for (const locItem of localArray) {
-                  if (locItem && locItem.id && !remoteMap.has(locItem.id)) {
-                    mergedList.push(locItem);
-                  }
-                }
-
-                // Check if there is actual semantic user data differences
-                if (!isArraysEqual(localArray, mergedList)) {
-                  console.log(`[Realtime Sync] Live update received/merged for '${key}' (${mergedList.length} items)`);
+                // Firestore list is the single source of truth when we are online.
+                // This ensures all machines stay in absolute real-time lock-step.
+                if (!isArraysEqual(localArray, remoteList)) {
+                  console.log(`[Realtime Sync] Live update received from cloud for '${key}' (${remoteList.length} items)`);
                   
                   // Set the flag: This local update is purely from cloud, so do not write it back.
                   ignoreLocalSync.current[key] = true;
-                  return mergedList;
+                  return remoteList;
                 }
                 return prevLocal;
               } catch (innerErr) {
