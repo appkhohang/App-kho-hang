@@ -11,74 +11,60 @@ import {
   setDoc, 
   deleteDoc 
 } from 'firebase/firestore';
-import { db } from '../utils/firebase';
-import { COLLECTION_MAP, isUserAdmin } from '../utils/syncService';
+import { db } from './firebase';
+import { COLLECTION_MAP, isUserAdmin } from './syncService';
 
-// Safely normalize user-facing semantic data for deep comparison, ignoring metadata keys
-function cleanObject(obj: any): any {
-  try {
-    if (!obj || typeof obj !== 'object') {
-      return obj;
+// Safely normalize user-facing semantic data for deep comparison, ignoring dynamic metadata keys
+function cleanAndSort(val: any): any {
+  if (val === undefined || val === null) {
+    return null;
+  }
+  if (Array.isArray(val)) {
+    return val.map(cleanAndSort);
+  }
+  if (typeof val === 'object') {
+    // Check if it's a Firestore Timestamp or custom Date object
+    if (typeof val.toDate === 'function') {
+      return val.toDate().getTime();
     }
-    
-    const copy = { ...obj };
-    // Remove temporary sync/metadata tags to prevent comparison loop on raw document change
-    delete copy.syncedAt;
-    delete copy.updatedAt;
-
-    // Key sorting to achieve stable stringify representations
+    if (val instanceof Date) {
+      return val.getTime();
+    }
     const sorted: any = {};
-    Object.keys(copy).sort().forEach(k => {
-      const val = copy[k];
-      if (val === undefined) {
-        // Ignore undefined keys as Firestore filters them out anyways
-        return;
+    Object.keys(val).sort().forEach(k => {
+      if (k === 'syncedAt' || k === 'updatedAt') {
+        return; // ignore dynamic timestamps
       }
-      if (Array.isArray(val)) {
-        sorted[k] = val.map(item => cleanObject(item));
-      } else if (val && typeof val === 'object') {
-        sorted[k] = cleanObject(val);
-      } else {
-        sorted[k] = val;
+      const v = val[k];
+      if (v !== undefined && v !== null) {
+        sorted[k] = cleanAndSort(v);
       }
     });
     return sorted;
-  } catch (err) {
-    console.warn("[cleanObject] Failed to clean object safely:", err);
-    return obj;
   }
+  return val;
 }
 
-function isUserDataEqual(item1: any, item2: any): boolean {
-  try {
-    if (!item1 && !item2) return true;
-    if (!item1 || !item2) return false;
-    return JSON.stringify(cleanObject(item1)) === JSON.stringify(cleanObject(item2));
-  } catch (err) {
-    console.warn("[isUserDataEqual] Comparison failed, fallback defaults to false:", err);
-    return false;
-  }
+// Full stable canonical serialization of list elements for fast and bulletproof comparison
+function serializeAndClean(arr: any[]): string {
+  if (!Array.isArray(arr)) return '';
+  const cleaned = arr.filter(Boolean).map(item => cleanAndSort(item));
+  
+  // Sort items by unique ID so order shifts do not affect string equivalence
+  cleaned.sort((a, b) => {
+    const idA = String(a?.id || '');
+    const idB = String(b?.id || '');
+    return idA.localeCompare(idB);
+  });
+  
+  return JSON.stringify(cleaned);
 }
 
-// Fast deep equals for serializable data structures
-function isArraysEqual(arr1: any[] | null | undefined, arr2: any[] | null | undefined): boolean {
-  try {
-    if (!arr1 && !arr2) return true;
-    if (!arr1 || !arr2) return false;
-    if (arr1.length !== arr2.length) return false;
-
-    const map1 = new Map(arr1.filter(Boolean).map(item => [item?.id, item]));
-    for (const item2 of arr2) {
-      if (!item2 || !item2.id) return false;
-      const item1 = map1.get(item2.id);
-      if (!item1) return false;
-      if (!isUserDataEqual(item1, item2)) return false;
-    }
-    return true;
-  } catch (err) {
-    console.warn("[isArraysEqual] Comparison failed, fallback defaults to false:", err);
-    return false;
-  }
+// Compare individual items
+function isItemEqual(item1: any, item2: any): boolean {
+  if (!item1 && !item2) return true;
+  if (!item1 || !item2) return false;
+  return JSON.stringify(cleanAndSort(item1)) === JSON.stringify(cleanAndSort(item2));
 }
 
 export interface RealtimeSyncProps {
@@ -161,24 +147,23 @@ export function useRealtimeSync({
   setSyncStatus
 }: RealtimeSyncProps) {
   
-  // Keep track of the last cloud-synced datasets to prevent echo/update loops
-  const lastCloudState = useRef<{ [colKey: string]: any[] }>({});
-  const lastCloudSettings = useRef<any>(null);
-  
-  // Track listeners initialization state
+  // Track listeners initialization state to prevent auto-pushing local data before initial cloud load
   const listenersInitialized = useRef<{ [colKey: string]: boolean }>({});
+  const settingsListenerInitialized = useRef<boolean>(false);
 
-  // Extremely critical: Skip syncing local hooks to cloud when the update came directly from the server.
-  // This breaks the infinite loop where state -> cloud -> snapshot -> state -> cloud.
-  const ignoreLocalSync = useRef<{ [colKey: string]: boolean }>({});
-  const ignoreLocalSettingsSync = useRef<boolean>(false);
+  // Keep track of stable canonical stringified key representations to filter out echo updates
+  const lastSyncedString = useRef<{ [colKey: string]: string }>({});
+  const lastSyncedSettingsString = useRef<string>('');
+
+  // Keep track of the last known cloud state array to calculate key-based updates/deletions accurately
+  const lastCloudState = useRef<{ [colKey: string]: any[] }>({});
 
   useEffect(() => {
     if (fbAuthLoading || !isAuthenticated || !db) {
       return;
     }
 
-    console.log("[Realtime Sync] Initializing Firestore live listeners with loop protection...");
+    console.log("[Realtime Sync] Initializing Firestore live listeners with canonical serialization protection...");
     setSyncStatus('syncing');
 
     const unsubscribeList: (() => void)[] = [];
@@ -210,40 +195,30 @@ export function useRealtimeSync({
           try {
             const remoteList: any[] = [];
             snapshot.forEach((doc) => {
-              const data = doc.data();
               remoteList.push({
                 id: doc.id,
-                ...data
+                ...doc.data()
               });
             });
 
-            const isInitial = !listenersInitialized.current[key];
+            const remoteStr = serializeAndClean(remoteList);
+            const activeStr = lastSyncedString.current[key] || '';
+
+            // Update local state ONLY if there are genuine user-facing semantic data differences
+            if (remoteStr !== activeStr) {
+              console.log(`[Realtime Sync] Live cloud update received for '${key}' (${remoteList.length} items)`);
+              
+              // Record current synced representation to prevent local triggers from re-uploading
+              lastSyncedString.current[key] = remoteStr;
+              lastCloudState.current[key] = remoteList;
+
+              setter(remoteList);
+            }
+
+            // Mark as initialized
             listenersInitialized.current[key] = true;
 
-            // Save last cloud state
-            lastCloudState.current[key] = remoteList;
-
-            setter((prevLocal: any[]) => {
-              try {
-                const localArray = Array.isArray(prevLocal) ? prevLocal.filter(Boolean) : [];
-                
-                // Firestore list is the single source of truth when we are online.
-                // This ensures all machines stay in absolute real-time lock-step.
-                if (!isArraysEqual(localArray, remoteList)) {
-                  console.log(`[Realtime Sync] Live update received from cloud for '${key}' (${remoteList.length} items)`);
-                  
-                  // Set the flag: This local update is purely from cloud, so do not write it back.
-                  ignoreLocalSync.current[key] = true;
-                  return remoteList;
-                }
-                return prevLocal;
-              } catch (innerErr) {
-                console.error(`[Realtime Sync] Error inside state setter for ${key}:`, innerErr);
-                return prevLocal;
-              }
-            });
-
-            // Update sync status indicator
+            // Update sync status indicators
             const nowStr = new Date().toLocaleTimeString('vi-VN') + " " + new Date().toLocaleDateString('vi-VN');
             setLastSyncTime(nowStr);
             setSyncStatus('success');
@@ -265,23 +240,21 @@ export function useRealtimeSync({
     try {
       const settingsDocRef = doc(db, 'settings', 'global_settings');
       const unsubSettings = onSnapshot(settingsDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const remoteSettings = docSnap.data();
-          lastCloudSettings.current = remoteSettings;
-          setSettings((prevSettings: any) => {
-            // Compare without dynamic timestamp syncedAt
-            const s1 = { ...prevSettings };
-            const s2 = { ...remoteSettings };
-            delete s1.syncedAt;
-            delete s2.syncedAt;
+        try {
+          if (docSnap.exists()) {
+            const remoteSettings = docSnap.data();
+            const remoteStr = JSON.stringify(cleanAndSort(remoteSettings));
+            const activeStr = lastSyncedSettingsString.current;
 
-            if (JSON.stringify(s1) !== JSON.stringify(s2)) {
+            if (remoteStr !== activeStr) {
               console.log("[Realtime Sync] Live settings update received from cloud");
-              ignoreLocalSettingsSync.current = true;
-              return remoteSettings;
+              lastSyncedSettingsString.current = remoteStr;
+              setSettings(remoteSettings);
             }
-            return prevSettings;
-          });
+          }
+          settingsListenerInitialized.current = true;
+        } catch (settingsErr) {
+          console.error("[Realtime Sync] Error inside settings snapshot processor:", settingsErr);
         }
       }, (error) => {
         console.warn("[Realtime Sync] Settings listener error:", error);
@@ -297,39 +270,41 @@ export function useRealtimeSync({
     };
   }, [fbAuthLoading, isAuthenticated, userEmail]);
 
-  // Monitor and Auto-Push local changes value-by-value back to Cloud
+  // Monitor and Auto-Push local changes value-by-value back to Cloud securely
   const syncLocalToCloud = async (key: string, colName: string, localList: any[]) => {
     if (!isAuthenticated || !isUserAdmin() || !db) return;
     
-    // Skip if listeners are not initialized
+    // Safety check: Skip pushing local list data before the collection's initial cloud load has initialized
     if (!listenersInitialized.current[key]) return;
 
-    // Check loop-protection flag. If true, this change originated from Firestore, so we ignore it here.
-    if (ignoreLocalSync.current[key]) {
-      ignoreLocalSync.current[key] = false;
+    const localStr = serializeAndClean(localList);
+    const activeStr = lastSyncedString.current[key] || '';
+
+    // Loop protection: If the local list string matches our last known cloud/sync string, do nothing
+    if (localStr === activeStr) {
       return;
     }
+
+    console.log(`[Realtime Sync] Local differences detected on '${key}'. Auto-saving changes to Firestore...`);
+    
+    // Save state representation locally first to prevent incoming snapshot loops
+    lastSyncedString.current[key] = localStr;
 
     const cloudData = lastCloudState.current[key] || [];
     
-    // Check if there are actual diffs between local state and cloud
-    if (isArraysEqual(localList, cloudData)) {
-      return;
-    }
+    // Keep internal cloud state cache updated
+    lastCloudState.current[key] = [...localList];
 
-    console.log(`[Realtime Sync] Local differences detected on '${key}'. Auto-saving to cloud...`);
-
-    // Map by ID
+    // Compute maps of local and cloud collections by unique key ID
     const localMap = new Map(localList.filter(Boolean).map(item => [item.id, item]));
     const cloudMap = new Map(cloudData.filter(Boolean).map(item => [item.id, item]));
 
-    // Find custom additions and updates
+    // 1. Identify additions and updates
     for (const item of localList) {
       if (!item || !item.id) continue;
       const cloudItem = cloudMap.get(item.id);
       
-      // If new, or holds modified attributes
-      if (!cloudItem || !isUserDataEqual(item, cloudItem)) {
+      if (!cloudItem || !isItemEqual(item, cloudItem)) {
         try {
           const docRef = doc(db, colName, item.id);
           const cleaned = { ...item, syncedAt: Date.now() };
@@ -341,7 +316,7 @@ export function useRealtimeSync({
       }
     }
 
-    // Find custom deletions
+    // 2. Identify deletions
     for (const cloudItem of cloudData) {
       if (!cloudItem || !cloudItem.id) continue;
       if (!localMap.has(cloudItem.id)) {
@@ -354,12 +329,9 @@ export function useRealtimeSync({
         }
       }
     }
-
-    // Keep internal sync state updated
-    lastCloudState.current[key] = [...localList];
   };
 
-  // Individual triggers on state updates
+  // Assign individual useEffect hooks for each local list state update
   useEffect(() => { syncLocalToCloud('importItems', COLLECTION_MAP.importItems, items); }, [items]);
   useEffect(() => { syncLocalToCloud('laborPayments', COLLECTION_MAP.laborPayments, laborPayments); }, [laborPayments]);
   useEffect(() => { syncLocalToCloud('tpDtShippings', COLLECTION_MAP.tpDtShippings, tpDtShippings); }, [tpDtShippings]);
@@ -376,28 +348,23 @@ export function useRealtimeSync({
   useEffect(() => { syncLocalToCloud('tasks', COLLECTION_MAP.tasks, tasks); }, [tasks]);
   useEffect(() => { syncLocalToCloud('userProfiles', COLLECTION_MAP.userProfiles, userProfiles); }, [userProfiles]);
 
-  // Sync settings when they update locally (excluding echo)
+  // Sync settings when they update locally (excluding echoes)
   useEffect(() => {
     const syncSettingsLocalToCloud = async () => {
       if (!isAuthenticated || !isUserAdmin() || !db) return;
-      
-      if (ignoreLocalSettingsSync.current) {
-        ignoreLocalSettingsSync.current = false;
-        return;
-      }
+      if (!settingsListenerInitialized.current) return;
 
-      const s1 = { ...settings };
-      const s2 = { ...lastCloudSettings.current };
-      delete s1.syncedAt;
-      delete s2.syncedAt;
+      const localStr = JSON.stringify(cleanAndSort(settings));
+      const activeStr = lastSyncedSettingsString.current;
 
-      if (JSON.stringify(s1) === JSON.stringify(s2)) return;
+      if (localStr === activeStr) return;
+
+      lastSyncedSettingsString.current = localStr;
 
       try {
         const settingsDocRef = doc(db, 'settings', 'global_settings');
         const cleaned = { ...settings, syncedAt: Date.now() };
         await setDoc(settingsDocRef, cleaned);
-        lastCloudSettings.current = cleaned;
         console.log("[Realtime Sync] Auto-saved system settings to cloud");
       } catch (err) {
         console.warn("[Realtime Sync] Settings auto-save error:", err);
