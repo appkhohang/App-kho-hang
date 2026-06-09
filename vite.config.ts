@@ -12,7 +12,7 @@ export default defineConfig(() => {
   // even when visited without a trailing slash (e.g. /repository-name).
   const isGithubActions = process.env.GITHUB_ACTIONS === 'true';
   const repoName = process.env.GITHUB_REPOSITORY ? process.env.GITHUB_REPOSITORY.split('/')[1] : '';
-  const base = isGithubActions ? `/${repoName}/` : '/';
+  const base = isGithubActions ? `/${repoName}/` : './';
 
   return {
     base: base,

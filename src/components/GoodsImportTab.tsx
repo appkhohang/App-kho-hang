@@ -1225,7 +1225,7 @@ export default function GoodsImportTab({
               const totalShipĐT_TP = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
               
               // Sum legacy row ship + separate ship logs
-              const legacyShipTP_ĐT = weekItems.reduce((acc, curr) => acc + (curr.vậnChuyểnTP_ĐT || 0), 0);
+              const legacyShipTP_ĐT = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
               const separateShipTP_ĐT = weekShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
               const totalShipTP_ĐT = legacyShipTP_ĐT + separateShipTP_ĐT;
               const netBackShipValue = totalShipTP_ĐT - totalShipĐT_TP;
