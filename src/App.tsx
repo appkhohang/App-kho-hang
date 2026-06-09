@@ -23,7 +23,7 @@ import { formatVietnameseDate } from './utils/dateUtils';
 
 function getSavedArray<T>(key: string, fallback: T[]): T[] {
   const value = getSavedState<T[]>(key, fallback);
-  return Array.isArray(value) ? value : fallback;
+  return Array.isArray(value) ? value.filter(Boolean) : fallback;
 }
 
 export default function App() {

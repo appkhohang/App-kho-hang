@@ -22,10 +22,10 @@ export default function LaborPaymentReceiptModal({
   const [isExporting, setIsExporting] = useState(false);
 
   // Computed metrics for the week
-  const totalQty = weekItems.reduce((acc, curr) => acc + curr.sốLượng, 0);
-  const totalAmount = weekItems.reduce((acc, curr) => acc + (curr.sốLượng * curr.đơnGiáMay), 0); // "Tiền hàng" (Tiền công may)
-  const totalShipDT_TP = weekItems.reduce((acc, curr) => acc + curr.vậnChuyểnĐT_TP, 0);
-  const totalShipTP_ĐT = weekItems.reduce((acc, curr) => acc + curr.vậnChuyểnTP_ĐT, 0);
+  const totalQty = weekItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
+  const totalAmount = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0); // "Tiền hàng" (Tiền công may)
+  const totalShipDT_TP = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+  const totalShipTP_ĐT = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
   const netBackShipValue = totalShipTP_ĐT - totalShipDT_TP; // "Vận chuyển"
   const grandTotal = totalAmount + netBackShipValue; // "Thành tiền"
 

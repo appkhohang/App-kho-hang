@@ -39,6 +39,7 @@ export default function ReportTab({ items, bills, productionBatches, workers, wo
   // Group items by week
   const itemsByWeek: { [weekLabel: string]: ImportItem[] } = {};
   items.forEach(item => {
+    if (!item) return;
     const week = item.weekKey || 'Khác';
     if (!itemsByWeek[week]) {
       itemsByWeek[week] = [];
@@ -50,9 +51,9 @@ export default function ReportTab({ items, bills, productionBatches, workers, wo
   
   // Calculate statistics for operating charts
   const weekStatsForChart = weekKeys.map(weekKey => {
-    const list = itemsByWeek[weekKey];
-    const qty = list.reduce((a, b) => a + b.sốLượng, 0);
-    const val = list.reduce((a, b) => a + (b.sốLượng * b.đơnGiáMay), 0);
+    const list = itemsByWeek[weekKey] || [];
+    const qty = list.reduce((a, b) => a + (b?.sốLượng || 0), 0);
+    const val = list.reduce((a, b) => a + ((b?.sốLượng || 0) * (b?.đơnGiáMay || 0)), 0);
     return { name: weekKey.replace('Tuần ', 'T').replace(' - Tháng ', '/'), qty, val };
   }).reverse().slice(-6); // Last 6 weeks
 

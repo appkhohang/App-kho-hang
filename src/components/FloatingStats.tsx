@@ -24,6 +24,7 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
   // Group items to identify the MOST RECENT week
   const itemsByWeek: { [week: string]: ImportItem[] } = {};
   items.forEach(item => {
+    if (!item) return;
     if (!itemsByWeek[item.weekKey]) itemsByWeek[item.weekKey] = [];
     itemsByWeek[item.weekKey].push(item);
   });
@@ -33,20 +34,20 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
   const latestWeekItems = itemsByWeek[latestWeekLabel] || [];
 
   // Weekly Stats calculation
-  const wQty = latestWeekItems.reduce((acc, curr) => acc + curr.sốLượng, 0);
-  const wSewValue = latestWeekItems.reduce((acc, curr) => acc + (curr.sốLượng * curr.đơnGiáMay), 0);
-  const wShipĐT_TP = latestWeekItems.reduce((acc, curr) => acc + curr.vậnChuyểnĐT_TP, 0);
-  const wShipTP_ĐT = latestWeekItems.reduce((acc, curr) => acc + curr.vậnChuyểnTP_ĐT, 0);
+  const wQty = latestWeekItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
+  const wSewValue = latestWeekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+  const wShipĐT_TP = latestWeekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+  const wShipTP_ĐT = latestWeekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
   const wNetShip = wShipTP_ĐT - wShipĐT_TP;
 
   // Monthly Stats calculation (current month)
   const currentMonthKey = getVietnameseMonthKey(new Date().toISOString().split("T")[0]);
-  const currentMonthItems = items.filter(item => getVietnameseMonthKey(item.ngày) === currentMonthKey);
+  const currentMonthItems = items.filter(item => item && getVietnameseMonthKey(item.ngày) === currentMonthKey);
   
-  const mQty = currentMonthItems.reduce((acc, curr) => acc + curr.sốLượng, 0);
-  const mSewValue = currentMonthItems.reduce((acc, curr) => acc + (curr.sốLượng * curr.đơnGiáMay), 0);
-  const mShipĐT_TP = currentMonthItems.reduce((acc, curr) => acc + curr.vậnChuyểnĐT_TP, 0);
-  const mShipTP_ĐT = currentMonthItems.reduce((acc, curr) => acc + curr.vậnChuyểnTP_ĐT, 0);
+  const mQty = currentMonthItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
+  const mSewValue = currentMonthItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+  const mShipĐT_TP = currentMonthItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+  const mShipTP_ĐT = currentMonthItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
   const mNetShip = mShipTP_ĐT - mShipĐT_TP;
 
   // Export Stats Card to Image using html2canvas

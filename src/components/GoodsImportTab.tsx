@@ -413,7 +413,8 @@ export default function GoodsImportTab({
   // Group items by Week for table processing
   const itemsByWeek: { [weekLabel: string]: ImportItem[] } = {};
   items.forEach(item => {
-    const week = item.weekKey;
+    if (!item) return;
+    const week = item.weekKey || "Tuần Không Xác Định";
     if (!itemsByWeek[week]) {
       itemsByWeek[week] = [];
     }
@@ -423,6 +424,7 @@ export default function GoodsImportTab({
   // Group items by Month for table processing
   const itemsByMonth: { [monthLabel: string]: ImportItem[] } = {};
   items.forEach(item => {
+    if (!item) return;
     const month = getVietnameseMonthKey(item.ngày);
     if (!itemsByMonth[month]) {
       itemsByMonth[month] = [];
@@ -433,7 +435,8 @@ export default function GoodsImportTab({
   // Group independent shippings by Week
   const shippingsByWeek: { [weekLabel: string]: TpDtShippingItem[] } = {};
   tpDtShippings.forEach(ship => {
-    const week = ship.weekKey;
+    if (!ship) return;
+    const week = ship.weekKey || "Tuần Không Xác Định";
     if (!shippingsByWeek[week]) {
       shippingsByWeek[week] = [];
     }
@@ -443,6 +446,7 @@ export default function GoodsImportTab({
   // Group independent shippings by Month
   const shippingsByMonth: { [monthLabel: string]: TpDtShippingItem[] } = {};
   tpDtShippings.forEach(ship => {
+    if (!ship) return;
     const month = getVietnameseMonthKey(ship.ngày);
     if (!shippingsByMonth[month]) {
       shippingsByMonth[month] = [];
@@ -564,9 +568,9 @@ export default function GoodsImportTab({
 
   // Helper values for Chart rendering
   const weekStatsForChart = Object.keys(itemsByWeek).map(weekKey => {
-    const list = itemsByWeek[weekKey];
-    const qty = list.reduce((a, b) => a + b.sốLượng, 0);
-    const val = list.reduce((a, b) => a + (b.sốLượng * b.đơnGiáMay), 0);
+    const list = itemsByWeek[weekKey] || [];
+    const qty = list.reduce((a, b) => a + (b?.sốLượng || 0), 0);
+    const val = list.reduce((a, b) => a + ((b?.sốLượng || 0) * (b?.đơnGiáMay || 0)), 0);
     return { name: weekKey.split(" ")[1] || "W", qty, val };
   }).reverse().slice(0, 5); // Limit 5 weeks
 
