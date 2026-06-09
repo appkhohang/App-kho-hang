@@ -16,6 +16,7 @@ import FloatingStats from './components/FloatingStats';
 import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile } from './types';
 import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage } from './utils/storage';
 import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncService';
+import { useRealtimeSync } from './utils/realtimeSync';
 import { auth, db } from './utils/firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
@@ -272,101 +273,29 @@ export default function App() {
     };
   }, [authState.email, authState.isAuthenticated, fbAuthLoading]);
 
-  // Automatically pull database from cloud upon successful authentication / session restore
-  useEffect(() => {
-    let active = true;
-    const triggerAutoPull = async () => {
-      if (fbAuthLoading) return;
-      if (!authState.isAuthenticated || !authState.email) return;
-      
-      try {
-        setSyncStatus('syncing');
-        const cloudData = await downloadAllFromCloud();
-        if (!active) return;
-        
-        if (cloudData) {
-          // Sync all database collections from Cloud. If a collection is empty, overwrite locally as empty list 
-          // to fully support newly registered/created accounts on other devices or fresh database clearings.
-          const freshItems = cloudData.importItems || [];
-          setItems(freshItems);
-          saveState("xuongan_import_items", freshItems);
-
-          const freshLaborPayments = cloudData.laborPayments || [];
-          setLaborPayments(freshLaborPayments);
-          saveState("xuongan_labor_payments", freshLaborPayments);
-
-          const freshTpDtShippings = cloudData.tpDtShippings || [];
-          setTpDtShippings(freshTpDtShippings);
-          saveState("xuongan_tp_dt_shippings", freshTpDtShippings);
-
-          const freshCustomers = cloudData.customers || [];
-          setCustomers(freshCustomers);
-          saveState("xuongan_customers", freshCustomers);
-
-          const freshBills = cloudData.bills || [];
-          setBills(freshBills);
-          saveState("xuongan_bills", freshBills);
-
-          const freshPayments = cloudData.payments || [];
-          setPayments(freshPayments);
-          saveState("xuongan_payments", freshPayments);
-
-          const freshOperationBreakdowns = cloudData.operationBreakdowns || [];
-          setOperationBreakdowns(freshOperationBreakdowns);
-          saveState("xuongan_operation_breakdowns", freshOperationBreakdowns);
-
-          const freshWorkers = cloudData.workers || [];
-          setWorkers(freshWorkers);
-          saveState("xuongan_workers", freshWorkers);
-
-          const freshWorkerJobs = cloudData.workerJobs || [];
-          setWorkerJobs(freshWorkerJobs);
-          saveState("xuongan_worker_jobs", freshWorkerJobs);
-
-          const freshRawMaterials = cloudData.rawMaterials || [];
-          setRawMaterials(freshRawMaterials);
-          saveState("xuongan_raw_materials", freshRawMaterials);
-
-          const freshMaterialRecipes = cloudData.materialRecipes || [];
-          setMaterialRecipes(freshMaterialRecipes);
-          saveState("xuongan_material_recipes", freshMaterialRecipes);
-
-          const freshProductionBatches = cloudData.productionBatches || [];
-          setProductionBatches(freshProductionBatches);
-          saveState("xuongan_production_batches", freshProductionBatches);
-
-          const freshMaterialReimports = cloudData.materialReimports || [];
-          setMaterialReimports(freshMaterialReimports);
-          saveState("xuongan_material_reimports", freshMaterialReimports);
-
-          if (cloudData.tasks && cloudData.tasks.length > 0) {
-            setTasks(cloudData.tasks);
-            saveState("xuongan_tasks", cloudData.tasks);
-          }
-          if (cloudData.userProfiles && cloudData.userProfiles.length > 0) {
-            setUserProfiles(cloudData.userProfiles);
-            saveState("xuongan_user_profiles", cloudData.userProfiles);
-          }
-          if (cloudData.settings) {
-            setSettings(cloudData.settings as any);
-            saveState("xuongan_settings", cloudData.settings);
-          }
-          setSyncStatus('success');
-          console.log("Auto-synchronized database from Cloud Firestore successfully");
-        } else {
-          setSyncStatus('idle');
-        }
-      } catch (err) {
-        console.warn("Failed to auto-pull database from Cloud", err);
-        setSyncStatus('error');
-      }
-    };
-
-    triggerAutoPull();
-    return () => {
-      active = false;
-    };
-  }, [authState.email, authState.isAuthenticated, fbAuthLoading]);
+  // Synchronize database bidirectionally in real-time with Firestore
+  useRealtimeSync({
+    items, setItems,
+    laborPayments, setLaborPayments,
+    tpDtShippings, setTpDtShippings,
+    customers, setCustomers,
+    bills, setBills,
+    payments, setPayments,
+    operationBreakdowns, setOperationBreakdowns,
+    workers, setWorkers,
+    workerJobs, setWorkerJobs,
+    rawMaterials, setRawMaterials,
+    materialRecipes, setMaterialRecipes,
+    productionBatches, setProductionBatches,
+    materialReimports, setMaterialReimports,
+    tasks, setTasks,
+    userProfiles, setUserProfiles,
+    settings, setSettings,
+    isAuthenticated: authState.isAuthenticated,
+    userEmail: authState.email,
+    setLastSyncTime,
+    setSyncStatus
+  });
 
   // Route protection and dynamic redirection based on page level permissions
   React.useEffect(() => {
