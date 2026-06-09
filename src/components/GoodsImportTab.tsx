@@ -726,7 +726,7 @@ export default function GoodsImportTab({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Đơn giá may (đ / chiếc)</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">Đơn giá may (đ / chiếc)</label>
                         <input
                           type="number"
                           required
@@ -739,7 +739,7 @@ export default function GoodsImportTab({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">ĐT ➔ TP Ship sản lượng (đ)</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">ĐT ➔ TP Ship sản lượng (đ)</label>
                         <input
                           type="number"
                           min={0}
@@ -795,7 +795,7 @@ export default function GoodsImportTab({
                   <form onSubmit={(e) => { handleAddTpDtShipping(e); setIsFormExpanded(false); }} className="p-5 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Nội dung chuyến hàng (Vải, mốc mẫu, phụ liệu...)</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">Nội dung chuyến hàng (Vải, mốc mẫu, phụ liệu...)</label>
                         <input
                           type="text"
                           required
@@ -807,7 +807,7 @@ export default function GoodsImportTab({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Số tiền thanh toán ship TP ➔ ĐT (đ)</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">Số tiền thanh toán ship TP ➔ ĐT (đ)</label>
                         <input
                           type="number"
                           required
@@ -1352,49 +1352,49 @@ export default function GoodsImportTab({
                       >
                         {/* Left: STT + Item Model + Date */}
                         <div className="flex items-center gap-3">
-                          <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 flex items-center justify-center font-mono font-bold text-[11px] border border-indigo-100/40 dark:border-indigo-900/20">
+                          <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/45 text-indigo-800 dark:text-indigo-200 flex items-center justify-center font-mono font-black text-xs border border-indigo-200 dark:border-indigo-800/50 shrink-0 shadow-xs">
                             {index + 1}
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-slate-800 dark:text-slate-105 text-xs sm:text-sm">
+                              <span className="font-black text-slate-900 dark:text-white text-sm sm:text-base tracking-tight leading-snug">
                                 {item.mẫu}
                               </span>
                               {item.photo && (
-                                <span className="p-0.5 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-sm text-[8px] font-extrabold flex items-center gap-0.5 tracking-wider uppercase">
+                                <span className="p-0.5 px-2 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded-md text-[9px] font-extrabold flex items-center gap-1 tracking-wider uppercase border border-emerald-500/20">
                                   <Camera className="w-2.5 h-2.5" />
                                   <span>Ảnh</span>
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] text-slate-450 dark:text-slate-500 font-medium font-sans flex items-center gap-1 mt-0.5">
-                              <Calendar className="w-3 h-3 text-rose-505" />
+                            <span className="text-xs text-slate-600 dark:text-slate-350 font-bold font-sans flex items-center gap-1.5 mt-1">
+                              <Calendar className="w-3.5 h-3.5 text-rose-500" />
                               <span>{formatVietnameseDate(item.ngày)}</span>
                             </span>
                           </div>
                         </div>
 
                         {/* Right: Quantity + Value + Chevron */}
-                        <div className="flex items-center gap-3 sm:gap-5">
+                        <div className="flex items-center gap-4 sm:gap-6">
                           {/* Qty */}
                           <div className="text-right">
-                            <span className="text-[8.5px] block uppercase font-bold text-slate-400 tracking-wider font-sans leading-none">SL Lượng</span>
-                            <span className="text-xs font-bold font-mono text-slate-705 dark:text-slate-300">
-                              {item.sốLượng.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">cái</span>
+                            <span className="text-[9px] block uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider font-sans leading-none mb-1">Số Lượng</span>
+                            <span className="text-xs sm:text-sm font-black font-mono text-slate-900 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                              {(item.sốLượng || 0).toLocaleString()} <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">cái</span>
                             </span>
                           </div>
 
                           {/* Price or Total */}
                           <div className="text-right">
-                            <span className="text-[8.5px] block uppercase font-bold text-slate-400 tracking-wider font-sans leading-none">Tổng Tiền</span>
-                            <span className="text-xs sm:text-xs font-black font-mono text-indigo-650 dark:text-indigo-400">
+                            <span className="text-[9px] block uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider font-sans leading-none mb-1">Thành Tiền</span>
+                            <span className="text-xs sm:text-sm font-black font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-100/40 dark:border-emerald-900/30">
                               {overallTotal.toLocaleString()} đ
                             </span>
                           </div>
 
                           {/* Quick arrow */}
-                          <div className="p-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                            <ChevronRight className="w-3.5 h-3.5" />
+                          <div className="p-1 sm:p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+                            <ChevronRight className="w-4 h-4" />
                           </div>
                         </div>
                       </div>
