@@ -471,16 +471,16 @@ export default function GoodsImportTab({
         : (shippingsByMonth[label] || []);
 
       // Total Qty
-      const q = weekItems.reduce((acc, curr) => acc + curr.sốLượng, 0);
+      const q = weekItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
       totalQty += q;
 
       // Total Goods Amount
-      const a = weekItems.reduce((acc, curr) => acc + (curr.sốLượng * curr.đơnGiáMay), 0);
+      const a = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
       totalGoodsAmount += a;
 
       // Total Ship on item level
-      const dtTp = weekItems.reduce((acc, curr) => acc + curr.vậnChuyểnĐT_TP, 0);
-      const legacyTpDt = weekItems.reduce((acc, curr) => acc + (curr.vậnChuyểnTP_ĐT || 0), 0);
+      const dtTp = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+      const legacyTpDt = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
       // Separate shipping
       const separateTpDt = weekShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
 
@@ -532,12 +532,12 @@ export default function GoodsImportTab({
     }
 
     // Week Total Summary section
-    const wTotalQty = weekItems.reduce((acc, curr) => acc + curr.sốLượng, 0);
-    const wTotalAmount = weekItems.reduce((acc, curr) => acc + (curr.sốLượng * curr.đơnGiáMay), 0);
-    const wTotalShipDT_TP = weekItems.reduce((acc, curr) => acc + curr.vậnChuyểnĐT_TP, 0);
+    const wTotalQty = weekItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
+    const wTotalAmount = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+    const wTotalShipDT_TP = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
     
     // Total TP->ĐT combines legacy row-level ship and new separate shippings
-    const wTotalLegacyShipTP_DT = weekItems.reduce((acc, curr) => acc + (curr.vậnChuyểnTP_ĐT || 0), 0);
+    const wTotalLegacyShipTP_DT = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
     const wTotalSeparateShipTP_DT = weekShips.reduce((acc, curr) => acc + curr.sốTiền, 0);
     const wTotalShipTP_DT = wTotalLegacyShipTP_DT + wTotalSeparateShipTP_DT;
     const wNetBackShip = wTotalShipTP_DT - wTotalShipDT_TP;
@@ -1219,10 +1219,10 @@ export default function GoodsImportTab({
                 : (shippingsByMonth[weekLabel] || []);
               
               // Computations
-              const totalQty = weekItems.reduce((acc, curr) => acc + curr.sốLượng, 0);
-              const totalAmount = weekItems.reduce((acc, curr) => acc + (curr.sốLượng * curr.đơnGiáMay), 0);
+              const totalQty = weekItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
+              const totalAmount = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
               const cleanTotalAmount = totalAmount;
-              const totalShipĐT_TP = weekItems.reduce((acc, curr) => acc + curr.vậnChuyểnĐT_TP, 0);
+              const totalShipĐT_TP = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
               
               // Sum legacy row ship + separate ship logs
               const legacyShipTP_ĐT = weekItems.reduce((acc, curr) => acc + (curr.vậnChuyểnTP_ĐT || 0), 0);
@@ -1338,7 +1338,7 @@ export default function GoodsImportTab({
                 <div className="divide-y divide-slate-100 dark:divide-slate-800/50 max-h-[500px] overflow-y-auto scroll-smooth border-t border-b border-slate-150 dark:border-slate-800/80">
                   {weekItems.map((item, index) => {
                     const totalShip = (item.vậnChuyểnĐT_TP || 0) + (item.vậnChuyểnTP_ĐT || 0);
-                    const itemTotal = (item.sốLượng * item.đơnGiáMay);
+                    const itemTotal = ((item.sốLượng || 0) * (item.đơnGiáMay || 0));
                     const overallTotal = itemTotal + totalShip;
                     
                     return (
@@ -1812,50 +1812,50 @@ export default function GoodsImportTab({
                       {/* Row 1: Date */}
                       <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
                         <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Ngày nhập hàng</span>
-                        <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">{formatVietnameseDate(selectedItemForModal.ngày)}</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">{formatVietnameseDate(selectedItemForModal.ngày || '')}</span>
                       </div>
 
                       {/* Row 2: Week Category */}
                       <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
                         <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Ghi nhận vào tuần</span>
-                        <span className="text-xs sm:text-sm font-extrabold text-indigo-700 dark:text-indigo-400 font-mono bg-indigo-500/10 px-2.5 py-1 rounded-md leading-none">{selectedItemForModal.weekKey}</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-indigo-700 dark:text-indigo-400 font-mono bg-indigo-500/10 px-2.5 py-1 rounded-md leading-none">{selectedItemForModal.weekKey || 'N/A'}</span>
                       </div>
 
                       {/* Row 3: Quantity */}
                       <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
                         <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Số lượng may</span>
-                        <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white font-mono bg-slate-100 dark:bg-slate-800/80 px-2.5 py-0.5 rounded-md">{selectedItemForModal.sốLượng.toLocaleString()} cái</span>
+                        <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white font-mono bg-slate-100 dark:bg-slate-800/80 px-2.5 py-0.5 rounded-md">{(selectedItemForModal.sốLượng || 0).toLocaleString()} cái</span>
                       </div>
 
                       {/* Row 4: Sew unit price */}
                       <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
                         <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Đơn giá may</span>
-                        <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white font-mono">{selectedItemForModal.đơnGiáMay.toLocaleString()} đ</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white font-mono">{(selectedItemForModal.đơnGiáMay || 0).toLocaleString()} đ</span>
                       </div>
 
                       {/* Row 5: Total Sew Cost */}
                       <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
                         <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Thành tiền công may</span>
-                        <span className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">{(selectedItemForModal.sốLượng * selectedItemForModal.đơnGiáMay).toLocaleString()} đ</span>
+                        <span className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">{((selectedItemForModal.sốLượng || 0) * (selectedItemForModal.đơnGiáMay || 0)).toLocaleString()} đ</span>
                       </div>
 
                       {/* Row 6: ĐT -> TP Shipping */}
                       <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
                         <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Ship Đồng Tháp ➔ Sài Gòn</span>
-                        <span className="text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-455 font-mono">{selectedItemForModal.vậnChuyểnĐT_TP > 0 ? `${selectedItemForModal.vậnChuyểnĐT_TP.toLocaleString()} đ` : '0 đ'}</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-455 font-mono">{(selectedItemForModal.vậnChuyểnĐT_TP || 0) > 0 ? `${(selectedItemForModal.vậnChuyểnĐT_TP || 0).toLocaleString()} đ` : '0 đ'}</span>
                       </div>
 
                       {/* Row 7: TP -> ĐT Shipping */}
                       <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
                         <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Ship Sài Gòn ➔ Đồng Tháp</span>
-                        <span className="text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-455 font-mono">{selectedItemForModal.vậnChuyểnTP_ĐT > 0 ? `${selectedItemForModal.vậnChuyểnTP_ĐT.toLocaleString()} đ` : '0 đ'}</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-455 font-mono">{(selectedItemForModal.vậnChuyểnTP_ĐT || 0) > 0 ? `${(selectedItemForModal.vậnChuyểnTP_ĐT || 0).toLocaleString()} đ` : '0 đ'}</span>
                       </div>
 
                       {/* Row 8: Cumulative Total Cost */}
                       <div className="flex justify-between items-center pt-4 mt-2 py-1.5">
                         <span className="text-xs sm:text-sm font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">TỔNG TOÀN BỘ CHI PHÍ</span>
                         <span className="text-sm sm:text-base font-black text-indigo-650 dark:text-indigo-300 font-mono bg-indigo-50 dark:bg-indigo-950/50 px-3.5 py-1.5 rounded-xl border border-indigo-100/40 dark:border-indigo-900/35 shadow-xs">
-                          {((selectedItemForModal.sốLượng * selectedItemForModal.đơnGiáMay) + (selectedItemForModal.vậnChuyểnĐT_TP || 0) + (selectedItemForModal.vậnChuyểnTP_ĐT || 0)).toLocaleString()} đ
+                          {(((selectedItemForModal.sốLượng || 0) * (selectedItemForModal.đơnGiáMay || 0)) + (selectedItemForModal.vậnChuyểnĐT_TP || 0) + (selectedItemForModal.vậnChuyểnTP_ĐT || 0)).toLocaleString()} đ
                         </span>
                       </div>
                     </div>
