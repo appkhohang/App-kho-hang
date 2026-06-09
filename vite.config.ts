@@ -7,15 +7,9 @@ import {defineConfig} from 'vite';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
-  // Respect Repo Name if building on GitHub Actions for GH Pages.
-  // This avoids blank screens on GitHub Pages by ensuring assets are loaded correctly
-  // even when visited without a trailing slash (e.g. /repository-name).
-  const isGithubActions = process.env.GITHUB_ACTIONS === 'true';
-  const repoName = process.env.GITHUB_REPOSITORY ? process.env.GITHUB_REPOSITORY.split('/')[1] : '';
-  
-  // Use VITE_BASE_URL if explicitly defined, otherwise use absolute repo path for GitHub Actions.
-  // We default to relative paths './' to guarantee full mobility across subdirectories and local builds.
-  const base = process.env.VITE_BASE_URL || (isGithubActions ? `/${repoName}/` : './');
+  // Use VITE_BASE_URL if explicitly defined, otherwise default to relative paths './'
+  // to guarantee full mobility across subdirectories, custom domains, and local builds.
+  const base = process.env.VITE_BASE_URL || './';
 
   return {
     base: base,
