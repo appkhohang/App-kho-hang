@@ -16,54 +16,69 @@ import { COLLECTION_MAP, isUserAdmin } from '../utils/syncService';
 
 // Safely normalize user-facing semantic data for deep comparison, ignoring metadata keys
 function cleanObject(obj: any): any {
-  if (!obj || typeof obj !== 'object') {
+  try {
+    if (!obj || typeof obj !== 'object') {
+      return obj;
+    }
+    
+    const copy = { ...obj };
+    // Remove temporary sync/metadata tags to prevent comparison loop on raw document change
+    delete copy.syncedAt;
+    delete copy.updatedAt;
+
+    // Key sorting to achieve stable stringify representations
+    const sorted: any = {};
+    Object.keys(copy).sort().forEach(k => {
+      const val = copy[k];
+      if (val === undefined) {
+        // Ignore undefined keys as Firestore filters them out anyways
+        return;
+      }
+      if (Array.isArray(val)) {
+        sorted[k] = val.map(item => cleanObject(item));
+      } else if (val && typeof val === 'object') {
+        sorted[k] = cleanObject(val);
+      } else {
+        sorted[k] = val;
+      }
+    });
+    return sorted;
+  } catch (err) {
+    console.warn("[cleanObject] Failed to clean object safely:", err);
     return obj;
   }
-  
-  const copy = { ...obj };
-  // Remove temporary sync/metadata tags to prevent comparison loop on raw document change
-  delete copy.syncedAt;
-  delete copy.updatedAt;
-
-  // Key sorting to achieve stable stringify representations
-  const sorted: any = {};
-  Object.keys(copy).sort().forEach(k => {
-    const val = copy[k];
-    if (val === undefined) {
-      // Ignore undefined keys as Firestore filters them out anyways
-      return;
-    }
-    if (Array.isArray(val)) {
-      sorted[k] = val.map(item => cleanObject(item));
-    } else if (val && typeof val === 'object') {
-      sorted[k] = cleanObject(val);
-    } else {
-      sorted[k] = val;
-    }
-  });
-  return sorted;
 }
 
 function isUserDataEqual(item1: any, item2: any): boolean {
-  if (!item1 && !item2) return true;
-  if (!item1 || !item2) return false;
-  return JSON.stringify(cleanObject(item1)) === JSON.stringify(cleanObject(item2));
+  try {
+    if (!item1 && !item2) return true;
+    if (!item1 || !item2) return false;
+    return JSON.stringify(cleanObject(item1)) === JSON.stringify(cleanObject(item2));
+  } catch (err) {
+    console.warn("[isUserDataEqual] Comparison failed, fallback defaults to false:", err);
+    return false;
+  }
 }
 
 // Fast deep equals for serializable data structures
 function isArraysEqual(arr1: any[] | null | undefined, arr2: any[] | null | undefined): boolean {
-  if (!arr1 && !arr2) return true;
-  if (!arr1 || !arr2) return false;
-  if (arr1.length !== arr2.length) return false;
+  try {
+    if (!arr1 && !arr2) return true;
+    if (!arr1 || !arr2) return false;
+    if (arr1.length !== arr2.length) return false;
 
-  const map1 = new Map(arr1.filter(Boolean).map(item => [item?.id, item]));
-  for (const item2 of arr2) {
-    if (!item2 || !item2.id) return false;
-    const item1 = map1.get(item2.id);
-    if (!item1) return false;
-    if (!isUserDataEqual(item1, item2)) return false;
+    const map1 = new Map(arr1.filter(Boolean).map(item => [item?.id, item]));
+    for (const item2 of arr2) {
+      if (!item2 || !item2.id) return false;
+      const item1 = map1.get(item2.id);
+      if (!item1) return false;
+      if (!isUserDataEqual(item1, item2)) return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("[isArraysEqual] Comparison failed, fallback defaults to false:", err);
+    return false;
   }
-  return true;
 }
 
 export interface RealtimeSyncProps {
@@ -192,37 +207,76 @@ export function useRealtimeSync({
       try {
         const colRef = collection(db, colName);
         const unsub = onSnapshot(colRef, (snapshot) => {
-          const remoteList: any[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            remoteList.push({
-              id: doc.id,
-              ...data
+          try {
+            const remoteList: any[] = [];
+            snapshot.forEach((doc) => {
+              const data = doc.data();
+              remoteList.push({
+                id: doc.id,
+                ...data
+              });
             });
-          });
 
-          const isInitial = !listenersInitialized.current[key];
-          listenersInitialized.current[key] = true;
+            const isInitial = !listenersInitialized.current[key];
+            listenersInitialized.current[key] = true;
 
-          // Save last cloud state
-          lastCloudState.current[key] = remoteList;
+            // Save last cloud state
+            lastCloudState.current[key] = remoteList;
 
-          setter((prevLocal: any[]) => {
-            // Check if there is actual semantic user data differences
-            if (!isArraysEqual(prevLocal, remoteList)) {
-              console.log(`[Realtime Sync] Live update received for '${key}' (${remoteList.length} items)`);
-              
-              // Set the flag: This local update is purely from cloud, so do not write it back.
-              ignoreLocalSync.current[key] = true;
-              return remoteList;
-            }
-            return prevLocal;
-          });
+            setter((prevLocal: any[]) => {
+              try {
+                const localArray = Array.isArray(prevLocal) ? prevLocal.filter(Boolean) : [];
+                
+                if (isInitial) {
+                  const remoteMap = new Map(remoteList.map(item => [item?.id, item]));
+                  const localOnlyItems = localArray.filter(locItem => locItem && locItem.id && !remoteMap.has(locItem.id));
+                  
+                  if (localOnlyItems.length > 0) {
+                    console.log(`[Realtime Sync] Found ${localOnlyItems.length} local-only items in '${key}'. Auto-pushing to cloud...`);
+                    // Upload local-only items in backend
+                    localOnlyItems.forEach(async (item) => {
+                      try {
+                        const docRef = doc(db, colName, item.id);
+                        await setDoc(docRef, { ...item, syncedAt: Date.now() });
+                        console.log(`[Realtime Sync] Auto-published offline-only item: ${colName}/${item.id}`);
+                      } catch (err) {
+                        console.warn(`[Realtime Sync] Auto-publish failed for ${colName}/${item.id}`, err);
+                      }
+                    });
+                  }
+                }
 
-          // Update sync status indicator
-          const nowStr = new Date().toLocaleTimeString('vi-VN') + " " + new Date().toLocaleDateString('vi-VN');
-          setLastSyncTime(nowStr);
-          setSyncStatus('success');
+                // Construct merged array: remote items always win for shared IDs, local-only items are preserved
+                const remoteMap = new Map(remoteList.map(item => [item?.id, item]));
+                const mergedList = [...remoteList];
+                for (const locItem of localArray) {
+                  if (locItem && locItem.id && !remoteMap.has(locItem.id)) {
+                    mergedList.push(locItem);
+                  }
+                }
+
+                // Check if there is actual semantic user data differences
+                if (!isArraysEqual(localArray, mergedList)) {
+                  console.log(`[Realtime Sync] Live update received/merged for '${key}' (${mergedList.length} items)`);
+                  
+                  // Set the flag: This local update is purely from cloud, so do not write it back.
+                  ignoreLocalSync.current[key] = true;
+                  return mergedList;
+                }
+                return prevLocal;
+              } catch (innerErr) {
+                console.error(`[Realtime Sync] Error inside state setter for ${key}:`, innerErr);
+                return prevLocal;
+              }
+            });
+
+            // Update sync status indicator
+            const nowStr = new Date().toLocaleTimeString('vi-VN') + " " + new Date().toLocaleDateString('vi-VN');
+            setLastSyncTime(nowStr);
+            setSyncStatus('success');
+          } catch (snapErr) {
+            console.error(`[Realtime Sync] Error inside snapshot processor for ${colName}:`, snapErr);
+          }
         }, (error) => {
           console.warn(`[Realtime Sync] Listener error for ${colName}:`, error);
           setSyncStatus('error');

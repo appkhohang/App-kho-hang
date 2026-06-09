@@ -9,7 +9,7 @@ service cloud.firestore {
 
     // Checks if the document ID is valid to safeguard against ID Poisoning and resource abuse
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.\\@]+$');
     }
 
     // Default deny fallback
