@@ -1027,12 +1027,12 @@ export default function App() {
 
               <div className="flex justify-between items-end">
                 <div>
-                  <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">{currentMonthImportCount}</p>
-                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 mt-1.5 font-sans whitespace-nowrap">Đơn nhập tháng này</p>
+                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 mb-1 font-sans lg:tracking-wide whitespace-nowrap">Đơn nhập tháng này</p>
+                  <p className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white font-mono leading-none">{currentMonthImportCount}</p>
                   {latestImportDate && (
                     <div 
                       title={`Ngày nhập lô hàng gần nhất: ${latestImportDate}`}
-                      className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-[9px] md:text-[10px] font-extrabold uppercase tracking-wide rounded-md border-none shadow-xs shadow-emerald-500/10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md group-hover:shadow-emerald-500/35"
+                      className="inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-[9px] md:text-[10px] font-extrabold uppercase tracking-wide rounded-md border-none shadow-xs shadow-emerald-500/10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md group-hover:shadow-emerald-500/35"
                     >
                       <span>Mới nhất: {latestImportDate}</span>
                     </div>

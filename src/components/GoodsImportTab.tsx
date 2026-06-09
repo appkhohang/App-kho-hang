@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera } from 'lucide-react';
+import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera, ChevronRight, Info, Calendar } from 'lucide-react';
 import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietnameseMonthKey } from '../utils/dateUtils';
 import { exportDatabasePackage } from '../utils/storage';
@@ -154,6 +154,51 @@ export default function GoodsImportTab({
       ...prev,
       [weekLabel]: !prev[weekLabel]
     }));
+  };
+
+  // State variables for the compact details view modal
+  const [selectedItemForModal, setSelectedItemForModal] = useState<ImportItem | null>(null);
+  const [isDetailEditing, setIsDetailEditing] = useState<boolean>(false);
+  const [modalEditMẫu, setModalEditMẫu] = useState('');
+  const [modalEditSốLượng, setModalEditSốLượng] = useState<number>(0);
+  const [modalEditĐơnGiá, setModalEditĐơnGiá] = useState<number>(0);
+  const [modalEditĐT_TP, setModalEditĐT_TP] = useState<number>(0);
+  const [modalEditTP_ĐT, setModalEditTP_ĐT] = useState<number>(0);
+  const [modalEditNgày, setModalEditNgày] = useState('');
+
+  const startModalEdit = (item: ImportItem) => {
+    setIsDetailEditing(true);
+    setModalEditMẫu(item.mẫu);
+    setModalEditSốLượng(item.sốLượng);
+    setModalEditĐơnGiá(item.đơnGiáMay);
+    setModalEditĐT_TP(item.vậnChuyểnĐT_TP);
+    setModalEditTP_ĐT(item.vậnChuyểnTP_ĐT);
+    setModalEditNgày(item.ngày);
+  };
+
+  const saveModalEdit = (id: string) => {
+    if (isViewer) {
+      alert("⚠️ Bạn đang đăng nhập với vai trò CHỈ XEM, không có quyền chỉnh sửa dòng hàng!");
+      return;
+    }
+    setItems(prev => prev.map(item => {
+      if (item.id === id) {
+        const updated = {
+          ...item,
+          mẫu: modalEditMẫu,
+          sốLượng: Number(modalEditSốLượng || 0),
+          đơnGiáMay: Number(modalEditĐơnGiá || 0),
+          vậnChuyểnĐT_TP: Number(modalEditĐT_TP || 0),
+          vậnChuyểnTP_ĐT: Number(modalEditTP_ĐT || 0),
+          ngày: modalEditNgày,
+          weekKey: getVietnameseWeekKey(modalEditNgày)
+        };
+        setSelectedItemForModal(updated);
+        return updated;
+      }
+      return item;
+    }));
+    setIsDetailEditing(false);
   };
 
   // Submit labor payment
@@ -404,6 +449,51 @@ export default function GoodsImportTab({
     }
     shippingsByMonth[month].push(ship);
   });
+
+  // Calculate totals for currently displayed items
+  const displayedTotals = React.useMemo(() => {
+    const isWeekMode = filterMode === 'week';
+    const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
+    const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
+
+    const filteredGroupKeys = Object.keys(groupData)
+      .sort((a, b) => b.localeCompare(a))
+      .filter(label => currentFilterValue === 'all' || label === currentFilterValue);
+
+    let totalQty = 0;
+    let totalGoodsAmount = 0;
+    let totalShip = 0;
+
+    filteredGroupKeys.forEach(label => {
+      const weekItems = groupData[label] || [];
+      const weekShippings = isWeekMode 
+        ? (shippingsByWeek[label] || [])
+        : (shippingsByMonth[label] || []);
+
+      // Total Qty
+      const q = weekItems.reduce((acc, curr) => acc + curr.sốLượng, 0);
+      totalQty += q;
+
+      // Total Goods Amount
+      const a = weekItems.reduce((acc, curr) => acc + (curr.sốLượng * curr.đơnGiáMay), 0);
+      totalGoodsAmount += a;
+
+      // Total Ship on item level
+      const dtTp = weekItems.reduce((acc, curr) => acc + curr.vậnChuyểnĐT_TP, 0);
+      const legacyTpDt = weekItems.reduce((acc, curr) => acc + (curr.vậnChuyểnTP_ĐT || 0), 0);
+      // Separate shipping
+      const separateTpDt = weekShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+
+      totalShip += (dtTp + legacyTpDt + separateTpDt);
+    });
+
+    return {
+      totalQty,
+      totalGoodsAmount,
+      totalShip,
+      totalCost: totalGoodsAmount + totalShip
+    };
+  }, [items, tpDtShippings, filterMode, selectedWeekFilter, selectedMonthFilter, itemsByWeek, itemsByMonth, shippingsByWeek, shippingsByMonth]);
 
   // EXCEL GENERATION LOGIC - STRICT COMPLIANCE TO USER REQUEST FORMAT:
   const exportWeekToExcel = (weekLabel: string, weekItems: ImportItem[]) => {
@@ -768,28 +858,78 @@ export default function GoodsImportTab({
       </AnimatePresence>
 
       {items.length > 0 && (
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs gap-3">
-          <div className="flex items-center gap-2.5 font-sans">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold font-mono">
-              <BarChart3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs gap-3">
+            <div className="flex items-center gap-2.5 font-sans">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold font-mono">
+                <BarChart3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Danh sách lô nhập kho</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                  Chế độ xem: {filterMode === 'week' ? `Lọc theo Tuần (${selectedWeekFilter === 'all' ? 'Tất cả' : selectedWeekFilter})` : `Lọc theo Tháng (${selectedMonthFilter === 'all' ? 'Tất cả' : selectedMonthFilter})`}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Danh sách lô nhập kho</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
-                Chế độ xem: {filterMode === 'week' ? `Lọc theo Tuần (${selectedWeekFilter === 'all' ? 'Tất cả' : selectedWeekFilter})` : `Lọc theo Tháng (${selectedMonthFilter === 'all' ? 'Tất cả' : selectedMonthFilter})`}
-              </p>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsFilterModalOpen(true)}
+              className="flex items-center gap-2 bg-indigo-650 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              title="Nhấn để mở Bộ lọc và Cấu hình bảng số liệu"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Bộ Lọc & Báo Cáo</span>
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsFilterModalOpen(true)}
-            className="flex items-center gap-2 bg-indigo-650 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-            title="Nhấn để mở Bộ lọc và Cấu hình bảng số liệu"
-          >
-            <Filter className="w-3.5 h-3.5" />
-            <span>Bộ Lọc & Báo Cáo</span>
-          </button>
+          {/* Real-time sum panel for displayed items */}
+          <div className="bg-gradient-to-r from-indigo-500/5 to-emerald-500/5 dark:from-indigo-950/20 dark:to-emerald-950/20 border border-indigo-100 dark:border-indigo-950/60 p-4 rounded-2xl shadow-xs space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-extrabold tracking-wider text-slate-500 dark:text-slate-400 uppercase font-sans">
+                  Tổng kết nhanh của danh sách đang hiển thị
+                </span>
+              </div>
+              <span className="text-[10px] font-mono font-extrabold text-[#31574a] dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                {displayedTotals.totalQty.toLocaleString()} sản phẩm
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Tiền hàng */}
+              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none">
+                  Tổng tiền hàng / thợ
+                </span>
+                <div className="text-base font-black font-mono text-indigo-650 dark:text-indigo-400 mt-2">
+                  {displayedTotals.totalGoodsAmount.toLocaleString()} <span className="text-xs font-normal text-slate-400">đ</span>
+                </div>
+              </div>
+
+              {/* Tiền ship */}
+              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none">
+                  Tổng tiền ship (vận chuyển)
+                </span>
+                <div className="text-base font-black font-mono text-rose-500 dark:text-rose-400 mt-2">
+                  {displayedTotals.totalShip.toLocaleString()} <span className="text-xs font-normal text-slate-400">đ</span>
+                </div>
+              </div>
+
+              {/* Tổng chi phí */}
+              <div className="p-3 bg-emerald-500/10 dark:bg-emerald-500/10 border border-emerald-500/25 dark:border-emerald-500/20 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-extrabold text-emerald-600 dark:text-emerald-400 block tracking-wider leading-none">
+                  TỔNG CHI PHÍ THỰC TẾ
+                </span>
+                <div className="text-base font-black font-mono text-emerald-650 dark:text-emerald-300 mt-2 flex items-baseline gap-1">
+                  <span>{displayedTotals.totalCost.toLocaleString()}</span>
+                  <span className="text-xs font-bold text-emerald-550/80">đ</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1194,166 +1334,72 @@ export default function GoodsImportTab({
                     </div>
                   </div>
 
-                {/* Week Items Table */}
-                <div className="overflow-x-auto max-h-[500px] overflow-y-auto scroll-smooth relative border border-slate-150 dark:border-slate-800/80 rounded-b-xl">
-                  <table className="w-full text-left text-xs border-collapse relative">
-                    <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-[#111827] text-slate-505 border-b border-slate-200 dark:border-slate-800">
-                      <tr>
-                        <th className="sticky left-0 z-30 min-w-[44px] max-w-[44px] w-[44px] bg-slate-50 dark:bg-[#111827] py-2.5 sm:py-3 px-2 sm:px-4 font-semibold font-mono text-[10px] sm:text-[11px] border-r border-slate-100 dark:border-slate-800/50">STT</th>
-                        {visibleColumns.mau && <th className="sticky left-[44px] z-30 bg-slate-50 dark:bg-[#111827] border-r border-slate-200 dark:border-slate-800/80 py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] min-w-[110px] sm:min-w-[140px]">Mẫu</th>}
-                        {visibleColumns.ngay && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">Ngày Nhập</th>}
-                        {visibleColumns.soLuong && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">Số Lượng</th>}
-                        {visibleColumns.donGia && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">Đơn Giá May</th>}
-                        {visibleColumns.thanhTien && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">Thành Tiền (đ)</th>}
-                        {visibleColumns.dtTp && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">ĐT {"->"} TP</th>}
-                        {visibleColumns.tpDt && <th className="py-2.5 sm:py-3 px-2 sm:px-4 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap">TP {"->"} ĐT</th>}
-                        <th className="py-2.5 sm:py-3 px-2 sm:px-4 text-right font-semibold text-[10px] sm:text-[11px] sticky right-0 bg-slate-50 dark:bg-[#111827] z-20 border-l border-slate-100 dark:border-slate-800/50 whitespace-nowrap">Hành Động</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-105 dark:divide-slate-800">
-                      {weekItems.map((item, index) => {
-                        const isEditing = editingId === item.id;
-                        return (
-                          <tr key={item.id} className="group hover:bg-slate-50/50 dark:hover:bg-zinc-900/30 transition">
-                            <td className="sticky left-0 z-10 min-w-[44px] max-w-[44px] w-[44px] bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-850/80 transition py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-400 text-[10px] sm:text-xs border-r border-slate-100 dark:border-slate-800/50">{index + 1}</td>
-                            
-                            {visibleColumns.mau && (
-                              <td className="sticky left-[44px] z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-850/80 border-r border-slate-200 dark:border-slate-800/80 transition min-w-[110px] sm:min-w-[140px] py-2 sm:py-3 px-2 sm:px-4 font-medium text-slate-850 dark:text-slate-100 text-[10px] sm:text-xs">
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={editMẫu}
-                                    onChange={e => setEditMẫu(e.target.value)}
-                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-full min-w-[70px]"
-                                  />
-                                ) : (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span>{item.mẫu}</span>
-                                    {item.photo && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setViewingPhotoUrl(item.photo || null)}
-                                        className="p-1 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded cursor-pointer transition flex items-center justify-center bg-emerald-500/5 hover:border-emerald-500/25 border border-transparent"
-                                        title="Xem ảnh đính kèm"
-                                      >
-                                        <Camera className="w-3 h-3" />
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
-                              </td>
-                            )}
-
-                            {visibleColumns.ngay && (
-                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-550 dark:text-slate-450 text-[10px] sm:text-xs whitespace-nowrap">{formatVietnameseDate(item.ngày)}</td>
-                            )}
-                            
-                            {visibleColumns.soLuong && (
-                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-[10px] sm:text-xs">
-                                {isEditing ? (
-                                  <input
-                                    type="number"
-                                    value={editSốLượng}
-                                    onChange={e => setEditSốLượng(Number(e.target.value))}
-                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
-                                  />
-                                ) : (
-                                  item.sốLượng.toLocaleString()
-                                )}
-                              </td>
-                            )}
-                            
-                            {visibleColumns.donGia && (
-                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-[10px] sm:text-xs whitespace-nowrap">
-                                {isEditing ? (
-                                  <input
-                                    type="number"
-                                    value={editĐơnGiá}
-                                    onChange={e => setEditĐơnGiá(Number(e.target.value))}
-                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
-                                  />
-                                ) : (
-                                  `${item.đơnGiáMay.toLocaleString()} đ`
-                                )}
-                              </td>
-                            )}
-                            
-                            {visibleColumns.thanhTien && (
-                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400 text-[10px] sm:text-xs whitespace-nowrap">
-                                {(isEditing ? editSốLượng * editĐơnGiá : item.sốLượng * item.đơnGiáMay).toLocaleString()}
-                              </td>
-                            )}
-                            
-                            {visibleColumns.dtTp && (
-                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-500 text-[10px] sm:text-xs whitespace-nowrap">
-                                {isEditing ? (
-                                  <input
-                                    type="number"
-                                    value={editĐT_TP}
-                                    onChange={e => setEditĐT_TP(Number(e.target.value))}
-                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
-                                  />
-                                ) : (
-                                  item.vậnChuyểnĐT_TP ? `${item.vậnChuyểnĐT_TP.toLocaleString()} đ` : '0 đ'
-                                )}
-                              </td>
-                            )}
-                            
-                            {visibleColumns.tpDt && (
-                              <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-slate-500 text-[10px] sm:text-xs whitespace-nowrap">
-                                {isEditing ? (
-                                  <input
-                                    type="number"
-                                    value={editTP_ĐT}
-                                    onChange={e => setEditTP_ĐT(Number(e.target.value))}
-                                    className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-16 sm:w-24 font-mono"
-                                  />
-                                ) : (
-                                  item.vậnChuyểnTP_ĐT ? `${item.vậnChuyểnTP_ĐT.toLocaleString()} đ` : '0 đ'
-                                )}
-                              </td>
-                            )}
-                            
-                            <td className="py-2 sm:py-3 px-2 sm:px-4 text-right sticky right-0 bg-white dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-850/80 transition border-l border-slate-100 dark:border-slate-800/50 z-10 whitespace-nowrap">
-                              {isEditing ? (
-                                <div className="flex justify-end gap-1">
-                                  <button
-                                    onClick={() => saveEdit(item.id)}
-                                    className="p-1 px-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded cursor-pointer transition text-[9px] sm:text-[10px]"
-                                  >
-                                    Lưu
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingId(null)}
-                                    className="p-1 px-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-705 text-slate-650 dark:text-slate-350 rounded cursor-pointer transition text-[9px] sm:text-[10px]"
-                                  >
-                                    Huỷ
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex justify-end gap-2 text-slate-400">
-                                  <button
-                                    onClick={() => startEdit(item)}
-                                    className="hover:text-blue-500 transition p-1 cursor-pointer"
-                                    title="Sửa hàng này"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteItem(item.id)}
-                                    className="hover:text-red-500 transition p-1 cursor-pointer"
-                                    title="Xoá hàng này"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
+                {/* Week Items Compact List */}
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/50 max-h-[500px] overflow-y-auto scroll-smooth border-t border-b border-slate-150 dark:border-slate-800/80">
+                  {weekItems.map((item, index) => {
+                    const totalShip = (item.vậnChuyểnĐT_TP || 0) + (item.vậnChuyểnTP_ĐT || 0);
+                    const itemTotal = (item.sốLượng * item.đơnGiáMay);
+                    const overallTotal = itemTotal + totalShip;
+                    
+                    return (
+                      <div 
+                        key={item.id} 
+                        onClick={() => {
+                          setSelectedItemForModal(item);
+                          setIsDetailEditing(false);
+                        }}
+                        className="group flex items-center justify-between p-3.5 sm:p-4 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/10 cursor-pointer transition active:bg-indigo-50/40"
+                      >
+                        {/* Left: STT + Item Model + Date */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 flex items-center justify-center font-mono font-bold text-[11px] border border-indigo-100/40 dark:border-indigo-900/20">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-800 dark:text-slate-105 text-xs sm:text-sm">
+                                {item.mẫu}
+                              </span>
+                              {item.photo && (
+                                <span className="p-0.5 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-sm text-[8px] font-extrabold flex items-center gap-0.5 tracking-wider uppercase">
+                                  <Camera className="w-2.5 h-2.5" />
+                                  <span>Ảnh</span>
+                                </span>
                               )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </div>
+                            <span className="text-[10px] text-slate-450 dark:text-slate-500 font-medium font-sans flex items-center gap-1 mt-0.5">
+                              <Calendar className="w-3 h-3 text-rose-505" />
+                              <span>{formatVietnameseDate(item.ngày)}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Right: Quantity + Value + Chevron */}
+                        <div className="flex items-center gap-3 sm:gap-5">
+                          {/* Qty */}
+                          <div className="text-right">
+                            <span className="text-[8.5px] block uppercase font-bold text-slate-400 tracking-wider font-sans leading-none">SL Lượng</span>
+                            <span className="text-xs font-bold font-mono text-slate-705 dark:text-slate-300">
+                              {item.sốLượng.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">cái</span>
+                            </span>
+                          </div>
+
+                          {/* Price or Total */}
+                          <div className="text-right">
+                            <span className="text-[8.5px] block uppercase font-bold text-slate-400 tracking-wider font-sans leading-none">Tổng Tiền</span>
+                            <span className="text-xs sm:text-xs font-black font-mono text-indigo-650 dark:text-indigo-400">
+                              {overallTotal.toLocaleString()} đ
+                            </span>
+                          </div>
+
+                          {/* Quick arrow */}
+                          <div className="p-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Independent TP -> DT Shippings Table */}
@@ -1693,6 +1739,287 @@ export default function GoodsImportTab({
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-contain"
                 />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Import Item Detail Modal */}
+      <AnimatePresence>
+        {selectedItemForModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+            <div className="absolute inset-0 cursor-pointer" onClick={() => setSelectedItemForModal(null)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className={`max-w-md w-full rounded-2xl shadow-2xl z-10 flex flex-col border overflow-hidden relative ${
+                settings.theme === 'dark' 
+                  ? 'bg-slate-900 border-slate-800 text-slate-100' 
+                  : 'bg-white border-slate-150 text-slate-800'
+              }`}
+            >
+              {/* Header Title */}
+              <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/20">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 px-2.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 font-bold font-mono text-[10px] rounded uppercase tracking-wider">
+                    {isDetailEditing ? 'Sửa chi tiết' : 'Chi tiết dòng'}
+                  </div>
+                  <h3 className="font-extrabold text-xs sm:text-sm tracking-tight text-slate-800 dark:text-slate-100">
+                    PHIẾU NHẬP HÀNG CHI TIẾT
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedItemForModal(null)}
+                  className={`p-1.5 rounded-full transition cursor-pointer ${
+                    settings.theme === 'dark' 
+                      ? 'hover:bg-slate-800 text-slate-400 hover:text-white' 
+                      : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <X className="w-4.5 h-4.5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 overflow-y-auto max-h-[75vh] space-y-4">
+                {!isDetailEditing ? (
+                  /* VIEW MODE */
+                  <div className="space-y-4 font-sans">
+                    {/* Model Banner */}
+                    <div className="p-4 bg-indigo-50/30 dark:bg-indigo-950/20 rounded-xl border border-indigo-100/30 dark:border-indigo-955/45 flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 block">Tên mặt hàng/Mẫu mã</span>
+                        <span className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100">{selectedItemForModal.mẫu}</span>
+                      </div>
+                      
+                      {selectedItemForModal.photo && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingPhotoUrl(selectedItemForModal.photo!)}
+                          className="p-1.5 px-3 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 hover:dark:bg-emerald-900/30 border border-emerald-100/50 dark:border-emerald-800/20 text-[10px] font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition select-none"
+                        >
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Xem ảnh sản phẩm</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Columns structure */}
+                    <div className="space-y-3">
+                      {/* Row 1: Date */}
+                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Ngày nhập hàng</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">{formatVietnameseDate(selectedItemForModal.ngày)}</span>
+                      </div>
+
+                      {/* Row 2: Week Category */}
+                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Ghi nhận vào tuần</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-indigo-700 dark:text-indigo-400 font-mono bg-indigo-500/10 px-2.5 py-1 rounded-md leading-none">{selectedItemForModal.weekKey}</span>
+                      </div>
+
+                      {/* Row 3: Quantity */}
+                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Số lượng may</span>
+                        <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white font-mono bg-slate-100 dark:bg-slate-800/80 px-2.5 py-0.5 rounded-md">{selectedItemForModal.sốLượng.toLocaleString()} cái</span>
+                      </div>
+
+                      {/* Row 4: Sew unit price */}
+                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Đơn giá may</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white font-mono">{selectedItemForModal.đơnGiáMay.toLocaleString()} đ</span>
+                      </div>
+
+                      {/* Row 5: Total Sew Cost */}
+                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Thành tiền công may</span>
+                        <span className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">{(selectedItemForModal.sốLượng * selectedItemForModal.đơnGiáMay).toLocaleString()} đ</span>
+                      </div>
+
+                      {/* Row 6: ĐT -> TP Shipping */}
+                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Ship Đồng Tháp ➔ Sài Gòn</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-455 font-mono">{selectedItemForModal.vậnChuyểnĐT_TP > 0 ? `${selectedItemForModal.vậnChuyểnĐT_TP.toLocaleString()} đ` : '0 đ'}</span>
+                      </div>
+
+                      {/* Row 7: TP -> ĐT Shipping */}
+                      <div className="flex justify-between items-center py-2.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">Ship Sài Gòn ➔ Đồng Tháp</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-455 font-mono">{selectedItemForModal.vậnChuyểnTP_ĐT > 0 ? `${selectedItemForModal.vậnChuyểnTP_ĐT.toLocaleString()} đ` : '0 đ'}</span>
+                      </div>
+
+                      {/* Row 8: Cumulative Total Cost */}
+                      <div className="flex justify-between items-center pt-4 mt-2 py-1.5">
+                        <span className="text-xs sm:text-sm font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">TỔNG TOÀN BỘ CHI PHÍ</span>
+                        <span className="text-sm sm:text-base font-black text-indigo-650 dark:text-indigo-300 font-mono bg-indigo-50 dark:bg-indigo-950/50 px-3.5 py-1.5 rounded-xl border border-indigo-100/40 dark:border-indigo-900/35 shadow-xs">
+                          {((selectedItemForModal.sốLượng * selectedItemForModal.đơnGiáMay) + (selectedItemForModal.vậnChuyểnĐT_TP || 0) + (selectedItemForModal.vậnChuyểnTP_ĐT || 0)).toLocaleString()} đ
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Notice bar */}
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800 rounded-xl flex items-start gap-2.5">
+                      <Info className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                      <p className="text-[10px] text-slate-450 dark:text-slate-500 leading-normal">
+                        Bản ghi này tự động đồng bộ hóa vào tổng công nợ, chi phí vận chuyển, và thống kê báo cáo của tab Nhập Hàng. Mọi hành động chỉnh sửa sẽ tự động phân loại lại tuần/tháng dựa trên ngày đã chọn.
+                      </p>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm("Bạn có chắc chắn muốn xoá dòng nhập hàng này?")) {
+                            setItems(prev => prev.filter(item => item.id !== selectedItemForModal.id));
+                            setSelectedItemForModal(null);
+                          }
+                        }}
+                        className="py-2.5 px-3 bg-red-50 hover:bg-red-100 dark:bg-[#201012] hover:dark:bg-[#2e1518] dark:border-[#381a1d] text-red-650 dark:text-red-400 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer border border-transparent"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Xóa bỏ</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => startModalEdit(selectedItemForModal)}
+                        className="py-2.5 px-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Chỉnh sửa</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedItemForModal(null)}
+                        className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-705 text-slate-650 dark:text-slate-300 rounded-xl font-bold text-xs flex items-center justify-center transition active:scale-95 cursor-pointer"
+                      >
+                        Đóng
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* EDIT MODE */
+                  <div className="space-y-4 font-sans text-left">
+                    {/* Tên Mẫu */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1 font-mono">Tên mặt hàng/Mẫu mã</label>
+                      <input
+                        type="text"
+                        value={modalEditMẫu}
+                        onChange={e => setModalEditMẫu(e.target.value)}
+                        className="w-full text-xs font-medium bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2.5 px-3 rounded-xl text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-505"
+                        placeholder="VD: Đầm xòe, Áo thun..."
+                        required
+                      />
+                    </div>
+
+                    {/* Hàng 2 cột: Ngày và Số lượng */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1 font-mono">Ngày nhập</label>
+                        <input
+                          type="date"
+                          value={modalEditNgày}
+                          onChange={e => setModalEditNgày(e.target.value)}
+                          className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2.5 px-3 rounded-xl text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-505 font-mono"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1 font-mono">Số lượng may</label>
+                        <input
+                          type="number"
+                          value={modalEditSốLượng}
+                          onChange={e => setModalEditSốLượng(Number(e.target.value))}
+                          className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2.5 px-3 rounded-xl text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-505 font-mono"
+                          placeholder="0"
+                          min="0"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Hàng 2 cột: Đơn giá may và Vận chuyển ĐT->TP */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1 font-mono">Đơn giá may (đ)</label>
+                        <input
+                          type="number"
+                          value={modalEditĐơnGiá}
+                          onChange={e => setModalEditĐơnGiá(Number(e.target.value))}
+                          className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2.5 px-3 rounded-xl text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-505 font-mono"
+                          placeholder="0"
+                          min="0"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1 font-mono">Ship ĐT➔TP (đ)</label>
+                        <input
+                          type="number"
+                          value={modalEditĐT_TP}
+                          onChange={e => setModalEditĐT_TP(Number(e.target.value))}
+                          className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2.5 px-3 rounded-xl text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-505 font-mono"
+                          placeholder="0"
+                          min="0"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Vận chuyển TP->ĐT */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1 font-mono">Ship Sài Gòn ➔ Đồng Tháp (đ)</label>
+                      <input
+                        type="number"
+                        value={modalEditTP_ĐT}
+                        onChange={e => setModalEditTP_ĐT(Number(e.target.value))}
+                        className="w-full text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2.5 px-3 rounded-xl text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-505 font-mono"
+                        placeholder="0"
+                        min="0"
+                      />
+                    </div>
+
+                    {/* Dynamic previews */}
+                    <div className="p-3.5 bg-indigo-50/20 dark:bg-indigo-950/10 border border-indigo-100/20 dark:border-indigo-950/30 rounded-xl space-y-1.5 font-mono">
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-slate-450 dark:text-slate-400 font-sans">Thành tiền may:</span>
+                        <span className="font-bold text-slate-700 dark:text-slate-355">{(modalEditSốLượng * modalEditĐơnGiá).toLocaleString()}đ</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-slate-450 dark:text-slate-400 font-sans">Phí ship vận chuyển:</span>
+                        <span className="font-bold text-slate-705 dark:text-slate-355">{(modalEditĐT_TP + modalEditTP_ĐT).toLocaleString()}đ</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px] font-bold border-t border-slate-150 dark:border-slate-850 pt-1.5 mt-0.5">
+                        <span className="text-indigo-600 dark:text-indigo-400 font-sans uppercase">Dự toán tổng chi phí:</span>
+                        <span className="text-indigo-650 dark:text-indigo-400">{(modalEditSốLượng * modalEditĐơnGiá + modalEditĐT_TP + modalEditTP_ĐT).toLocaleString()}đ</span>
+                      </div>
+                    </div>
+
+                    {/* Save or Cancel */}
+                    <div className="flex gap-2 justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsDetailEditing(false)}
+                        className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-805 dark:hover:bg-slate-705 text-slate-650 dark:text-slate-300 rounded-xl font-bold text-xs cursor-pointer select-none transition"
+                      >
+                        Quay lại
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => saveModalEdit(selectedItemForModal.id)}
+                        className="py-2.5 px-5 bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition select-none cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Lưu thay đổi</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>
