@@ -12,7 +12,10 @@ export default defineConfig(() => {
   // even when visited without a trailing slash (e.g. /repository-name).
   const isGithubActions = process.env.GITHUB_ACTIONS === 'true';
   const repoName = process.env.GITHUB_REPOSITORY ? process.env.GITHUB_REPOSITORY.split('/')[1] : '';
-  const base = isGithubActions ? `/${repoName}/` : '/';
+  
+  // Use VITE_BASE_URL if explicitly defined, otherwise use absolute repo path for GitHub Actions.
+  // We default to relative paths './' to guarantee full mobility across subdirectories and local builds.
+  const base = process.env.VITE_BASE_URL || (isGithubActions ? `/${repoName}/` : './');
 
   return {
     base: base,
