@@ -4,10 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>My Google AI Studio App</title>
+    <script>
+      // Self-healing script to automatically fix missing trailing slash when loading from GitHub Pages
+      (function() {
+        var host = window.location.hostname;
+        var path = window.location.pathname;
+        if (
+          host.endsWith('.github.io') && 
+          path.length > 1 && 
+          !path.endsWith('/') && 
+          !/\.[a-zA-Z0-9]{2,4}$/.test(path)
+        ) {
+          window.location.replace(window.location.protocol + '//' + window.location.host + path + '/' + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./src/main.tsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
 

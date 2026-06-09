@@ -74,7 +74,7 @@ export default function InvoicesTab({
     // Filter valid items out of the list
     const activeItems = modalDraftItems.filter(item => 
       item.mẫuMã.trim() !== '' && 
-      item.sốLượng !== '' && Number(item.sốLượng) > 0
+      String(item.sốLượng) !== '' && Number(item.sốLượng) > 0
     );
 
     if (activeItems.length === 0) {
