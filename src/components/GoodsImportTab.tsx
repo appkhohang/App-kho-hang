@@ -5,11 +5,12 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal } from 'lucide-react';
+import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera } from 'lucide-react';
 import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietnameseMonthKey } from '../utils/dateUtils';
 import { exportDatabasePackage } from '../utils/storage';
 import LaborPaymentReceiptModal from './LaborPaymentReceiptModal';
+import CameraCapture from './CameraCapture';
 import * as XLSX from 'xlsx';
 
 interface GoodsImportTabProps {
@@ -104,6 +105,8 @@ export default function GoodsImportTab({
   const [shipTP_ĐT, setShipTP_ĐT] = useState<number | ''>('');
   const [ngàyNhập, setNgàyNhập] = useState(getCurrentDateStr());
   const [isFormExpanded, setIsFormExpanded] = useState(false);
+  const [importPhoto, setImportPhoto] = useState<string | null>(null);
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
 
   // Form toggle state for adding either sewn items or separate cargo shipments
   const [activeFormType, setActiveFormType] = useState<'goods' | 'shipping'>('goods');
@@ -221,7 +224,8 @@ export default function GoodsImportTab({
       vậnChuyểnTP_ĐT: Number(shipTP_ĐT || 0),
       ngày: ngàyNhập,
       weekKey: getVietnameseWeekKey(ngàyNhập),
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      photo: importPhoto || undefined
     };
 
     setItems(prev => [newItem, ...prev]);
@@ -233,6 +237,7 @@ export default function GoodsImportTab({
     setShipĐT_TP('');
     setShipTP_ĐT('');
     setNgàyNhập(getCurrentDateStr());
+    setImportPhoto(null);
   };
 
   // Start Inline Edit
@@ -654,6 +659,15 @@ export default function GoodsImportTab({
                           className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
                         />
                       </div>
+                    </div>
+
+                    {/* Camera Capture for Goods Item */}
+                    <div className="border-t border-slate-100 dark:border-slate-805/40 pt-2 pb-1">
+                      <CameraCapture
+                        onCapture={setImportPhoto}
+                        initialValue={importPhoto}
+                        resolvedTheme={settings.theme === 'dark' ? 'dark' : 'light'}
+                      />
                     </div>
 
                     <div className="flex flex-col sm:flex-row justify-between items-center pt-2 gap-3">
@@ -1213,7 +1227,19 @@ export default function GoodsImportTab({
                                     className="bg-white dark:bg-slate-950 py-0.5 px-1 border rounded border-indigo-400 outline-none text-[10px] sm:text-xs w-full min-w-[70px]"
                                   />
                                 ) : (
-                                  item.mẫu
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span>{item.mẫu}</span>
+                                    {item.photo && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setViewingPhotoUrl(item.photo || null)}
+                                        className="p-1 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded cursor-pointer transition flex items-center justify-center bg-emerald-500/5 hover:border-emerald-500/25 border border-transparent"
+                                        title="Xem ảnh đính kèm"
+                                      >
+                                        <Camera className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                             )}
@@ -1632,6 +1658,44 @@ export default function GoodsImportTab({
             allLaborPayments={laborPayments}
             onClose={() => setSelectedLaborPaymentForModal(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Lightbox photo viewer */}
+      <AnimatePresence>
+        {viewingPhotoUrl && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+            <div className="absolute inset-0" onClick={() => setViewingPhotoUrl(null)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={`max-w-2xl w-full p-5 rounded-2xl shadow-2xl z-10 flex flex-col border relative uppercase font-mono ${settings.theme === 'dark' ? 'bg-[#0e1613] border-[#1c2d27]' : 'bg-white border-slate-200'}`}
+            >
+              <button
+                type="button"
+                onClick={() => setViewingPhotoUrl(null)}
+                className={`absolute top-4 right-4 p-1.5 rounded-full transition cursor-pointer ${settings.theme === 'dark' ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'}`}
+                title="Đóng xem ảnh"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <div className="pb-3 border-b border-slate-105 dark:border-slate-800/60 w-full flex items-center gap-2">
+                <Camera className="w-4 h-4 text-emerald-555" />
+                <span className={`text-[11px] font-bold tracking-wider ${settings.theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Ảnh chụp mặt hàng / Biên nhận đính kèm</span>
+              </div>
+              
+              <div className="mt-4 w-full aspect-[4/3] max-h-[60vh] bg-black/5 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100 dark:border-slate-800/40">
+                <img
+                  src={viewingPhotoUrl}
+                  alt="Ảnh phóng to chi tiết"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

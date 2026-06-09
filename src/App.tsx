@@ -110,20 +110,20 @@ export default function App() {
   });
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = getSavedState<AppSettings>("xuongan_settings", {
-      theme: 'system',
+      theme: 'light',
       currencySymbol: 'đ',
       exportFormat: 'xlsx'
     });
     if (!saved || typeof saved !== 'object') {
       return {
-        theme: 'system',
+        theme: 'light',
         currencySymbol: 'đ',
         exportFormat: 'xlsx'
       };
     }
     return {
       ...saved,
-      theme: saved.theme || 'system',
+      theme: 'light',
       currencySymbol: saved.currencySymbol || 'đ',
       exportFormat: saved.exportFormat || 'xlsx'
     };
@@ -799,7 +799,7 @@ export default function App() {
       setMaterialRecipes(getSavedState("xuongan_material_recipes", []));
       setProductionBatches(getSavedState("xuongan_production_batches", []));
       setMaterialReimports(getSavedState("xuongan_material_reimports", []));
-      setSettings(getSavedState("xuongan_settings", { theme: 'system', currencySymbol: 'đ', exportFormat: 'xlsx' }));
+      setSettings(getSavedState("xuongan_settings", { theme: 'light', currencySymbol: 'đ', exportFormat: 'xlsx' }));
       alert("Đồng bộ hóa khôi phục Cơ sở dữ liệu xưởng thành công!");
     } else {
       alert("Lỗi! File khôi phục không đúng định dạng chuẩn của Xưởng An.");
@@ -1991,6 +1991,7 @@ export default function App() {
                     payments={payments}
                     setPayments={setPayments}
                     userRole={userRole}
+                    resolvedTheme={resolvedTheme}
                   />
                 </motion.div>
               ) : activeTab === 'production' ? (

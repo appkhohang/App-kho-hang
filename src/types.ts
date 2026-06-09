@@ -13,6 +13,7 @@ export interface ImportItem {
   ngày: string; // YYYY-MM-DD format
   weekKey: string; // e.g., "Tuần 22 - Tháng 05"
   createdAt: number;
+  photo?: string; // Captured photo (Data URL)
 }
 
 export interface TpDtShippingItem {
@@ -53,6 +54,7 @@ export interface Bill {
   grandTotal: number; // Tổng cộng = subtotal + previousDebt - paymentAmount
   createdAt: number;
   hasPaid?: boolean; // toggle state
+  photo?: string; // Captured photo (Data URL)
 }
 
 export interface Customer {
