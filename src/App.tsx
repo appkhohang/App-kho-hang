@@ -293,6 +293,7 @@ export default function App() {
     settings, setSettings,
     isAuthenticated: authState.isAuthenticated,
     userEmail: authState.email,
+    fbAuthLoading,
     setLastSyncTime,
     setSyncStatus
   });

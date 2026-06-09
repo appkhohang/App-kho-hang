@@ -117,6 +117,7 @@ export interface RealtimeSyncProps {
 
   isAuthenticated: boolean;
   userEmail: string | null;
+  fbAuthLoading: boolean;
   setLastSyncTime: (time: string) => void;
   setSyncStatus: (status: 'idle' | 'syncing' | 'success' | 'error') => void;
 }
@@ -140,6 +141,7 @@ export function useRealtimeSync({
   settings, setSettings,
   isAuthenticated,
   userEmail,
+  fbAuthLoading,
   setLastSyncTime,
   setSyncStatus
 }: RealtimeSyncProps) {
@@ -157,7 +159,7 @@ export function useRealtimeSync({
   const ignoreLocalSettingsSync = useRef<boolean>(false);
 
   useEffect(() => {
-    if (!isAuthenticated || !db) {
+    if (fbAuthLoading || !isAuthenticated || !db) {
       return;
     }
 
@@ -266,7 +268,7 @@ export function useRealtimeSync({
       console.log("[Realtime Sync] Tearing down Firestore live listeners...");
       unsubscribeList.forEach(unsub => unsub());
     };
-  }, [isAuthenticated, userEmail]);
+  }, [fbAuthLoading, isAuthenticated, userEmail]);
 
   // Monitor and Auto-Push local changes value-by-value back to Cloud
   const syncLocalToCloud = async (key: string, colName: string, localList: any[]) => {
