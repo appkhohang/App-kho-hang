@@ -9,9 +9,10 @@ import {
   doc, 
   onSnapshot, 
   setDoc, 
-  deleteDoc 
+  deleteDoc,
+  writeBatch
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, getNamespaceCollection, getSettingsDocId, sanitizeDataForFirestore } from './firebase';
 import { COLLECTION_MAP, isUserAdmin } from './syncService';
 
 // Safely normalize user-facing semantic data for deep comparison, ignoring dynamic metadata keys
@@ -65,6 +66,47 @@ function isItemEqual(item1: any, item2: any): boolean {
   if (!item1 && !item2) return true;
   if (!item1 || !item2) return false;
   return JSON.stringify(cleanAndSort(item1)) === JSON.stringify(cleanAndSort(item2));
+}
+
+// Bidirectional merge helper to reconcile local offline items and remote cloud items
+function mergeLocalAndCloud(localList: any[], remoteList: any[]): any[] {
+  if (!Array.isArray(localList) || localList.length === 0) return remoteList || [];
+  if (!Array.isArray(remoteList) || remoteList.length === 0) return localList || [];
+
+  const mergedMap = new Map();
+  
+  // First, populate with local items
+  localList.forEach(item => {
+    if (item && item.id) {
+      mergedMap.set(item.id, item);
+    }
+  });
+  
+  // Combine with remote items using timestamp/creation reconciliation
+  remoteList.forEach(remoteItem => {
+    if (remoteItem && remoteItem.id) {
+      const localItem = mergedMap.get(remoteItem.id);
+      if (!localItem) {
+        mergedMap.set(remoteItem.id, remoteItem);
+      } else {
+        const localCreated = localItem.createdAt || 0;
+        const remoteCreated = remoteItem.createdAt || 0;
+        const localUpdated = localItem.updatedAt || 0;
+        const remoteUpdated = remoteItem.updatedAt || 0;
+        
+        const localTime = Math.max(localCreated, localUpdated);
+        const remoteTime = Math.max(remoteCreated, remoteUpdated);
+        
+        if (remoteTime >= localTime) {
+          mergedMap.set(remoteItem.id, remoteItem);
+        } else {
+          mergedMap.set(remoteItem.id, localItem);
+        }
+      }
+    }
+  });
+  
+  return Array.from(mergedMap.values());
 }
 
 export interface RealtimeSyncProps {
@@ -121,6 +163,7 @@ export interface RealtimeSyncProps {
   fbAuthLoading: boolean;
   setLastSyncTime: (time: string) => void;
   setSyncStatus: (status: 'idle' | 'syncing' | 'success' | 'error') => void;
+  setSyncError?: (error: string | null) => void;
 }
 
 export function useRealtimeSync({
@@ -144,9 +187,31 @@ export function useRealtimeSync({
   userEmail,
   fbAuthLoading,
   setLastSyncTime,
-  setSyncStatus
+  setSyncStatus,
+  setSyncError
 }: RealtimeSyncProps) {
   
+  // Store up-to-date refs of state arrays to solve closure issues in the snapshot listeners
+  const latestStates = useRef<Record<string, any[]>>({});
+  
+  latestStates.current = {
+    importItems: items,
+    laborPayments: laborPayments,
+    tpDtShippings: tpDtShippings,
+    customers: customers,
+    bills: bills,
+    payments: payments,
+    operationBreakdowns: operationBreakdowns,
+    workers: workers,
+    workerJobs: workerJobs,
+    rawMaterials: rawMaterials,
+    materialRecipes: materialRecipes,
+    productionBatches: productionBatches,
+    materialReimports: materialReimports,
+    tasks: tasks,
+    userProfiles: userProfiles
+  };
+
   // Track listeners initialization state to prevent auto-pushing local data before initial cloud load
   const listenersInitialized = useRef<{ [colKey: string]: boolean }>({});
   const settingsListenerInitialized = useRef<boolean>(false);
@@ -157,6 +222,9 @@ export function useRealtimeSync({
 
   // Keep track of the last known cloud state array to calculate key-based updates/deletions accurately
   const lastCloudState = useRef<{ [colKey: string]: any[] }>({});
+
+  // Keep track of pending timeout IDs for debounced local pushes
+  const debounceTimeouts = useRef<Record<string, NodeJS.Timeout | number>>({});
 
   useEffect(() => {
     if (fbAuthLoading || !isAuthenticated || !db) {
@@ -190,7 +258,7 @@ export function useRealtimeSync({
     // Setup listener for each collection
     collectionsToSync.forEach(({ key, colName, setter }) => {
       try {
-        const colRef = collection(db, colName);
+        const colRef = collection(db, getNamespaceCollection(colName));
         const unsub = onSnapshot(colRef, (snapshot) => {
           try {
             const remoteList: any[] = [];
@@ -204,8 +272,22 @@ export function useRealtimeSync({
             const remoteStr = serializeAndClean(remoteList);
             const activeStr = lastSyncedString.current[key] || '';
 
-            // Update local state ONLY if there are genuine user-facing semantic data differences
-            if (remoteStr !== activeStr) {
+            const isFirstLoad = !listenersInitialized.current[key];
+
+            if (isFirstLoad) {
+              const localList = latestStates.current[key] || [];
+              const mergedList = mergeLocalAndCloud(localList, remoteList);
+              console.log(`[Realtime Sync] Reconciled initial load for '${key}': ${localList.length} local / ${remoteList.length} remote -> ${mergedList.length} merged`);
+              
+              // Set listeners initialized FIRST to allow the upcoming setter-triggered hooks to auto-upload additions
+              listenersInitialized.current[key] = true;
+
+              // Record the remote database representation in cache so delta-sync uploader identifies newly added local items
+              lastSyncedString.current[key] = remoteStr;
+              lastCloudState.current[key] = remoteList;
+
+              setter(mergedList);
+            } else if (remoteStr !== activeStr) {
               console.log(`[Realtime Sync] Live cloud update received for '${key}' (${remoteList.length} items)`);
               
               // Record current synced representation to prevent local triggers from re-uploading
@@ -222,12 +304,16 @@ export function useRealtimeSync({
             const nowStr = new Date().toLocaleTimeString('vi-VN') + " " + new Date().toLocaleDateString('vi-VN');
             setLastSyncTime(nowStr);
             setSyncStatus('success');
+            if (setSyncError) setSyncError(null);
           } catch (snapErr) {
             console.error(`[Realtime Sync] Error inside snapshot processor for ${colName}:`, snapErr);
           }
         }, (error) => {
           console.warn(`[Realtime Sync] Listener error for ${colName}:`, error);
           setSyncStatus('error');
+          if (setSyncError) {
+            setSyncError(error?.message || String(error));
+          }
         });
 
         unsubscribeList.push(unsub);
@@ -238,7 +324,7 @@ export function useRealtimeSync({
 
     // Setup listener for settings document
     try {
-      const settingsDocRef = doc(db, 'settings', 'global_settings');
+      const settingsDocRef = doc(db, 'settings', getSettingsDocId());
       const unsubSettings = onSnapshot(settingsDocRef, (docSnap) => {
         try {
           if (docSnap.exists()) {
@@ -253,11 +339,16 @@ export function useRealtimeSync({
             }
           }
           settingsListenerInitialized.current = true;
+          if (setSyncError) setSyncError(null);
         } catch (settingsErr) {
           console.error("[Realtime Sync] Error inside settings snapshot processor:", settingsErr);
         }
       }, (error) => {
         console.warn("[Realtime Sync] Settings listener error:", error);
+        setSyncStatus('error');
+        if (setSyncError) {
+          setSyncError(error?.message || String(error));
+        }
       });
       unsubscribeList.push(unsubSettings);
     } catch (err) {
@@ -267,11 +358,16 @@ export function useRealtimeSync({
     return () => {
       console.log("[Realtime Sync] Tearing down Firestore live listeners...");
       unsubscribeList.forEach(unsub => unsub());
+
+      // Clear any pending debounced sync timers to prevent memory leaks or stale background updates
+      Object.values(debounceTimeouts.current).forEach(timeout => {
+        if (timeout) clearTimeout(timeout as any);
+      });
     };
   }, [fbAuthLoading, isAuthenticated, userEmail]);
 
   // Monitor and Auto-Push local changes value-by-value back to Cloud securely
-  const syncLocalToCloud = async (key: string, colName: string, localList: any[]) => {
+  const syncLocalToCloud = (key: string, colName: string, localList: any[]) => {
     if (!isAuthenticated || !isUserAdmin() || !db) return;
     
     // Safety check: Skip pushing local list data before the collection's initial cloud load has initialized
@@ -285,50 +381,71 @@ export function useRealtimeSync({
       return;
     }
 
-    console.log(`[Realtime Sync] Local differences detected on '${key}'. Auto-saving changes to Firestore...`);
-    
-    // Save state representation locally first to prevent incoming snapshot loops
-    lastSyncedString.current[key] = localStr;
-
-    const cloudData = lastCloudState.current[key] || [];
-    
-    // Keep internal cloud state cache updated
-    lastCloudState.current[key] = [...localList];
-
-    // Compute maps of local and cloud collections by unique key ID
-    const localMap = new Map(localList.filter(Boolean).map(item => [item.id, item]));
-    const cloudMap = new Map(cloudData.filter(Boolean).map(item => [item.id, item]));
-
-    // 1. Identify additions and updates
-    for (const item of localList) {
-      if (!item || !item.id) continue;
-      const cloudItem = cloudMap.get(item.id);
-      
-      if (!cloudItem || !isItemEqual(item, cloudItem)) {
-        try {
-          const docRef = doc(db, colName, item.id);
-          const cleaned = { ...item, syncedAt: Date.now() };
-          await setDoc(docRef, cleaned);
-          console.log(`[Realtime Sync] Auto-saved: ${colName}/${item.id}`);
-        } catch (err) {
-          console.warn(`[Realtime Sync] Auto-save error: ${colName}/${item.id}`, err);
-        }
-      }
+    // Clear any previous pending debounced sync for this specific collection
+    if (debounceTimeouts.current[key]) {
+      clearTimeout(debounceTimeouts.current[key] as any);
     }
 
-    // 2. Identify deletions
-    for (const cloudItem of cloudData) {
-      if (!cloudItem || !cloudItem.id) continue;
-      if (!localMap.has(cloudItem.id)) {
-        try {
-          const docRef = doc(db, colName, cloudItem.id);
-          await deleteDoc(docRef);
-          console.log(`[Realtime Sync] Auto-deleted: ${colName}/${cloudItem.id}`);
-        } catch (err) {
-          console.warn(`[Realtime Sync] Auto-delete error: ${colName}/${cloudItem.id}`, err);
+    // Execute the actual Firebase write instantly (0ms delay) to guarantee the fastest transmission speed
+    debounceTimeouts.current[key] = setTimeout(async () => {
+      try {
+        console.log(`[Realtime Sync] Performing instant batch save for '${key}' to Firestore...`);
+        
+        // Save state representation locally first to prevent incoming snapshot loops
+        lastSyncedString.current[key] = localStr;
+
+        const cloudData = lastCloudState.current[key] || [];
+        
+        // Keep internal cloud state cache updated
+        lastCloudState.current[key] = [...localList];
+
+        // Compute maps of local and cloud collections by unique key ID
+        const localMap = new Map(localList.filter(Boolean).map(item => [item.id, item]));
+        const cloudMap = new Map(cloudData.filter(Boolean).map(item => [item.id, item]));
+
+        let operationsCount = 0;
+        const batch = writeBatch(db);
+
+        // 1. Identify additions and updates
+        for (const item of localList) {
+          if (!item || !item.id) continue;
+          const cloudItem = cloudMap.get(item.id);
+          
+          if (!cloudItem || !isItemEqual(item, cloudItem)) {
+            const docRef = doc(db, getNamespaceCollection(colName), item.id);
+            const cleaned = sanitizeDataForFirestore({ ...item, syncedAt: Date.now() });
+            batch.set(docRef, cleaned);
+            operationsCount++;
+            console.log(`[Realtime Sync] Queued save in batch: ${colName}/${item.id}`);
+          }
+        }
+
+        // 2. Identify deletions
+        for (const cloudItem of cloudData) {
+          if (!cloudItem || !cloudItem.id) continue;
+          if (!localMap.has(cloudItem.id)) {
+            const docRef = doc(db, getNamespaceCollection(colName), cloudItem.id);
+            batch.delete(docRef);
+            operationsCount++;
+            console.log(`[Realtime Sync] Queued delete in batch: ${colName}/${cloudItem.id}`);
+          }
+        }
+
+        if (operationsCount > 0) {
+          setSyncStatus('syncing');
+          await batch.commit();
+          console.log(`[Realtime Sync] Committed atomic batch of ${operationsCount} changes for '${key}' successfully.`);
+          setSyncStatus('success');
+          if (setSyncError) setSyncError(null);
+        }
+      } catch (err: any) {
+        console.warn(`[Realtime Sync] Error committing batch for '${key}':`, err);
+        setSyncStatus('error');
+        if (setSyncError) {
+          setSyncError(err?.message || String(err));
         }
       }
-    }
+    }, 0);
   };
 
   // Assign individual useEffect hooks for each local list state update
@@ -362,8 +479,8 @@ export function useRealtimeSync({
       lastSyncedSettingsString.current = localStr;
 
       try {
-        const settingsDocRef = doc(db, 'settings', 'global_settings');
-        const cleaned = { ...settings, syncedAt: Date.now() };
+        const settingsDocRef = doc(db, 'settings', getSettingsDocId());
+        const cleaned = sanitizeDataForFirestore({ ...settings, syncedAt: Date.now() });
         await setDoc(settingsDocRef, cleaned);
         console.log("[Realtime Sync] Auto-saved system settings to cloud");
       } catch (err) {

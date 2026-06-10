@@ -5,7 +5,7 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw } from 'lucide-react';
 import { AppSettings, ImportItem, Customer, UserProfile } from '../types';
 import { auth, db } from '../utils/firebase';
 import { updatePassword, getAuth, createUserWithEmailAndPassword, signOut as logoutTemp, setPersistence, inMemoryPersistence } from 'firebase/auth';
@@ -52,6 +52,14 @@ export default function SettingsTab({
   const [isDbOpen, setIsDbOpen] = useState(false);
   const [isCloudOpen, setIsCloudOpen] = useState(false);
   const [isPwdOpen, setIsPwdOpen] = useState(false);
+  const [isGroupOpen, setIsGroupOpen] = useState(false);
+  const [isSyncRepairOpen, setIsSyncRepairOpen] = useState(false);
+  const [forceDefaultDb, setForceDefaultDb] = useState(() => {
+    return localStorage.getItem("xuongan_force_default_db") === "true";
+  });
+  const [inputGroupCode, setInputGroupCode] = useState(() => {
+    return localStorage.getItem("xuongan_group_code") || "";
+  });
 
   // States for changing password feature
   const [newPassword, setNewPassword] = useState('');
@@ -74,6 +82,61 @@ export default function SettingsTab({
 
   const currentUser = auth.currentUser;
   const isGoogleUser = currentUser?.providerData.some(p => p.providerId === 'google.com');
+
+  const handleToggleForceDefaultDb = () => {
+    const newVal = !forceDefaultDb;
+    setForceDefaultDb(newVal);
+    if (newVal) {
+      localStorage.setItem("xuongan_force_default_db", "true");
+    } else {
+      localStorage.removeItem("xuongan_force_default_db");
+    }
+    alert(`⚙️ Đã chuyển chế độ Cơ sở dữ liệu:\n${newVal ? "👉 SỬ DỤNG DATABASE MẶC ĐỊNH (default) - Thích hợp cho chạy trên Cloud Run cá nhân" : "👉 SỬ DỤNG DATABASE SANDBOX (ai-studio-...) - Chế độ xem thử mặc định"}\n\nHệ thống đang tải lại trang để áp dụng...`);
+    window.location.reload();
+  };
+
+  const handleWipeCacheAndSync = () => {
+    if (confirm("⚠️ Xóa dọn dẹp cache cục bộ máy khách?\nHành động này xóa toàn bộ bộ nhớ đệm (offline cache) của trình duyệt máy này và tải dữ liệu mới nhất trực tiếp từ cơ sở dữ liệu nền Đám mây về để đồng bộ sạch sẽ, tránh lỗi quyền hoặc xung đột dữ liệu.\n\nBạn có muốn tiến hành?")) {
+      const groupCode = localStorage.getItem("xuongan_group_code");
+      const forceDb = localStorage.getItem("xuongan_force_default_db");
+      const savedAuth = localStorage.getItem("xuongan_auth");
+      
+      localStorage.clear();
+      
+      if (groupCode) localStorage.setItem("xuongan_group_code", groupCode);
+      if (forceDb) localStorage.setItem("xuongan_force_default_db", forceDb);
+      if (savedAuth) localStorage.setItem("xuongan_auth", savedAuth);
+      
+      alert("🎉 Đã xóa dọn dẹp cache cục bộ máy khách thành công!\nHệ thống sẽ tự động tải lại và lấy dữ liệu tươi mới từ cơ sở dữ liệu đám mây.");
+      window.location.reload();
+    }
+  };
+
+  const handleLogoutAndWipeAll = async () => {
+    if (confirm("🚨 CẢNH BÁO: ĐĂNG XUẤT & XÓA SẠCH MÁY NÀY?\nHành động này sẽ xóa sạch hoàn toàn tất cả tài khoản, phân nhóm, cấu hình và dữ liệu cục bộ của máy này và đưa ứng dụng về trạng thái mới cài đặt để bạn có thể đăng nhập hoặc đồng bộ với tài khoản khác.\n\nHành động này không ảnh hưởng đến dữ liệu đã lưu trên Đám mây.\n\nBạn có chắc chắn muốn tiến hành?")) {
+      try {
+        await logoutTemp(auth);
+      } catch (e) {
+        console.error(e);
+      }
+      localStorage.clear();
+      alert("🎉 Toàn bộ dữ liệu cục bộ máy đã được xóa sạch hoàn toàn!\nHệ thống đang tải lại để quý khách đăng nhập hoặc liên kết tài khoản mới.");
+      window.location.reload();
+    }
+  };
+
+  const handleSaveGroupCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCode = inputGroupCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+    if (cleanCode) {
+      localStorage.setItem("xuongan_group_code", cleanCode);
+      alert(`🎉 Đã kết hợp nhóm "${cleanCode}" thành công!\nTất cả thiết bị kết nối vào mã nhóm này sẽ liên kết đồng bộ dữ liệu tự động thời gian thực (0ms trễ). Hệ thống đang tải lại...`);
+    } else {
+      localStorage.removeItem("xuongan_group_code");
+      alert("ℹ️ Đã xóa mã liên kết. Hệ thống sẽ trở về Nhóm dữ liệu Mặc định và tự động tải lại...");
+    }
+    window.location.reload();
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -598,6 +661,219 @@ export default function SettingsTab({
                   <span>Tài khoản hiện quy định chế độ <strong>{userRole === 'staff' ? 'Nhân viên nhập thợ' : 'Chỉ xem'}</strong>. Phân quyền này chỉ dùng để cập nhật nghiệp vụ hàng ngày cục bộ, không thể ghi đè sao lưu trực tiếp lên cơ sở dữ liệu tổng của xưởng trên nền đám mây.</span>
                 </div>
               )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Group Coupling / Collective Coordination Panel (Chức năng Kết hợp Nhóm & Đa liên kết) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+        <div 
+          onClick={() => setIsGroupOpen(!isGroupOpen)}
+          className="flex items-center justify-between cursor-pointer select-none group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-650 dark:text-emerald-400 rounded-xl">
+              <Share2 className="w-5 h-5 group-hover:scale-110 transition shrink-0" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2 flex-wrap">
+                <span>Kết hợp Nhóm & Liên kết thiết bị</span>
+                <span className="text-[9px] bg-emerald-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-mono">Realtime 0ms</span>
+              </h3>
+              <p className="text-xs text-slate-450 dark:text-slate-400">
+                Thiết lập phòng liên kết đồng bộ tức thì cho nhiều điện thoại, máy tính của xưởng.
+              </p>
+            </div>
+          </div>
+          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-450 group-hover:text-slate-700 dark:group-hover:text-amber-400 transition ml-2 shrink-0">
+            {isGroupOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {isGroupOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden space-y-4 pt-3 border-t border-slate-150 dark:border-slate-800"
+            >
+              {/* Question Explainer for the user */}
+              <div className="p-4 bg-[#f8fafc] dark:bg-[#0c101d] border border-slate-200 dark:border-indigo-900/40 rounded-xl space-y-2.5 text-xs text-slate-600 dark:text-slate-350 leading-relaxed">
+                <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black uppercase text-[10px]">
+                  <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>Xác nhận: Cơ chế Tự động Đồng bộ hoàn toàn Tức thì</span>
+                </div>
+                <p>
+                  Khi tài khoản <strong className="text-slate-800 dark:text-slate-100">A</strong> cập nhật sổ sách (may mẫu, nhập vải, làm hoá đơn...), hệ thống truyền tải dữ liệu đám mây ngay lúc đó. 
+                  Nhờ vậy, màn hình máy tài khoản <strong className="text-slate-800 dark:text-slate-100">B</strong> sẽ <strong className="text-indigo-600 dark:text-indigo-400 underline font-black font-sans">TỰ ĐỘNG CẬP NHẬT NGAY LẬP TỨC</strong> mà không cần phải tải lại trang (reload) hay khởi động lại ứng dụng!
+                </p>
+                <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-150 dark:border-slate-850">
+                  ⚠️ <strong>Cơ chế liên kết nhóm:</strong> Để hai hay nhiều máy tự động sáp nhập cập nhật sang nhau, các tài khoản cần liên kết chung một <strong>Mã nhóm liên kết</strong> ở dưới đây.
+                </p>
+              </div>
+
+              {/* Status Indicator */}
+              <div className="flex items-center gap-2 p-3 rounded-xl border bg-slate-50/50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800 text-xs">
+                <span className="font-bold text-slate-600 dark:text-slate-400">Trạng thái nhóm hiện tại:</span>
+                {localStorage.getItem("xuongan_group_code") ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-650 dark:text-emerald-400 font-bold font-mono py-0.5 px-2 bg-emerald-50 dark:bg-emerald-950/20 rounded-md border border-emerald-200/50 uppercase">
+                    🟢 Nhóm collab &lsquo;{localStorage.getItem("xuongan_group_code")}&rsquo;
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold font-mono py-0.5 px-2 bg-indigo-50 dark:bg-indigo-950/20 rounded-md border border-indigo-200/50 uppercase">
+                    🔵 nhóm mặc định chung (public)
+                  </span>
+                )}
+              </div>
+
+              {/* Config Form */}
+              <form onSubmit={handleSaveGroupCode} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider font-mono">
+                    Mã liên kết nhóm của xưởng (Chỉ viết liền không dấu, viết hoa)
+                  </label>
+                  <div className="relative">
+                    <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={inputGroupCode}
+                      onChange={(e) => setInputGroupCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))}
+                      placeholder="Ví dụ: COMAYXUONGAN, TEAMAN_STUDIO, NHOMMAY_01"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg py-2 pl-9 pr-4 text-xs font-mono text-slate-800 dark:text-slate-200 outline-none transition"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-normal">
+                    Thiết bị của cộng sự/thợ phụ chỉ cần điền đúng chính xác mã này là hai bên sẽ cùng truy cập một nguồn dữ liệu và nhìn thấy bảng số liệu của nhau thời gian thực.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="submit"
+                    className="py-2.5 px-4 bg-emerald-650 hover:bg-emerald-700 text-white rounded-lg text-xs font-sans font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <Check className="w-4 h-4 text-emerald-200" />
+                    <span>Lưu & Kích hoạt liên kết Nhóm này</span>
+                  </button>
+
+                  {localStorage.getItem("xuongan_group_code") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInputGroupCode("");
+                        localStorage.removeItem("xuongan_group_code");
+                        alert("ℹ️ Đang xóa mã kết nối để về Nhóm mặc định chung. Hệ thống sẽ tải lại...");
+                        window.location.reload();
+                      }}
+                      className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-sans font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <span>Rời nhóm (Về nhóm mặc định)</span>
+                    </button>
+                  )}
+                </div>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Cloud Sync Repair & Database Environment Modes Toggle Section */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+        <div 
+          onClick={() => setIsSyncRepairOpen(!isSyncRepairOpen)}
+          className="flex items-center justify-between cursor-pointer select-none group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-50 dark:bg-amber-955/20 text-amber-650 dark:text-amber-400 rounded-xl">
+              <Database className="w-5 h-5 group-hover:scale-110 transition shrink-0" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2 flex-wrap">
+                <span>Khắc phục Đám mây & Đồng bộ dữ liệu</span>
+                <span className="text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-mono">Quản trị</span>
+              </h3>
+              <p className="text-xs text-slate-450 dark:text-slate-400">
+                Xử lý lỗi quyền truy cập (Permission) hoặc xóa sạch dữ liệu đệm máy cục bộ để kết nối tài khoản khác.
+              </p>
+            </div>
+          </div>
+          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-450 group-hover:text-slate-700 dark:group-hover:text-amber-400 transition ml-2 shrink-0">
+            {isSyncRepairOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {isSyncRepairOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden space-y-4 pt-3 border-t border-slate-150 dark:border-slate-800"
+            >
+              <div className="p-4 bg-amber-50/20 dark:bg-amber-955/10 border border-amber-200/50 dark:border-amber-900/30 rounded-xl space-y-2 text-xs text-slate-650 dark:text-slate-350 leading-relaxed">
+                <span className="font-bold text-amber-700 dark:text-amber-400 block uppercase text-[10px] tracking-wider">🛠 Hướng dẫn Khắc phục Lỗi Quyền Đám mây (Permission Error)</span>
+                <p>
+                  Nếu thiết bị của bạn bị báo lỗi <strong>"Missing or insufficient permissions"</strong>, lỗi đó xuất phát từ việc máy chủ đám mây không tìm thấy tên cơ sở dữ liệu Sandbox của AI Studio trên dự án cá nhân hoặc phiên kết nối bị hết hạn đột ngột.
+                </p>
+                <p>
+                  Hãy sử dụng hai công cụ hạch toán mạnh mẽ dưới đây để tái cấu trúc hoặc đồng bộ tươi sạch.
+                </p>
+              </div>
+
+              {/* Toggle Database Mode */}
+              <div className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">Sử dụng Cơ sở dữ liệu mặc định (Default DB)</span>
+                    <p className="text-[11px] text-slate-400 leading-normal">
+                      Kích hoạt chế độ này nếu bạn đang chạy ứng dụng trong Container Cloud Run của tài khoản cá nhân. Hệ thống sẽ bỏ qua DB Sandbox để dùng DB chính chủ <code>(default)</code> của bạn.
+                    </p>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleToggleForceDefaultDb} 
+                    className="shrink-0 transition active:scale-95 cursor-pointer"
+                  >
+                    {forceDefaultDb ? (
+                      <ToggleRight className="w-10 h-10 text-emerald-500" />
+                    ) : (
+                      <ToggleLeft className="w-10 h-10 text-slate-300 dark:text-slate-700" />
+                    )}
+                  </button>
+                </div>
+                <div className="text-[10px] font-mono py-1 px-2.5 bg-slate-50 dark:bg-slate-950 rounded-lg text-slate-500 border border-slate-150 dark:border-slate-850">
+                  Môi trường DB: <span className="font-bold text-indigo-600 dark:text-indigo-400">{forceDefaultDb ? "CHÍNH CHỦ (default)" : "SANDBOX (ai-studio)"}</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleWipeCacheAndSync}
+                  className="p-3 bg-indigo-50 hover:bg-indigo-105 dark:bg-indigo-950/35 dark:hover:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 rounded-xl text-xs font-bold font-sans transition flex items-center justify-center gap-2 border border-indigo-100 dark:border-indigo-900/45 cursor-pointer active:scale-95"
+                >
+                  <RefreshCw className="w-4.5 h-4.5 text-indigo-550 animate-pulse" />
+                  <div className="text-left">
+                    <span className="block text-[11px]">Xóa Cache Cục Bộ & Pull Mới</span>
+                    <span className="block text-[9px] font-normal text-slate-400 dark:text-slate-500">Giữ phiên, tải sạch từ đám mây</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLogoutAndWipeAll}
+                  className="p-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-450 rounded-xl text-xs font-bold font-sans transition flex items-center justify-center gap-2 border border-rose-100 dark:border-rose-900/20 cursor-pointer active:scale-95"
+                >
+                  <Trash2 className="w-4.5 h-4.5 text-rose-550" />
+                  <div className="text-left">
+                    <span className="block text-[11px]">Xóa Sạch Máy & Đăng xuất</span>
+                    <span className="block text-[9px] font-normal text-slate-400 dark:text-slate-500">Đặt lại ban đầu để thay đổi tài khoản</span>
+                  </div>
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

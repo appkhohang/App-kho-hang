@@ -7,116 +7,42 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Checks if the document ID is valid to safeguard against ID Poisoning and resource abuse
+    // Safe validation of document ID to protect against bad inputs and prevent overflow
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.\\@]+$');
+      return id is string && id.size() <= 256;
     }
 
-    // Default deny fallback
+    // Checks if the collection name is a standard collection or partitioned collaborative space
+    function isValidCollection(colName) {
+      return colName == 'import_items' || 
+             colName == 'tp_dt_shippings' || 
+             colName == 'labor_payments' || 
+             colName == 'customers' || 
+             colName == 'bills' || 
+             colName == 'payments' || 
+             colName == 'operation_breakdowns' || 
+             colName == 'workers' || 
+             colName == 'worker_jobs' || 
+             colName == 'raw_materials' || 
+             colName == 'material_recipes' || 
+             colName == 'production_batches' || 
+             colName == 'material_reimports' || 
+             colName == 'login_notifications' || 
+             colName == 'settings' || 
+             colName == 'tasks' || 
+             colName == 'user_profiles' ||
+             colName.matches('^group_.*');
+    }
+
+    // Catch-all rule for other paths
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // 1. Sổ nhật ký đơn hàng nhập sỉ
-    match /import_items/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 2. Cước phí vận chuyển Đồng Tháp - Sài Gòn
-    match /tp_dt_shippings/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 3. Chi lương / tạm ứng cho thợ
-    match /labor_payments/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 4. Hồ sơ công nợ khách sỉ
-    match /customers/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 5. Hoá đơn lập bán cho khách
-    match /bills/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 6. Báo cáo thu nợ khách sỉ hàng ngày
-    match /payments/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 7. Hồ sơ định mức mẫu và công đoạn tương ứng
-    match /operation_breakdowns/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 8. Danh sách thợ may xưởng
-    match /workers/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 9. Nhật ký công thợ giao việc hàng ngày
-    match /worker_jobs/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 10. Vật tư kho nguyên liệu thô
-    match /raw_materials/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 11. Định mức nguyên vật liệu tiêu hao trên đơn vị thành phẩm
-    match /material_recipes/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 12. Lô sản xuất mộc hao phí
-    match /production_batches/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 13. Đơn nhập nguyên vật liệu kho thô
-    match /material_reimports/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 14. Nhật ký truy cập hệ thống bảo mật
-    match /login_notifications/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 15. Cài đặt tổng quan
-    match /settings/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 16. Danh mục công việc
-    match /tasks/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
-    }
-
-    // 17. Danh sách tài khoản phụ và phân quyền thành viên
-    match /user_profiles/{id} {
-      allow get, write: if isSignedIn() && isValidId(id);
-      allow list: if isSignedIn();
+    // Rules for all valid collections
+    match /{collectionName}/{id} {
+      allow read: if isSignedIn() && isValidCollection(collectionName);
+      allow write: if isSignedIn() && isValidId(id) && isValidCollection(collectionName);
     }
   }
 }

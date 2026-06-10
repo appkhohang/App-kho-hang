@@ -12,7 +12,7 @@ import {
   writeBatch,
   getDoc
 } from 'firebase/firestore';
-import { db, auth, OperationType, handleFirestoreError } from './firebase';
+import { db, auth, OperationType, handleFirestoreError, getNamespaceCollection, getSettingsDocId, sanitizeDataForFirestore } from './firebase';
 import { 
   ImportItem, 
   LaborPayment, 
@@ -104,11 +104,12 @@ export function isUserAuthenticated(): boolean {
 export async function saveDocumentToCloud(collectionName: string, id: string, data: any) {
   if (!isUserAdmin()) return;
   try {
-    const docRef = doc(db, collectionName, id);
-    await setDoc(docRef, {
+    const docRef = doc(db, getNamespaceCollection(collectionName), id);
+    const sanitized = sanitizeDataForFirestore({
       ...data,
       syncedAt: Date.now()
     });
+    await setDoc(docRef, sanitized);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${collectionName}/${id}`);
   }
@@ -120,7 +121,7 @@ export async function saveDocumentToCloud(collectionName: string, id: string, da
 export async function deleteDocumentFromCloud(collectionName: string, id: string) {
   if (!isUserAdmin()) return;
   try {
-    const docRef = doc(db, collectionName, id);
+    const docRef = doc(db, getNamespaceCollection(collectionName), id);
     await deleteDoc(docRef);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${collectionName}/${id}`);
@@ -143,11 +144,12 @@ export async function uploadCollectionToCloud(collectionName: string, items: any
       const batch = writeBatch(db);
       for (const item of chunk) {
         if (!item.id) continue;
-        const docRef = doc(db, collectionName, item.id);
-        batch.set(docRef, {
+        const docRef = doc(db, getNamespaceCollection(collectionName), item.id);
+        const sanitized = sanitizeDataForFirestore({
           ...item,
           syncedAt: Date.now()
         });
+        batch.set(docRef, sanitized);
       }
       await batch.commit();
     }
@@ -162,7 +164,7 @@ export async function uploadCollectionToCloud(collectionName: string, items: any
 export async function downloadCollectionFromCloud<T>(collectionName: string): Promise<T[]> {
   if (!isUserAuthenticated()) return [];
   try {
-    const querySnapshot = await getDocs(collection(db, collectionName));
+    const querySnapshot = await getDocs(collection(db, getNamespaceCollection(collectionName)));
     const results: T[] = [];
     querySnapshot.forEach((doc) => {
       results.push({
@@ -227,7 +229,7 @@ export async function downloadAllFromCloud() {
     // Pull settings if exist
     let appSettings: any = null;
     try {
-      const settingsDoc = await getDoc(doc(db, 'settings', 'global_settings'));
+      const settingsDoc = await getDoc(doc(db, 'settings', getSettingsDocId()));
       if (settingsDoc.exists()) {
         appSettings = settingsDoc.data();
       }
@@ -288,10 +290,11 @@ export async function pushAllLocalStateToCloud(localData: {
 
   try {
     // Save settings
-    await setDoc(doc(db, 'settings', 'global_settings'), {
+    const sanitizedSettings = sanitizeDataForFirestore({
       ...localData.settings,
       syncedAt: Date.now()
     });
+    await setDoc(doc(db, 'settings', getSettingsDocId()), sanitizedSettings);
 
     // Run parallel collection updates
     await Promise.all([

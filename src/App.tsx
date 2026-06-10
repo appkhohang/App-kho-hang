@@ -181,6 +181,7 @@ export default function App() {
   const [showSyncBanner, setShowSyncBanner] = useState(false);
 
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => localStorage.getItem("xuongan_last_sync") || null);
   const [showCloudInfo, setShowCloudInfo] = useState(false);
 
@@ -295,7 +296,8 @@ export default function App() {
     userEmail: authState.email,
     fbAuthLoading,
     setLastSyncTime,
-    setSyncStatus
+    setSyncStatus,
+    setSyncError
   });
 
   // Route protection and dynamic redirection based on page level permissions
@@ -1314,6 +1316,38 @@ export default function App() {
               {/* Right menu actions */}
               <div className="flex items-center gap-2.5">
                 
+                {/* Real-time Database Link/Sync Status Pill */}
+                <button 
+                  onClick={() => {
+                    if (syncStatus === 'error') {
+                      alert(`⚠️ Chi tiết lỗi kết nối Đám mây:\n\n${syncError || "Không thể tải cấu hình do mất kết nối mạng hoặc sai ID Cơ sở dữ liệu. Nếu sếp dùng Firebase riêng, sếp hãy kiểm tra xem Rules ở Firestore của sếp đã cho phép đọc ghi chưa."}`);
+                    } else if (syncStatus === 'success') {
+                      alert(`🟢 Cơ sở dữ liệu đám mây kết nối THÀNH CÔNG!\n\n• Cập nhật mới nhất: ${lastSyncTime || "Vừa xong"}\n• Thiết bị đang truyền tải dữ liệu tự động 2 chiều theo thời gian thực (Real-time).`);
+                    } else {
+                      alert(`🟡 Hệ thống đang kiểm tra liên kết và thiết lập luồng đồng bộ song phương với Firebase...`);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] sm:text-xs font-bold transition-all duration-300 shadow-2xs cursor-pointer active:scale-95 ${
+                    syncStatus === 'syncing' 
+                      ? 'bg-amber-50/60 dark:bg-amber-950/10 border-amber-250 dark:border-amber-900 text-amber-600 dark:text-amber-400 hover:bg-amber-100/40' 
+                      : syncStatus === 'error'
+                      ? 'bg-red-50/60 dark:bg-red-950/10 border-red-250 dark:border-red-900 text-red-650 dark:text-red-400 hover:bg-red-100/40'
+                      : 'bg-emerald-50/60 dark:bg-emerald-950/10 border-emerald-250 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100/40'
+                  }`}
+                  title={
+                    syncStatus === 'syncing' 
+                      ? 'Hệ thống đang đồng bộ dữ liệu song phương với đám mây... Click để xem chi tiết.' 
+                      : syncStatus === 'error'
+                      ? 'Kết nối đồng bộ đám mây thất bại hoặc sai thông số cấu hình. Click để xem chi tiết lỗi.'
+                      : `Liên kết dữ liệu đám mây hoạt động. Cập nhật: ${lastSyncTime || 'Sẵn sàng'}. Click để xem chi tiết.`
+                  }
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
+                  <span className="hidden select-none xs:block leading-none font-sans">
+                    {syncStatus === 'syncing' ? 'Đang đồng bộ' : syncStatus === 'error' ? 'Mất kết nối' : 'Đã kết nối'}
+                  </span>
+                </button>
+
                 {/* Brand Colors Popover Dropdown */}
                 <div className="relative">
                   <button
