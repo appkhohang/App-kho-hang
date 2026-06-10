@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Quan Ly Xuong An</string>
+    <string name="title_activity_main">Quan Ly Xuong An</string>
+    <string name="package_name">com.xuongan.quanlykho</string>
+    <string name="custom_url_scheme">com.xuongan.quanlykho</string>
+</resources>

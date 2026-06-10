@@ -20,7 +20,23 @@ const dbId = (firebaseConfig as any).firestoreDatabaseId;
 // does not exist in the user's personal Firebase production project 'app-kho-an'.
 const isForceDefaultDb = typeof window !== 'undefined' && localStorage.getItem("xuongan_force_default_db") === "true";
 
-const finalDbId = isForceDefaultDb ? undefined : dbId;
+// Auto-detect sandbox environment
+const isSandbox = typeof window !== 'undefined' && (
+  window.location.hostname.includes('ais-dev-') || 
+  window.location.hostname.includes('ais-pre-') || 
+  window.location.hostname.includes('aistudio') ||
+  (window.location.hostname.includes('.run.app') && !window.location.hostname.includes('app-kho-an'))
+);
+
+const isProductionOrApk = !isSandbox || (typeof window !== 'undefined' && (
+  (window as any).Capacitor || 
+  window.location.protocol === 'capacitor:' || 
+  window.location.hostname === 'localhost' ||
+  window.location.hostname.includes('web.app') ||
+  window.location.hostname.includes('firebaseapp.com')
+));
+
+const finalDbId = (isForceDefaultDb || isProductionOrApk) ? undefined : dbId;
 
 export const db = finalDbId ? getFirestore(app, finalDbId) : getFirestore(app);
 export const auth = getAuth(app);
