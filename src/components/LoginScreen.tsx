@@ -125,8 +125,11 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
     } catch (err: any) {
       setEmailLoading(false);
       console.error("Firebase Login Error: ", err);
+      const errStr = String(err.message || err.code || "");
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setErrorMessage('Tài khoản hoặc mật khẩu không chính xác.');
+      } else if (err.code === 'auth/network-request-failed' || errStr.includes('network-request-failed')) {
+        setErrorMessage('⚠️ Lỗi kết nối Firebase (Hạn chế Iframe Sandbox hoặc Trình duyệt chặn).\n\nDo bạn đang xem thử ứng dụng trong khung Iframe của AI Studio hoặc dùng trình duyệt có tính năng bảo mật cao (Brave, Safari tối bảo mật), kết nối Firebase Auth đã bị chặn.\n\n👉 Cách khắc phục:\n1. Hãy mở ứng dụng trong một tab độc lập bằng liên kết ngoài (Bấm nút "Mở trong tab mới" ở cạnh trên bên phải màn hình AI Studio).\n2. Hoặc nếu sử dụng Brave, vui lòng tạm dừng tính năng "Brave Shield" cho trang web này để đăng nhập.');
       } else {
         setErrorMessage(`Lỗi xác thực Firebase: ${err.message || 'Liên kết thất bại'}`);
       }
@@ -176,8 +179,30 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
     } catch (err: any) {
       setGoogleLoading(false);
       console.error("Google Auth Error: ", err);
-      if (err.code === 'auth/network-request-failed' || String(err.message).includes('network-request-failed')) {
-        setErrorMessage('⚠️ Lỗi chặn kết nối Google Auth (Iframe Sandbox).\n\nDo cửa sổ xem thử (Iframe) của AI Studio chặn popup/cookie từ bên thứ ba theo chính sách bảo mật trình duyệt, bạn hãy làm một trong hai cách:\n1. Bấm nút "Mở trong tab mới" (ở phía góc cao bên phải màn hình) để thao tác đầy đủ.\n2. Hoặc đăng nhập trực tiếp bằng Email & Mật khẩu phụ của bạn.');
+      const errStr = String(err.message || err.code || err || "");
+      
+      const isAssertionError = 
+        errStr.includes('Pending promise was never set') || 
+        errStr.includes('INTERNAL ASSERTION FAILED') ||
+        errStr.includes('pending-promise');
+
+      if (isAssertionError) {
+        setErrorMessage('⚠️ Hệ thống gặp sự cố đồng bộ Firebase do đóng popup đột ngột.\n\nỨng dụng sẽ tự động tải lại sau 2 giây để khôi phục trạng thái chuẩn.');
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+        return;
+      }
+
+      const isSandboxIssue = 
+        err.code === 'auth/network-request-failed' || 
+        err.code === 'auth/popup-closed-by-user' || 
+        errStr.includes('network-request-failed') || 
+        errStr.includes('popup-closed-by-user') ||
+        errStr.includes('cancelled-by-user');
+
+      if (isSandboxIssue) {
+        setErrorMessage('⚠️ Lỗi kết nối Google Auth (Hạn chế Iframe Sandbox/Trình duyệt).\n\nDo chính sách bảo mật, cửa sổ xem thử (Iframe) chặn popup hoặc cookie bên thứ ba. Để xử lý, bạn hãy:\n1. Bấm nút "Mở trong tab mới" (ở phía góc trên bên phải màn hình AI Studio) rồi thực hiện đăng nhập lại.\n2. Hoặc đăng nhập trực tiếp bằng tài khoản Email & Mật khẩu phụ.');
       } else {
         setErrorMessage(`Lỗi đăng nhập Google: ${err.message || 'Hủy bỏ phiên hạch toán'}`);
       }
@@ -281,10 +306,14 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
                   <motion.div
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-650 dark:text-red-400 flex items-start gap-2"
+                    className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-650 dark:text-red-400 flex items-start gap-2 text-left"
                   >
                     <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    <span>{errorMessage}</span>
+                    <div className="flex-1 space-y-1">
+                      {errorMessage.split('\n').map((line, idx) => (
+                        <p key={idx} className="font-sans leading-relaxed">{line}</p>
+                      ))}
+                    </div>
                   </motion.div>
                 )}
 
@@ -377,8 +406,13 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
                 </div>
 
                 {errorMessage && (
-                  <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-250 dark:border-red-900/50 rounded-lg text-xs text-red-650 dark:text-red-400 text-center">
-                    {errorMessage}
+                  <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-250 dark:border-red-900/50 rounded-lg text-xs text-red-650 dark:text-red-400 text-left flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-1">
+                      {errorMessage.split('\n').map((line, idx) => (
+                        <p key={idx} className="font-sans leading-relaxed">{line}</p>
+                      ))}
+                    </div>
                   </div>
                 )}
 

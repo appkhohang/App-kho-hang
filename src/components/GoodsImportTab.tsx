@@ -11,6 +11,8 @@ import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietn
 import { exportDatabasePackage } from '../utils/storage';
 import LaborPaymentReceiptModal from './LaborPaymentReceiptModal';
 import CameraCapture from './CameraCapture';
+import { useAndroidBack } from '../hooks/useAndroidBack';
+import { LazyImage } from './LazyImage';
 import * as XLSX from 'xlsx';
 
 interface GoodsImportTabProps {
@@ -169,6 +171,14 @@ export default function GoodsImportTab({
   const [modalEditĐT_TP, setModalEditĐT_TP] = useState<number>(0);
   const [modalEditTP_ĐT, setModalEditTP_ĐT] = useState<number>(0);
   const [modalEditNgày, setModalEditNgày] = useState('');
+
+  // Android Back button wiring for GoodsImportTab Overlays
+  useAndroidBack(showColumnCustomizer, () => setShowColumnCustomizer(false));
+  useAndroidBack(isFilterModalOpen, () => setIsFilterModalOpen(false));
+  useAndroidBack(viewingPhotoUrl !== null, () => setViewingPhotoUrl(null));
+  useAndroidBack(activeWeekForLaborPay !== null, () => setActiveWeekForLaborPay(null));
+  useAndroidBack(selectedLaborPaymentForModal !== null, () => setSelectedLaborPaymentForModal(null));
+  useAndroidBack(selectedItemForModal !== null, () => setSelectedItemForModal(null));
 
   const startModalEdit = (item: ImportItem) => {
     setIsDetailEditing(true);
@@ -2041,8 +2051,8 @@ export default function GoodsImportTab({
               </div>
               
               <div className="mt-4 w-full aspect-[4/3] max-h-[60vh] bg-black/5 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100 dark:border-slate-800/40">
-                <img
-                  src={viewingPhotoUrl}
+                <LazyImage
+                  src={viewingPhotoUrl || ''}
                   alt="Ảnh phóng to chi tiết"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-contain"

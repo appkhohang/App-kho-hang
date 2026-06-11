@@ -10,6 +10,8 @@ import { getCurrentDateStr } from '../utils/dateUtils';
 import InvoiceDetailModal from './InvoiceDetailModal';
 import PaymentReceiptModal from './PaymentReceiptModal';
 import CameraCapture from './CameraCapture';
+import { useAndroidBack } from '../hooks/useAndroidBack';
+import { LazyImage } from './LazyImage';
 
 interface InvoicesTabProps {
   customers: Customer[];
@@ -193,6 +195,13 @@ export default function InvoicesTab({
   // State for showing modal with screen capture
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<Bill | null>(null);
   const [selectedPaymentForModal, setSelectedPaymentForModal] = useState<PaymentRecord | null>(null);
+
+  // Android Back button wiring for InvoicesTab Overlays
+  useAndroidBack(isAddingCustomer, () => setIsAddingCustomer(false));
+  useAndroidBack(isWritingInvoice, () => setIsWritingInvoice(false));
+  useAndroidBack(isQuickPaymentOpen, () => setIsQuickPaymentOpen(false));
+  useAndroidBack(selectedInvoiceForModal !== null, () => setSelectedInvoiceForModal(null));
+  useAndroidBack(selectedPaymentForModal !== null, () => setSelectedPaymentForModal(null));
 
   // Clear current row builder inputs when switching customer
   useEffect(() => {
@@ -1641,8 +1650,8 @@ export default function InvoicesTab({
               </div>
               
               <div className="mt-4 w-full aspect-[4/3] max-h-[60vh] bg-black/5 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100 dark:border-slate-800/40">
-                <img
-                  src={viewingPhotoUrl}
+                <LazyImage
+                  src={viewingPhotoUrl || ''}
                   alt="Ảnh phóng to hoá đơn"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-contain"

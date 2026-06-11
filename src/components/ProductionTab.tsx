@@ -17,6 +17,7 @@ import {
   ModelMaterialRecipe, ProductionBatch, MaterialReimport, AppSettings, LaborPayment, TaskType 
 } from '../types';
 import { formatVietnameseDate, getCurrentDateStr, getVietnameseWeekKey } from '../utils/dateUtils';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 
 interface ProductionTabProps {
   operationBreakdowns: ModelOperationBreakdown[];
@@ -92,6 +93,7 @@ export default function ProductionTab({
   // Bento selection tiles
   const [activeBdId, setActiveBdId] = useState<string | null>(null);
   const [activeWorkerId, setActiveWorkerId] = useState<string | null>(null);
+  const [previewWorkerId, setPreviewWorkerId] = useState<string | null>(null);
 
   // States for Batch Job assignment & Allocation
   const [isMultipleWorkers, setIsMultipleWorkers] = useState(false);
@@ -135,6 +137,27 @@ export default function ProductionTab({
   const [isEditingWorkerTasks, setIsEditingWorkerTasks] = useState(false);
   const [editingWorkerTaskIds, setEditingWorkerTaskIds] = useState<string[]>([]);
 
+  // Active Worker personal page states
+  const [workerActiveTab, setWorkerActiveTab] = useState<'jobs' | 'payments'>('jobs');
+  const [wkJobModel, setWkJobModel] = useState('');
+  const [wkJobQty, setWkJobQty] = useState<number>(100);
+  const [wkJobOps, setWkJobOps] = useState<string[]>([]);
+  const [wkJobCustomPrices, setWkJobCustomPrices] = useState<Record<string, number>>({});
+  const [wkJobDate, setWkJobDate] = useState(getCurrentDateStr());
+  const [wkPayAmount, setWkPayAmount] = useState<number>(0);
+  const [wkPayNote, setWkPayNote] = useState('');
+  const [wkPayDate, setWkPayDate] = useState(getCurrentDateStr());
+
+  // Android Back button wiring for ProductionTab Overlays
+  useAndroidBack(showAddBreakdown, () => setShowAddBreakdown(false));
+  useAndroidBack(showAddWorker, () => setShowAddWorker(false));
+  useAndroidBack(showAddJob, () => setShowAddJob(false));
+  useAndroidBack(showAddMaterial, () => setShowAddMaterial(false));
+  useAndroidBack(showAddRecipe, () => setShowAddRecipe(false));
+  useAndroidBack(showRunProduction, () => setShowRunProduction(false));
+  useAndroidBack(showReplenishMaterial, () => setShowReplenishMaterial(false));
+  useAndroidBack(showAddTaskModal, () => setShowAddTaskModal(false));
+
   // Form states - Worker Jobs Matching
   const [selectedWorkerId, setSelectedWorkerId] = useState('');
   const [selectedModelForJob, setSelectedModelForJob] = useState('');
@@ -143,7 +166,7 @@ export default function ProductionTab({
   const [jobQuantity, setJobQuantity] = useState<number>(100);
   const [jobDate, setJobDate] = useState(getCurrentDateStr());
 
-  const [assignmentMode, setAssignmentMode] = useState<'single' | 'bulk_split' | 'op_template'>('single');
+  const [assignmentMode, setAssignmentMode] = useState<'single' | 'bulk_split' | 'op_template'>('op_template');
   const [opAssignments, setOpAssignments] = useState<Record<string, { workerId: string; quantity: number; price: number }[]>>({});
 
   // Form states - Raw Materials
@@ -373,6 +396,19 @@ export default function ProductionTab({
     setJobQuantity(sum);
   };
 
+  const getMatchingWorkersForOp = (opName: string): Worker[] => {
+    const matchedTasks = tasks.filter(t => 
+      t.name.toLowerCase().trim() === opName.toLowerCase().trim() ||
+      opName.toLowerCase().trim().includes(t.name.toLowerCase().trim()) ||
+      t.name.toLowerCase().trim().includes(opName.toLowerCase().trim())
+    );
+    const matchedTaskIds = matchedTasks.map(t => t.id);
+    
+    return workers.filter(w => 
+      w.taskIds && w.taskIds.some(id => matchedTaskIds.includes(id))
+    );
+  };
+
   const initOpAssignments = (modelName: string, totalQty: number) => {
     const selectedBd = operationBreakdowns.find(bd => bd.modelName === modelName);
     if (!selectedBd) return;
@@ -380,9 +416,20 @@ export default function ProductionTab({
     selectedBd.operations.forEach(op => {
       const mult = op.multiplier || 1;
       const targetQty = totalQty * mult;
-      newAssignments[op.id] = [
-        { workerId: op.defaultWorkerId || '', quantity: targetQty, price: op.price }
-      ];
+      
+      const matchedWorkers = getMatchingWorkersForOp(op.name);
+      if (matchedWorkers.length > 0) {
+        const count = matchedWorkers.length;
+        newAssignments[op.id] = matchedWorkers.map(w => ({
+          workerId: w.id,
+          quantity: Math.round(targetQty / count),
+          price: op.price
+        }));
+      } else {
+        newAssignments[op.id] = [
+          { workerId: op.defaultWorkerId || '', quantity: targetQty, price: op.price }
+        ];
+      }
     });
     setOpAssignments(newAssignments);
   };
@@ -444,14 +491,7 @@ export default function ProductionTab({
       setWorkerOpPrices(newBatchPrices);
 
       // Initialize template op assignments
-      const newAssignments: Record<string, { workerId: string; quantity: number; price: number }[]> = {};
-      selectedBd.operations.forEach(op => {
-        const mult = op.multiplier || 1;
-        newAssignments[op.id] = [
-          { workerId: op.defaultWorkerId || '', quantity: jobQuantity * mult, price: op.price }
-        ];
-      });
-      setOpAssignments(newAssignments);
+      initOpAssignments(modelName, jobQuantity);
     } else {
       setJobCheckedOps([]);
       setCustomOpPrices({});
@@ -796,6 +836,9 @@ export default function ProductionTab({
   const deleteWorker = (id: string, name: string) => {
     if (confirm(`Bạn chắc chắn muốn xóa thợ "${name}" khỏi danh bạ?`)) {
       setWorkers(workers.filter(w => w.id !== id));
+      if (activeWorkerId === id) {
+        setActiveWorkerId(null);
+      }
     }
   };
 
@@ -986,6 +1029,698 @@ export default function ProductionTab({
     alert('Khởi chạy đợt hàng sản xuất mộc và cập nhật kho nguyên liệu tự động thành công!');
   };
 
+  // Render the dedicated personal page for each worker
+  const renderActiveWorkerPage = () => {
+    const activeWorker = workers.find(w => w.id === activeWorkerId);
+    if (!activeWorker) return null;
+
+    const matchedJobs = workerJobs.filter(j => j.workerId === activeWorker.id);
+    const totalQuantity = matchedJobs.reduce((sum, j) => sum + j.quantity, 0);
+    const totalEarned = matchedJobs.reduce((sum, j) => sum + j.totalAmount, 0);
+
+    // Filter matching payments
+    const matchedPayments = laborPayments.filter(p => 
+      p.note.toLowerCase().includes(activeWorker.name.toLowerCase())
+    );
+    const totalPaid = matchedPayments.reduce((sum, p) => sum + p.amount, 0);
+    const remainingDebt = totalEarned - totalPaid;
+
+    return (
+      <div className="bg-white dark:bg-zinc-900/95 border-2 border-slate-300 dark:border-zinc-805 p-6 md:p-8 rounded-3xl shadow-md space-y-8">
+        {/* Back header line */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b-2 border-slate-205 dark:border-zinc-800">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setActiveWorkerId(null)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-600 dark:hover:bg-indigo-750 border border-indigo-700 rounded-xl text-xs md:text-sm font-black transition flex items-center gap-1.5 cursor-pointer shadow-sm select-none"
+            >
+              ← QUAY LẠI QUẢN LÝ CHUNG
+            </button>
+            <div className="h-8 w-0.5 bg-slate-300 dark:bg-slate-700 hidden sm:block" />
+            <div>
+              <span className="text-xs uppercase font-black tracking-widest text-indigo-600 dark:text-indigo-400 block mb-0.5">SỔ TÍNH LƯƠNG GIA CÔNG CHI TIẾT</span>
+              <h2 className="text-base md:text-lg font-black text-slate-850 dark:text-slate-100 uppercase tracking-tight">
+                THỢ GIA CÔNG: {activeWorker.name}
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              onClick={() => {
+                const proceed = confirm(`Xác nhận xóa hồ sơ thợ "${activeWorker.name}"? Thao tác này KHÔNG xóa nhật ký các đợt may đã lưu.`);
+                if (proceed) {
+                  setWorkers(workers.filter(w => w.id !== activeWorker.id));
+                  setActiveWorkerId(null);
+                }
+              }}
+              className="p-2.5 bg-red-50 hover:bg-red-100 text-red-650 dark:bg-red-950/20 dark:hover:bg-red-950/40 border border-red-200 dark:border-transparent rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+              title="Xóa hồ sơ thợ may"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Xóa hồ sơ thợ</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Worker Info, Phone, and Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div className="md:col-span-1 bg-slate-100/70 dark:bg-zinc-950/40 border-2 border-slate-200 dark:border-zinc-800 p-5 rounded-2xl flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-lg tracking-widest shrink-0 uppercase shadow-lg select-none">
+                  {activeWorker.name.substring(0, 2)}
+                </div>
+                <div>
+                  <h4 className="font-black text-slate-900 dark:text-white text-base uppercase leading-normal">{activeWorker.name}</h4>
+                  <span className="text-xs bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-extrabold px-2.5 py-0.5 rounded-md inline-block mt-1 uppercase tracking-wide">
+                    Thợ mộc phụ trách
+                  </span>
+                </div>
+              </div>
+              
+              <div className="pt-3 border-t-2 border-dashed border-slate-300 dark:border-zinc-800 text-xs md:text-sm space-y-2 text-slate-900 dark:text-slate-100">
+                <p className="flex items-center justify-between font-sans">
+                  <span className="font-black text-slate-600 dark:text-slate-400">Số Điện Thoại:</span>
+                  <span className="font-mono font-black text-slate-900 dark:text-white">{activeWorker.phone || 'Chưa có SĐT'}</span>
+                </p>
+                <p className="flex items-center justify-between font-sans">
+                  <span className="font-black text-slate-600 dark:text-slate-400">Tham gia:</span>
+                  <span className="font-mono font-black text-indigo-700 dark:text-indigo-400">{formatVietnameseDate(activeWorker.createdAt ? new Date(activeWorker.createdAt).toISOString().split('T')[0] : getCurrentDateStr())}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Editing worker skills checklist */}
+            <div className="pt-4 mt-4 border-t-2 border-dashed border-slate-300 dark:border-zinc-800">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs font-black uppercase text-slate-800 dark:text-slate-200 tracking-wide flex items-center gap-1 select-none">
+                  <CheckSquare className="w-3.5 h-3.5 text-indigo-600" /> Tay nghề nhận:
+                </span>
+                {!isEditingWorkerTasks ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingWorkerTasks(true);
+                      setEditingWorkerTaskIds(activeWorker.taskIds || []);
+                    }}
+                    className="text-xs font-black text-indigo-600 dark:text-indigo-400 underline hover:no-underline cursor-pointer"
+                  >
+                    SỬA ĐỔI
+                  </button>
+                ) : (
+                  <div className="flex gap-2.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveWorkerTasks(activeWorker.id)}
+                      className="text-emerald-600 font-extrabold hover:underline cursor-pointer"
+                    >
+                      LƯU
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingWorkerTasks(false)}
+                      className="text-slate-500 font-extrabold hover:underline cursor-pointer"
+                    >
+                      HỦY
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {!isEditingWorkerTasks ? (
+                <div className="flex flex-wrap gap-1.55">
+                  {(!activeWorker.taskIds || activeWorker.taskIds.length === 0) ? (
+                    <span className="text-xs text-slate-500 italic font-bold">Chưa gán tay nghề</span>
+                  ) : (
+                    activeWorker.taskIds.map(tId => {
+                      const t = tasks.find(tk => tk.id === tId);
+                      if (!t) return null;
+                      return (
+                        <span key={tId} className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-850 dark:text-indigo-300 text-xs px-2.5 py-1 rounded-lg font-extrabold border border-indigo-200">
+                          {t.name}
+                        </span>
+                      );
+                    })
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                  {tasks.map(task => {
+                    const isChecked = editingWorkerTaskIds.includes(task.id);
+                    return (
+                      <label
+                        key={task.id}
+                        className={`flex items-start gap-2 p-2 rounded-lg text-xs font-black cursor-pointer transition select-none ${
+                          isChecked
+                            ? 'bg-indigo-100 text-indigo-900 dark:bg-indigo-950/50 dark:text-indigo-200 border border-indigo-300'
+                            : 'text-slate-705 hover:bg-slate-200 dark:hover:bg-zinc-800 bg-slate-100 dark:bg-zinc-900 border border-transparent'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setEditingWorkerTaskIds(editingWorkerTaskIds.filter(id => id !== task.id));
+                            } else {
+                              setEditingWorkerTaskIds([...editingWorkerTaskIds, task.id]);
+                            }
+                          }}
+                          className="mt-0.5 rounded border-slate-300 accent-indigo-650 scale-90 cursor-pointer"
+                        />
+                        <span className="truncate" title={task.name}>{task.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Statistical KPI Blocks */}
+          <div className="md:col-span-3 grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-indigo-50/50 dark:bg-zinc-950/40 border-2 border-indigo-200 dark:border-zinc-800 rounded-2xl p-4.5 flex flex-col justify-between shadow-xs">
+              <span className="text-xs font-black uppercase text-indigo-900 dark:text-indigo-300 tracking-wide block">Tổng đợt may:</span>
+              <div className="mt-2.5">
+                <span className="font-mono text-3xl font-black text-indigo-700 dark:text-indigo-400 block">{matchedJobs.length}</span>
+                <span className="text-xs text-slate-700 dark:text-slate-300 font-extrabold block mt-1 uppercase">Mẻ công nhận</span>
+              </div>
+            </div>
+
+            <div className="bg-sky-50/50 dark:bg-zinc-950/40 border-2 border-sky-200 dark:border-zinc-800 rounded-2xl p-4.5 flex flex-col justify-between shadow-xs">
+              <span className="text-xs font-black uppercase text-sky-900 dark:text-sky-300 tracking-wide block">Sản lượng mộc:</span>
+              <div className="mt-2.5">
+                <span className="font-mono text-3xl font-black text-sky-700 dark:text-sky-400 block">{totalQuantity.toLocaleString()}</span>
+                <span className="text-xs text-slate-700 dark:text-slate-300 font-extrabold block mt-1 uppercase">Sản phẩm tích luỹ</span>
+              </div>
+            </div>
+
+            <div className="bg-emerald-50/50 dark:bg-zinc-950/40 border-2 border-emerald-205 dark:border-zinc-800 rounded-2xl p-4.5 flex flex-col justify-between shadow-xs">
+              <span className="text-xs font-black uppercase text-emerald-950 dark:text-emerald-300 tracking-wide block">Lương tích lũy:</span>
+              <div className="mt-2.5">
+                <span className="font-mono text-2xl lg:text-3xl font-black text-emerald-700 dark:text-emerald-400 block">+{totalEarned.toLocaleString()}đ</span>
+                <span className="text-xs text-slate-700 dark:text-slate-300 font-extrabold block mt-1 uppercase">Tiền công quỹ gốc</span>
+              </div>
+            </div>
+
+            <div className={`border-2 rounded-2xl p-4.5 flex flex-col justify-between shadow-xs ${
+              remainingDebt > 0 
+                ? 'bg-rose-50/85 dark:bg-rose-950/20 border-rose-400' 
+                : 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300'
+            }`}>
+              <span className="text-xs font-black uppercase tracking-wide block text-slate-900 dark:text-slate-300">NỢ LƯƠNG HIỆN TẠI:</span>
+              <div className="mt-2.5">
+                <span className={`font-mono text-2xl lg:text-3xl font-black block ${remainingDebt > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {remainingDebt.toLocaleString()}đ
+                </span>
+                <span className="text-[10px] text-slate-700 dark:text-slate-300 font-extrabold block mt-1 uppercase">Dư nợ sổ chi thợ</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Lower Main split layout */}
+        {false && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column inside page */}
+            <div className="lg:col-span-1 space-y-6">
+              
+              {/* Quick Payment or Salary Advance form */}
+              <div className="bg-white dark:bg-zinc-950/80 border-2 border-slate-300 dark:border-zinc-800 rounded-2xl p-5 space-y-5 shadow-sm">
+                <div className="pb-3 border-b-2 border-slate-200 dark:border-zinc-800 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-605 text-white flex items-center justify-center shrink-0 bg-emerald-600">
+                    <DollarSign className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900 dark:text-zinc-100 uppercase tracking-tight">
+                      CHI LƯƠNG & CHUYỂN KHOẢN
+                    </h4>
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-400 leading-normal">
+                      Lập phiếu chi trả tiền công hoặc tạm ứng cho {activeWorker.name}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-extrabold text-slate-800 dark:text-slate-300 uppercase block">Số tiền chi trả lẻ (VNĐ):</label>
+                    <input
+                      type="number"
+                      value={wkPayAmount === 0 ? '' : wkPayAmount}
+                      onChange={(e) => setWkPayAmount(Number(e.target.value))}
+                      placeholder="Nhập số tiền VNĐ. VD: 1500000"
+                      className="w-full text-sm font-mono font-black p-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-300 dark:border-zinc-800 rounded-xl focus:border-indigo-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-900 dark:text-zinc-100 placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-extrabold text-slate-800 dark:text-slate-300 uppercase block">Ngày chi ghi nhận:</label>
+                    <input
+                      type="date"
+                      value={wkPayDate}
+                      onChange={(e) => setWkPayDate(e.target.value)}
+                      className="w-full text-sm font-mono font-black p-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-300 dark:border-zinc-800 rounded-xl focus:border-indigo-600 focus:bg-white focus:outline-none text-slate-900 dark:text-zinc-100"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-xs font-extrabold text-slate-800 dark:text-slate-300 uppercase block">Nội dung chi tiền:</label>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setWkPayNote("Thanh toán lương may")}
+                          className="text-xs bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-950/80 font-black px-2 py-1 rounded-md text-indigo-805 dark:text-indigo-300 cursor-pointer transition"
+                        >
+                          MAY CÔNG
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWkPayNote("Tạm ứng tiền công")}
+                          className="text-xs bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/80 font-black px-2 py-1 rounded-md text-rose-800 dark:text-rose-300 cursor-pointer transition"
+                        >
+                          ỨNG TRƯỚC
+                        </button>
+                      </div>
+                    </div>
+                  <input
+                    type="text"
+                    value={wkPayNote}
+                    onChange={(e) => setWkPayNote(e.target.value)}
+                    placeholder="VD: Chi trả dồn lương tuần qua"
+                    className="w-full text-sm font-black p-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-300 dark:border-zinc-800 rounded-xl focus:border-indigo-600 focus:bg-white focus:outline-none text-slate-900 dark:text-zinc-100 placeholder:text-slate-400"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (wkPayAmount <= 0) {
+                      alert("Vui lòng nhập số tiền thanh toán hợp lệ!");
+                      return;
+                    }
+                    const noteStr = wkPayNote.trim() || 'Trả lương may';
+                    const newPayment: LaborPayment = {
+                      id: 'pay_' + Date.now(),
+                      weekKey: getVietnameseWeekKey(wkPayDate || getCurrentDateStr()),
+                      amount: wkPayAmount,
+                      date: wkPayDate || getCurrentDateStr(),
+                      note: `Chi lương thợ ${activeWorker.name} - ${noteStr}`,
+                      createdAt: Date.now()
+                    };
+                    setLaborPayments([newPayment, ...laborPayments]);
+                    setWkPayAmount(0);
+                    setWkPayNote('');
+                    alert(`Đã hoàn tất lập phiếu chi dồn lương ${wkPayAmount.toLocaleString()}đ cho thợ ${activeWorker.name}!`);
+                  }}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs md:text-sm font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-600/10"
+                >
+                  <Check className="w-4 h-4 stroke-[3]" />
+                  <span>XÁC NHẬN GIAO TIỀN CHI TRẢ</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick assignment form */}
+            <div className="bg-white dark:bg-zinc-950/80 border-2 border-slate-300 dark:border-zinc-800 rounded-2xl p-5 space-y-5 shadow-sm">
+              <div className="pb-3 border-b-2 border-slate-200 dark:border-zinc-800 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-650 text-white flex items-center justify-center shrink-0">
+                  <Plus className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-900 dark:text-zinc-100 uppercase tracking-tight">
+                    GIAO MẺ CHẾ TÁC MỚI
+                  </h4>
+                  <p className="text-xs font-bold text-slate-600 dark:text-slate-400 leading-normal">
+                    Phân bổ trực tiếp đợt hàng may công đoạn cho thợ
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-extrabold text-slate-800 dark:text-slate-300 uppercase block">Chọn mẫu mộc sản phẩm:</label>
+                  <select
+                    value={wkJobModel}
+                    onChange={(e) => {
+                      const model = e.target.value;
+                      setWkJobModel(model);
+                      const assoc = operationBreakdowns.find(bd => bd.modelName === model);
+                      if (assoc) {
+                        setWkJobOps(assoc.operations.map(o => o.id));
+                        setWkJobCustomPrices({});
+                      } else {
+                        setWkJobOps([]);
+                        setWkJobCustomPrices({});
+                      }
+                    }}
+                    className="w-full text-sm font-black p-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-300 dark:border-zinc-800 rounded-xl focus:border-indigo-600 focus:bg-white focus:outline-none text-slate-900 dark:text-zinc-100"
+                  >
+                    <option value="">-- CLICK CHỌN MẪU --</option>
+                    {operationBreakdowns.map(bd => (
+                      <option key={bd.id} value={bd.modelName}>{bd.modelName.toUpperCase()} ({bd.operations.length} công đoạn)</option>
+                    ))}
+                  </select>
+                </div>
+
+                {wkJobModel && (
+                  <div className="space-y-3 bg-slate-100/50 dark:bg-zinc-900 p-3 border-2 border-slate-200 dark:border-zinc-800 rounded-xl">
+                    <span className="text-xs font-black text-indigo-900 dark:text-indigo-400 uppercase tracking-wider block">
+                      CÁC CÔNG ĐOẠN MAY / GIA CÔNG:
+                    </span>
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                      {(() => {
+                        const assoc = operationBreakdowns.find(bd => bd.modelName === wkJobModel);
+                        if (!assoc) return null;
+                        return assoc.operations.map(o => {
+                          const isChecked = wkJobOps.includes(o.id);
+                          const currentVal = wkJobCustomPrices[o.id] !== undefined ? wkJobCustomPrices[o.id] : o.price;
+                          return (
+                            <div key={o.id} className="flex items-center justify-between gap-1.5 p-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg">
+                              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-805 dark:text-slate-200 min-w-0 flex-1 select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setWkJobOps(wkJobOps.filter(id => id !== o.id));
+                                    } else {
+                                      setWkJobOps([...wkJobOps, o.id]);
+                                    }
+                                  }}
+                                  className="rounded border-slate-305 accent-indigo-600 scale-100"
+                                />
+                                <span className="truncate">{o.name}</span>
+                              </label>
+                              
+                              <div className="flex items-center gap-1 shrink-0">
+                                <input
+                                  type="number"
+                                  value={currentVal}
+                                  onChange={(e) => {
+                                    setWkJobCustomPrices({
+                                      ...wkJobCustomPrices,
+                                      [o.id]: Number(e.target.value)
+                                    });
+                                  }}
+                                  className="w-18 text-xs font-mono font-black text-right p-1 border-2 border-slate-200 dark:border-slate-800 rounded bg-slate-50 dark:bg-zinc-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
+                                />
+                                <span className="text-xs text-slate-500 font-extrabold">đ</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-extrabold text-slate-800 dark:text-slate-300 uppercase block">Số lượng mộc:</label>
+                    <input
+                      type="number"
+                      value={wkJobQty}
+                      onChange={(e) => setWkJobQty(Number(e.target.value))}
+                      className="w-full text-sm font-mono font-black p-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-300 dark:border-zinc-800 rounded-xl focus:border-indigo-600 focus:bg-white focus:outline-none text-slate-900 dark:text-zinc-100"
+                      min={1}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-extrabold text-slate-800 dark:text-slate-300 uppercase block">Ngày giao việc:</label>
+                    <input
+                      type="date"
+                      value={wkJobDate}
+                      onChange={(e) => setWkJobDate(e.target.value)}
+                      className="w-full text-sm font-mono font-black p-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-300 dark:border-zinc-800 rounded-xl focus:border-indigo-600 focus:bg-white focus:outline-none text-slate-900 dark:text-zinc-100"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!wkJobModel) {
+                      alert("Vui lòng chọn mẫu sản phẩm trước!");
+                      return;
+                    }
+                    if (wkJobOps.length === 0) {
+                      alert("Vui lòng tick chọn ít nhất 1 công đoạn!");
+                      return;
+                    }
+                    if (wkJobQty <= 0) {
+                      alert("Vui lòng nhập số lượng hợp lệ (> 0)!");
+                      return;
+                    }
+                    
+                    const assoc = operationBreakdowns.find(b => b.modelName === wkJobModel);
+                    if (!assoc) return;
+
+                    const sumUnitPrice = assoc.operations
+                      .filter(o => wkJobOps.includes(o.id))
+                      .reduce((sum, o) => {
+                        const customizedPrice = wkJobCustomPrices[o.id];
+                        return sum + (customizedPrice !== undefined ? customizedPrice : o.price);
+                      }, 0);
+
+                    const totalAmount = sumUnitPrice * wkJobQty;
+
+                    const newJob: WorkerJob = {
+                      id: 'job_' + Date.now(),
+                      workerId: activeWorker.id,
+                      workerName: activeWorker.name,
+                      modelName: wkJobModel,
+                      quantity: wkJobQty,
+                      selectedOperationIds: [...wkJobOps],
+                      unitPrice: sumUnitPrice,
+                      totalAmount,
+                      date: wkJobDate || getCurrentDateStr(),
+                      createdAt: Date.now(),
+                      customPrices: { ...wkJobCustomPrices }
+                    };
+
+                    setWorkerJobs([newJob, ...workerJobs]);
+                    
+                    // Reset
+                    setWkJobModel('');
+                    setWkJobOps([]);
+                    setWkJobCustomPrices({});
+                    setWkJobQty(100);
+                    alert(`Giao mẻ may cho thợ ${activeWorker.name} thành công! Công tích dồn thêm: ${totalAmount.toLocaleString()}đ.`);
+                  }}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs md:text-sm font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/10"
+                >
+                  <PlusCircle className="w-4 h-4 stroke-[3]" />
+                  <span>Xác nhận giao mẻ việc</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Column inside page: Tabs list history */}
+          <div className="lg:col-span-2 space-y-4">
+            
+            {/* Tab selection design */}
+            <div className="flex bg-slate-100 dark:bg-zinc-950 p-1 rounded-xl w-fit select-none">
+              <button
+                onClick={() => setWorkerActiveTab('jobs')}
+                className={`py-2 px-4 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                  workerActiveTab === 'jobs'
+                    ? 'bg-indigo-600 text-white dark:bg-indigo-600 shadow-md'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-805'
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                <span className="font-extrabold text-xs md:text-sm">SỐ MẺ HÀNG ({matchedJobs.length})</span>
+              </button>
+              <button
+                onClick={() => setWorkerActiveTab('payments')}
+                className={`py-2 px-4 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                  workerActiveTab === 'payments'
+                    ? 'bg-indigo-600 text-white dark:bg-indigo-600 shadow-md'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-805 hover:text-slate-900'
+                }`}
+              >
+                <DollarSign className="w-4 h-4 stroke-[2.5]" />
+                <span className="font-extrabold text-xs md:text-sm">PHIẾU ĐÃ NHẬN TIỀN ({matchedPayments.length})</span>
+              </button>
+            </div>
+
+            {/* Sub-tab view panel */}
+            {workerActiveTab === 'jobs' ? (
+              <div className="bg-white dark:bg-zinc-950 border-2 border-slate-300 dark:border-zinc-800 p-5 rounded-2xl shadow-sm space-y-5">
+                <div className="flex justify-between items-center pb-3 border-b-2 border-slate-200 dark:border-zinc-800">
+                  <h4 className="font-black text-sm text-indigo-950 dark:text-indigo-400 uppercase tracking-tight">SỔ PHÂN CÔNG GIA CÔNG CHI TIẾT</h4>
+                  <span className="text-xs text-slate-505 dark:text-slate-400 font-black uppercase tracking-wider">LỊCH SỬ</span>
+                </div>
+
+                {matchedJobs.length === 0 ? (
+                  <div className="text-center py-16 text-slate-500 dark:text-slate-400 text-sm space-y-3">
+                    <AlertCircle className="w-10 h-10 mx-auto text-slate-400 dark:text-slate-650" />
+                    <p className="font-extrabold text-slate-600 dark:text-slate-400">Chưa có mẻ gia công nào được ghi nhận cho thợ này.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1.5 scrollbar-thin">
+                    {matchedJobs.map(job => {
+                      const associatedBd = operationBreakdowns.find(bd => bd.modelName === job.modelName);
+                      const opNamesCombined = associatedBd && associatedBd.operations
+                        .filter(o => job.selectedOperationIds.includes(o.id))
+                        .map(o => o.name)
+                        .join(', ') || 'Công đoạn gia công';
+                      return (
+                        <div key={job.id} className="p-4 bg-slate-50 dark:bg-zinc-900/60 border-2 border-slate-250 dark:border-zinc-800 rounded-xl space-y-4 hover:bg-slate-100/50 transition shadow-xs">
+                          
+                          {/* Formal ticket layout explicitly answering request details */}
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-white dark:bg-zinc-950 p-4 rounded-xl border-2 border-slate-200 dark:border-zinc-800 shadow-sm">
+                            <div className="space-y-1 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-zinc-800 pb-2 sm:pb-0 sm:pr-3">
+                              <span className="text-[10px] uppercase font-black tracking-wider text-indigo-700 dark:text-indigo-400 block">👤 Tên Thợ</span>
+                              <span className="text-sm font-black text-slate-900 dark:text-white uppercase block mt-1">{activeWorker.name}</span>
+                            </div>
+                            
+                            <div className="space-y-1 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-zinc-800 pb-2 sm:pb-0 sm:pr-3">
+                              <span className="text-[10px] uppercase font-black tracking-wider text-indigo-700 dark:text-indigo-400 block">👕 Sản Phẩm</span>
+                              <div className="space-y-1 mt-1">
+                                <span className="text-sm font-black text-indigo-805 dark:text-indigo-400 block uppercase leading-none">{job.modelName}</span>
+                                <span className="font-mono text-xs font-black text-slate-700 dark:text-slate-300 block">SL: <span className="text-sm font-black text-slate-900 dark:text-white">{job.quantity.toLocaleString()}</span> cái</span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-zinc-800 pb-2 sm:pb-0 sm:pr-3 col-span-1">
+                              <span className="text-[10px] uppercase font-black tracking-wider text-indigo-700 dark:text-indigo-400 block">💸 Số Tiền Công</span>
+                              <div className="mt-1">
+                                <span className="font-mono text-base font-black text-emerald-700 dark:text-emerald-400 block">+{job.totalAmount.toLocaleString()}đ</span>
+                                <span className="text-[10px] text-slate-500 font-mono font-bold block mt-0.5">Giá mẻ: {job.unitPrice.toLocaleString()}đ/c</span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <span className="text-[10px] uppercase font-black tracking-wider text-indigo-700 dark:text-indigo-400 block">🔧 Tên Công Việc</span>
+                              <span className="text-xs font-black text-slate-800 dark:text-slate-200 block line-clamp-3 mt-1 leading-normal" title={opNamesCombined}>
+                                {opNamesCombined}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-slate-800 dark:text-slate-200 bg-slate-200/80 dark:bg-zinc-800 px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold">
+                              <Calendar className="w-3.5 h-3.5" />
+                              Ngày phân việc: {formatVietnameseDate(job.date)}
+                            </span>
+                          </div>
+
+                          {/* Tag of active operations for the job */}
+                          <div className="p-3 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl space-y-2">
+                            <span className="text-[11px] font-black uppercase text-indigo-900 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-2 rounded-md inline-block">
+                              Đơn giá chi tiết từng công đoạn trong mẻ may:
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-1 text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {associatedBd && associatedBd.operations
+                                .filter(o => job.selectedOperationIds.includes(o.id))
+                                .map(o => {
+                                  const opPriceInDoc = (job.customPrices && job.customPrices[o.id] !== undefined) ? job.customPrices[o.id] : o.price;
+                                  return (
+                                    <div key={o.id} className="flex justify-between items-center border-b border-dashed border-slate-100 dark:border-zinc-900 pb-1">
+                                      <span className="truncate text-slate-800 dark:text-slate-200 font-extrabold">• {o.name}:</span>
+                                      <span className="font-mono text-xs font-black text-slate-900 dark:text-white shrink-0">
+                                        {(opPriceInDoc * job.quantity).toLocaleString()}đ
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </div>
+
+                          {/* Quick Pay on individual job click */}
+                          <div className="flex justify-between items-center pt-2.5 border-t border-dashed border-slate-300 dark:border-zinc-800">
+                            <button
+                              type="button"
+                              onClick={() => triggerQuickPay(job)}
+                              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 text-emerald-805 dark:text-emerald-450 rounded-xl text-xs font-black border border-emerald-200 transition cursor-pointer flex items-center gap-1 select-none"
+                            >
+                              <DollarSign className="w-4 h-4 stroke-[2.5]" />
+                              <span>Tạm ứng lương nhanh đợt may này</span>
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const confirmDelete = confirm("Bạn chắc chắn muốn huỷ mẻ hàng may này?");
+                                if (confirmDelete) {
+                                  setWorkerJobs(workerJobs.filter(j => j.id !== job.id));
+                                }
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition cursor-pointer"
+                              title="Xóa mẻ"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-zinc-950 border-2 border-slate-300 dark:border-zinc-800 p-5 rounded-2xl shadow-sm space-y-5">
+                <div className="flex justify-between items-center pb-3 border-b-2 border-slate-205 dark:border-zinc-800">
+                  <h4 className="font-black text-sm text-emerald-950 dark:text-emerald-400 uppercase tracking-tight">NHẬT KÝ CHI TRẢ LƯƠNG & CHUYỂN KHOẢN</h4>
+                  <span className="text-xs text-slate-450 font-black uppercase">ĐỐI CHIẾU</span>
+                </div>
+
+                {matchedPayments.length === 0 ? (
+                  <div className="text-center py-16 text-slate-500 dark:text-slate-450 text-sm space-y-3">
+                    <AlertCircle className="w-10 h-10 mx-auto text-slate-400 dark:text-slate-650" />
+                    <p className="font-extrabold text-slate-600 dark:text-slate-400">Chưa có ghi chép tạm ứng hay hoàn tất tiền lương nào.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1.5 scrollbar-thin">
+                    {matchedPayments.map(pay => (
+                      <div key={pay.id} className="p-3.5 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-250 dark:border-zinc-800 rounded-xl flex items-center justify-between text-xs hover:bg-slate-100/50 transition">
+                        <div className="min-w-0 pr-2">
+                          <p className="font-black text-slate-900 dark:text-slate-100 text-sm truncate">
+                            {pay.note.replace(`Chi lương thợ ${activeWorker.name} -`, '').trim()}
+                          </p>
+                          <div className="flex justify-start items-center gap-2 mt-1">
+                            <span className="text-xs font-mono text-slate-500 font-bold">Mã phiếu: {pay.id}</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-xs font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-200 dark:bg-zinc-800 px-1.5 py-0.5 rounded-md">{formatVietnameseDate(pay.date)}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="font-mono text-sm font-black text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-2 py-1 rounded-md">-{pay.amount.toLocaleString()}đ</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const confirmDel = confirm(`Huỷ bỏ ghi chép chi lương mã ${pay.id}? Khoản lương tương ứng sẽ được trả về sổ nợ.`);
+                              if (confirmDel) {
+                                setLaborPayments(laborPayments.filter(p => p.id !== pay.id));
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-red-500 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20 transition cursor-pointer"
+                            title="Xóa ghi chi"
+                          >
+                            <X className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+        )}
+
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6" id="production_container">
       {isViewer && (
@@ -1125,14 +1860,26 @@ export default function ProductionTab({
 
       <AnimatePresence mode="wait">
         {subTab === 'breakdown' ? (
-          <motion.div
-            key="sub-breakdown-tab"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.15 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-          >
+          activeWorkerId ? (
+            <motion.div
+              key="active-worker-profile-page"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+              className="w-full"
+            >
+              {renderActiveWorkerPage()}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="sub-breakdown-tab"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.15 }}
+              className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+            >
             {/* Left side: Setup configurations & directories */}
             <div className="lg:col-span-1 space-y-6">
               {/* Directory 1: Process Breakdowns per Model Name */}
@@ -1155,8 +1902,8 @@ export default function ProductionTab({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Chọn mẫu (bấm ô vuông để xem công đoạn):</p>
-                    <div className="grid grid-cols-2 gap-2 max-h-[240px] overflow-y-auto pr-1 scrollbar-thin">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Chọn mẫu (bấm dòng để xem công đoạn):</p>
+                    <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1 scrollbar-thin">
                       {operationBreakdowns.map(bd => {
                         const isSelected = activeBdId === bd.id;
                         const totalModelPay = bd.operations.reduce((s, o) => s + o.price, 0);
@@ -1164,28 +1911,33 @@ export default function ProductionTab({
                           <div 
                             key={bd.id}
                             onClick={() => setActiveBdId(isSelected ? null : bd.id)}
-                            className={`p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer select-none transition duration-150 aspect-square ${
+                            className={`p-2.5 rounded-xl border text-left flex items-center justify-between cursor-pointer select-none transition duration-150 ${
                               isSelected
                                 ? 'bg-indigo-50/70 border-indigo-400 dark:bg-indigo-950/30 text-indigo-950 dark:text-indigo-300 ring-2 ring-indigo-500/10'
                                 : 'bg-slate-50 border-slate-150 hover:bg-slate-100/75 dark:bg-zinc-900/50 dark:border-slate-800 text-slate-700 hover:border-slate-300'
                             }`}
                           >
-                            <div className="flex justify-between items-start">
-                              <Scissors className={`w-4 h-4 ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0 ${
+                                isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
+                              }`}>
+                                <Scissors className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-slate-800 dark:text-slate-100 text-[11px] leading-tight tracking-tight uppercase truncate">
+                                  {bd.modelName}
+                                </p>
+                                <span className="text-[9px] font-mono text-slate-400 block mt-0.5">{bd.operations.length} công đoạn</span>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2.5 shrink-0 pl-1">
+                              <span className="text-[10px] font-mono font-black text-rose-500">{totalModelPay.toLocaleString()}đ</span>
                               <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
                                 isSelected ? 'bg-indigo-600 border-indigo-650' : 'border-slate-300 dark:border-slate-700'
                               }`}>
                                 {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3.5]" />}
                               </div>
-                            </div>
-                            
-                            <p className="font-extrabold text-slate-800 dark:text-slate-100 text-[11px] leading-tight tracking-tight mt-2 uppercase line-clamp-2 max-h-[30px] overflow-hidden">
-                              {bd.modelName}
-                            </p>
-
-                            <div className="pt-1">
-                              <span className="text-[9px] font-mono text-slate-400 block">{bd.operations.length} công đoạn</span>
-                              <span className="text-[10px] font-mono font-black text-rose-500 block leading-none mt-0.5">{totalModelPay.toLocaleString()}đ</span>
                             </div>
                           </div>
                         );
@@ -1273,8 +2025,8 @@ export default function ProductionTab({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Chọn thợ may (bấm ô để xem chi tiết lương & lịch sử):</p>
-                    <div className="grid grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-2">Chọn thợ may (Click chọn để mở trang chi tiết sổ giao việc & tính lương thợ):</p>
+                    <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
                       {workers.map(wk => {
                         const isSelected = activeWorkerId === wk.id;
                         const workerJobQuantity = workerJobs.filter(j => j.workerId === wk.id).reduce((sum, j) => sum + j.quantity, 0);
@@ -1282,55 +2034,82 @@ export default function ProductionTab({
                         return (
                           <div 
                             key={wk.id}
-                            onClick={() => setActiveWorkerId(isSelected ? null : wk.id)}
-                            className={`p-3 rounded-2xl border text-left flex flex-col justify-between cursor-pointer select-none transition duration-150 aspect-square ${
+                            onClick={() => {
+                              setActiveWorkerId(wk.id);
+                              setWorkerActiveTab('jobs');
+                              setWkJobModel('');
+                              setWkJobOps([]);
+                              setWkJobCustomPrices({});
+                              setWkJobQty(100);
+                              setWkPayAmount(0);
+                              setWkPayNote('');
+                              setWkPayDate(getCurrentDateStr());
+                              setWkJobDate(getCurrentDateStr());
+                            }}
+                            className={`p-2.5 rounded-xl border text-left flex items-center justify-between cursor-pointer select-none transition duration-150 ${
                               isSelected
-                                ? 'bg-indigo-50/70 border-indigo-400 dark:bg-indigo-950/30 text-indigo-950 dark:text-indigo-300 ring-2 ring-indigo-500/10'
+                                ? 'bg-indigo-50/75 border-indigo-400 dark:bg-indigo-950/30 text-indigo-950 dark:text-indigo-300 ring-2 ring-indigo-500/10'
                                 : 'bg-slate-50 border-slate-150 hover:bg-slate-100/75 dark:bg-zinc-900/50 dark:border-slate-800 text-slate-700 hover:border-slate-300'
                             }`}
                           >
-                            <div className="flex justify-between items-start">
-                              <Users className={`w-4 h-4 ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0 ${
+                                isSelected ? 'bg-indigo-650 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
+                              }`}>
+                                <Users className="w-3.5 h-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-slate-800 dark:text-slate-100 text-[11px] leading-tight tracking-tight uppercase truncate">
+                                  {wk.name}
+                                </p>
+                                <span className="text-[9px] font-mono text-slate-400 block mt-0.5">{workerJobQuantity.toLocaleString()} sản phẩm</span>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2.5 shrink-0 pl-1">
+                              <span className="text-[10px] font-mono font-black text-indigo-600 dark:text-indigo-400">{totalAcc.toLocaleString()}đ</span>
                               <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
                                 isSelected ? 'bg-indigo-600 border-indigo-650' : 'border-slate-300 dark:border-slate-700'
                               }`}>
                                 {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3.5]" />}
                               </div>
                             </div>
-                            
-                            <p className="font-extrabold text-slate-800 dark:text-slate-100 text-[11px] leading-tight tracking-tight mt-2 uppercase line-clamp-2 max-h-[30px] overflow-hidden">
-                              {wk.name}
-                            </p>
-
-                            <div className="pt-1">
-                              <span className="text-[9px] font-mono text-slate-400 block">{workerJobQuantity.toLocaleString()} sản phẩm</span>
-                              <span className="text-[10px] font-mono font-black text-indigo-600 dark:text-indigo-400 block leading-none mt-0.5">{totalAcc.toLocaleString()}đ</span>
-                            </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Detailed statistics card for active selected worker */}
+                    {/* Highly polished preview details card displayed immediately for chosen worker */}
                     {(() => {
-                      const activeWorker = workers.find(w => w.id === activeWorkerId);
+                      const activeWorker = workers.find(w => w.id === previewWorkerId);
                       if (!activeWorker) return null;
                       const workerJobQuantity = workerJobs.filter(j => j.workerId === activeWorker.id).reduce((sum, j) => sum + j.quantity, 0);
                       const totalAcc = workerJobs.filter(j => j.workerId === activeWorker.id).reduce((sum, j) => sum + j.totalAmount, 0);
                       const matchedJobs = workerJobs.filter(j => j.workerId === activeWorker.id);
+                      
+                      // Calculate unique products
+                      const uniqueProducts = Array.from(new Set(matchedJobs.map(j => j.modelName)));
+
+                      // Get assigned operation names
+                      const assignedTasks = (activeWorker.taskIds || []).map(tId => {
+                        const t = tasks.find(tk => tk.id === tId);
+                        return t ? t.name : '';
+                      }).filter(Boolean);
+
                       return (
                         <motion.div 
                           initial={{ opacity: 0, y: 5 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="mt-3 bg-slate-50 dark:bg-zinc-900/60 border border-slate-150 dark:border-slate-800/80 rounded-2xl p-4 space-y-2.5"
+                          className="mt-3 bg-slate-50 dark:bg-zinc-900/60 border border-slate-150 dark:border-slate-800/85 rounded-2xl p-4 space-y-3.5 shadow-sm"
                         >
                           <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-200 dark:border-slate-800">
                             <div>
-                              <p className="font-extrabold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-tight">
+                              <p className="text-[9px] uppercase font-black tracking-tight text-slate-400 block">👤 THỢ MAY ĐANG CHỌN</p>
+                              <p className="font-extrabold text-xs text-indigo-950 dark:text-slate-200 uppercase tracking-tight">
                                 {activeWorker.name}
                               </p>
                               {activeWorker.phone && (
-                                <p className="text-[10px] text-slate-405 font-mono mt-0.5">SĐT: {activeWorker.phone}</p>
+                                <p className="text-[9.5px] text-slate-400 font-mono mt-0.5">SĐT: {activeWorker.phone}</p>
                               )}
                             </div>
                             <button
@@ -1338,28 +2117,44 @@ export default function ProductionTab({
                                 e.stopPropagation();
                                 deleteWorker(activeWorker.id, activeWorker.name);
                               }}
-                              className="text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-zinc-800 p-1 rounded-lg transition"
-                              title="Xóa hồ sơ thợi may"
+                              className="text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-zinc-805 p-1 rounded-lg transition"
+                              title="Xóa hồ sơ thợ may"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-center">
-                            <div className="bg-white dark:bg-zinc-950 p-2 border border-slate-100 dark:border-slate-850 rounded-xl">
-                              <span className="text-[9px] text-slate-450 uppercase font-bold block">Tổng sản lượng:</span>
+                          <div className="grid grid-cols-2 gap-2 text-center text-[10px]">
+                            <div className="bg-white dark:bg-zinc-950 p-2.5 border border-slate-100 dark:border-slate-850 rounded-xl space-y-0.5">
+                              <span className="text-[8.5px] text-slate-455 uppercase font-extrabold block">TỔNG SẢN LƯỢNG</span>
                               <span className="font-mono text-xs font-black text-slate-800 dark:text-slate-200">{workerJobQuantity.toLocaleString()} cái</span>
                             </div>
-                            <div className="bg-white dark:bg-zinc-950 p-2 border border-slate-100 dark:border-slate-850 rounded-xl">
-                              <span className="text-[9px] text-slate-450 uppercase font-bold block">Công nợ lương:</span>
-                              <span className="font-mono text-xs font-black text-rose-500">{totalAcc.toLocaleString()}đ</span>
+                            <div className="bg-white dark:bg-zinc-950 p-2.5 border border-slate-100 dark:border-slate-850 rounded-xl space-y-0.5">
+                              <span className="text-[8.5px] text-slate-455 uppercase font-extrabold block">SỐ TIỀN CÔNG</span>
+                              <span className="font-mono text-xs font-black text-rose-500">+{totalAcc.toLocaleString()}đ</span>
+                            </div>
+                          </div>
+
+                          {/* Sản phẩm */}
+                          <div className="bg-white dark:bg-zinc-950 p-3 border border-slate-100 dark:border-slate-850 rounded-xl space-y-1.5">
+                            <span className="text-[8.5px] text-slate-455 uppercase font-extrabold block">👕 SẢN PHẨM KHAI THÁC</span>
+                            <div className="flex flex-wrap gap-1">
+                              {uniqueProducts.length === 0 ? (
+                                <span className="text-[9.5px] text-slate-400 italic">Chưa phát sinh sản phẩm gia công</span>
+                              ) : (
+                                uniqueProducts.map(pName => (
+                                  <span key={pName} className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 text-[9px] px-2 py-0.5 rounded font-extrabold border border-emerald-100/30 uppercase">
+                                    {pName}
+                                  </span>
+                                ))
+                              )}
                             </div>
                           </div>
 
                           {/* Công việc đảm nhận */}
                           <div className="bg-white dark:bg-zinc-950 p-3 border border-slate-100 dark:border-slate-850 rounded-xl space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-extrabold text-slate-450 uppercase mb-0.5">
-                              <span>Công việc đảm nhận:</span>
+                            <div className="flex justify-between items-center text-[8.5px] font-extrabold text-slate-455 uppercase mb-0.5">
+                              <span>🔧 CÔNG VIỆC/CÔNG ĐOẠN ĐẢM NHẬN</span>
                               {!isEditingWorkerTasks ? (
                                 <button
                                   type="button"
@@ -1367,13 +2162,13 @@ export default function ProductionTab({
                                     setIsEditingWorkerTasks(true);
                                     setEditingWorkerTaskIds(activeWorker.taskIds || []);
                                   }}
-                                  className="text-indigo-650 dark:text-indigo-400 font-extrabold hover:underline flex items-center gap-0.5 cursor-pointer text-[9.5px]"
+                                  className="text-indigo-650 dark:text-indigo-400 font-extrabold hover:underline flex items-center gap-0.5 cursor-pointer text-[9px]"
                                 >
                                   <Edit className="w-2.5 h-2.5" />
                                   <span>Gán việc</span>
                                 </button>
                               ) : (
-                                <div className="flex gap-2 text-[9.5px]">
+                                <div className="flex gap-2 text-[9px]">
                                   <button
                                     type="button"
                                     onClick={() => handleSaveWorkerTasks(activeWorker.id)}
@@ -1394,18 +2189,14 @@ export default function ProductionTab({
 
                             {!isEditingWorkerTasks ? (
                               <div className="flex flex-wrap gap-1">
-                                {(!activeWorker.taskIds || activeWorker.taskIds.length === 0) ? (
-                                  <span className="text-[10px] text-slate-400 italic">Chưa gán công việc cụ thể</span>
+                                {assignedTasks.length === 0 ? (
+                                  <span className="text-[9.5px] text-slate-400 italic">Chưa gán công việc hay tay nghề chi tiết</span>
                                 ) : (
-                                  activeWorker.taskIds.map(tId => {
-                                    const t = tasks.find(tk => tk.id === tId);
-                                    if (!t) return null;
-                                    return (
-                                      <span key={tId} className="bg-indigo-50/70 dark:bg-indigo-950/20 text-indigo-650 dark:text-indigo-450 text-[9.5px] px-2 py-0.5 rounded-md font-bold border border-indigo-100/10">
-                                        {t.name}
-                                      </span>
-                                    );
-                                  })
+                                  assignedTasks.map(name => (
+                                    <span key={name} className="bg-indigo-50/70 dark:bg-indigo-950/20 text-indigo-655 dark:text-indigo-450 text-[9px] px-2 py-0.5 rounded-md font-bold border border-indigo-100/10">
+                                      {name}
+                                    </span>
+                                  ))
                                 )}
                               </div>
                             ) : (
@@ -1418,7 +2209,7 @@ export default function ProductionTab({
                                       className={`flex items-start gap-1 p-1.5 rounded-md text-[9.5px] font-bold cursor-pointer transition select-none ${
                                         isChecked
                                           ? 'bg-indigo-50/60 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300'
-                                          : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-850 bg-slate-50 dark:bg-zinc-900'
+                                          : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-855 bg-slate-50 dark:bg-zinc-900'
                                       }`}
                                     >
                                       <input
@@ -1441,21 +2232,56 @@ export default function ProductionTab({
                             )}
                           </div>
 
-                          <div>
-                            <p className="text-[9px] font-extrabold text-slate-450 uppercase mb-1">Lịch sử nhận hàng gần đây (Tối đa 3 đợt):</p>
-                            <div className="space-y-1.5 max-h-[130px] overflow-y-auto pr-1 scrollbar-thin">
+                          {/* Quick details about recent assigned jobs with required formatting */}
+                          <div className="bg-white dark:bg-zinc-950 p-3 border border-slate-100 dark:border-slate-850 rounded-xl space-y-2">
+                            <span className="text-[8.5px] text-slate-455 uppercase font-extrabold block">📋 NHẬT KÝ LÀM VIỆC GẦN ĐÂY</span>
+                            <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1 scrollbar-thin">
                               {matchedJobs.length === 0 ? (
-                                <p className="text-[10px] text-slate-400 dark:text-slate-650 text-center py-1 font-semibold">Chưa phát sinh nhật ký công thợ.</p>
+                                <p className="text-[9.5px] text-slate-400 italic text-center py-1">Chưa có mẻ hàng gia công nào</p>
                               ) : (
-                                matchedJobs.slice(0, 3).map(j => (
-                                  <div key={j.id} className="flex justify-between items-center p-2 bg-white dark:bg-zinc-950 rounded-xl border border-slate-100 dark:border-slate-850 text-[10px] font-semibold">
-                                    <span className="truncate max-w-[85px] uppercase">{j.modelName}</span>
-                                    <span className="font-mono text-slate-500">{formatVietnameseDate(j.date)}</span>
-                                    <span className="font-mono text-emerald-600 font-extrabold">{j.quantity}c (+{j.totalAmount.toLocaleString()}đ)</span>
-                                  </div>
-                                ))
+                                matchedJobs.slice(0, 3).map(j => {
+                                  const associatedBd = operationBreakdowns.find(bd => bd.modelName === j.modelName);
+                                  const opNames = associatedBd
+                                    ? associatedBd.operations
+                                        .filter(o => j.selectedOperationIds.includes(o.id))
+                                        .map(o => o.name)
+                                        .join(', ')
+                                    : 'Công đoạn';
+                                  return (
+                                    <div key={j.id} className="text-[9.5px] border-b border-slate-100 dark:border-slate-850 pb-1.5 last:border-0 last:pb-0">
+                                      <div className="flex justify-between items-center text-slate-500">
+                                        <span className="font-extrabold text-slate-800 dark:text-slate-200">Sản phẩm: {j.modelName} ({j.quantity}c)</span>
+                                        <span className="font-mono text-indigo-600">+{j.totalAmount.toLocaleString()}đ</span>
+                                      </div>
+                                      <p className="text-slate-400 font-medium truncate mt-0.5" title={opNames}>• Công việc: {opNames}</p>
+                                    </div>
+                                  );
+                                })
                               )}
                             </div>
+                          </div>
+
+                          {/* Navigation button to open the full detailed records page */}
+                          <div className="pt-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveWorkerId(activeWorker.id);
+                                setWorkerActiveTab('jobs');
+                                setWkJobModel('');
+                                setWkJobOps([]);
+                                setWkJobCustomPrices({});
+                                setWkJobQty(100);
+                                setWkPayAmount(0);
+                                setWkPayNote('');
+                                setWkPayDate(getCurrentDateStr());
+                                setWkJobDate(getCurrentDateStr());
+                              }}
+                              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10.5px] font-black uppercase text-center transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                            >
+                              <Layers className="w-4 h-4" />
+                              <span>Mở sổ giao việc & trả lương thợ chi tiết →</span>
+                            </button>
                           </div>
                         </motion.div>
                       );
@@ -1587,6 +2413,7 @@ export default function ProductionTab({
               </div>
             </div>
           </motion.div>
+          )
         ) : (
           <motion.div
             key="sub-materials-tab"
@@ -2339,55 +3166,7 @@ export default function ProductionTab({
               </button>
             </div>
 
-            {/* Toggle Mode: Single vs Multi vs Op Template */}
-            <div className="bg-slate-105 dark:bg-zinc-950 p-1 rounded-2xl flex border border-slate-250 dark:border-slate-850 gap-1 flex-wrap sm:flex-nowrap">
-              <button
-                type="button"
-                onClick={() => {
-                  setAssignmentMode('single');
-                  setIsMultipleWorkers(false);
-                }}
-                className={`flex-1 py-1.5 text-center text-[11px] font-extrabold rounded-xl transition cursor-pointer ${
-                  assignmentMode === 'single'
-                    ? 'bg-white dark:bg-zinc-800 text-indigo-650 dark:text-indigo-400 shadow-xs'
-                    : 'text-slate-505 hover:text-slate-700'
-                }`}
-              >
-                Giao 1 thợ
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAssignmentMode('bulk_split');
-                  setIsMultipleWorkers(true);
-                  distributeQuantityEvenly(jobQuantity, selectedWorkerIds);
-                }}
-                className={`flex-1 py-1.5 text-center text-[11px] font-extrabold rounded-xl transition cursor-pointer ${
-                  assignmentMode === 'bulk_split'
-                    ? 'bg-white dark:bg-zinc-800 text-indigo-650 dark:text-indigo-400 shadow-xs'
-                    : 'text-slate-505 hover:text-slate-700'
-                }`}
-              >
-                Phân sỉ đều các thợ
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAssignmentMode('op_template');
-                  setIsMultipleWorkers(false);
-                  if (selectedModelForJob) {
-                    initOpAssignments(selectedModelForJob, jobQuantity);
-                  }
-                }}
-                className={`flex-1 py-1.5 text-center text-[11px] font-extrabold rounded-xl transition cursor-pointer ${
-                  assignmentMode === 'op_template'
-                    ? 'bg-white dark:bg-zinc-800 text-indigo-650 dark:text-indigo-400 shadow-xs'
-                    : 'text-slate-505 hover:text-slate-700'
-                }`}
-              >
-                Chia nhanh theo mẫu ⚙
-              </button>
-            </div>
+
 
             <div className="space-y-4">
               {/* Product list selector */}
@@ -2494,6 +3273,51 @@ export default function ProductionTab({
                               const price = customOpPrices[o.id] !== undefined ? customOpPrices[o.id] : o.price;
                               return sum + price;
                             }, 0).toLocaleString()}đ / cái
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedWorkerId && selectedModelForJob && (
+                    <div className="p-3 bg-gradient-to-r from-emerald-50/50 to-indigo-50/50 dark:from-zinc-900/50 dark:to-zinc-950 rounded-xl border border-indigo-100/55 dark:border-indigo-950/30 space-y-2 text-xs">
+                      <p className="text-[9px] uppercase font-black tracking-tight text-emerald-600 dark:text-emerald-450 flex items-center gap-1 leading-none">
+                        <span>🏷️ VÉ PHÂN CÔNG GIA CÔNG CHI TIẾT ĐÃ CHỌN</span>
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-[10.5px] leading-relaxed">
+                        <div className="bg-white dark:bg-zinc-950 p-2 rounded-lg border border-slate-100 dark:border-zinc-850">
+                          <span className="text-slate-450 font-mono block text-[8px] uppercase">Thợ May Gia Công:</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-200 uppercase">
+                            {workers.find(w => w.id === selectedWorkerId)?.name || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="bg-white dark:bg-zinc-950 p-2 rounded-lg border border-slate-100 dark:border-zinc-850">
+                          <span className="text-slate-455 font-mono block text-[8px] uppercase">Mẫu Sản Phẩm:</span>
+                          <span className="font-extrabold text-indigo-700 dark:text-indigo-400 uppercase">
+                            {selectedModelForJob} ({jobQuantity} cái)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-white dark:bg-zinc-950 p-2 rounded-lg border border-slate-100 dark:border-zinc-850">
+                        <span className="text-slate-455 font-mono block text-[8px] uppercase">Các Công Việc Thực Hiện:</span>
+                        <span className="font-extrabold text-slate-750 dark:text-slate-300">
+                          {operationBreakdowns.find(bd => bd.modelName === selectedModelForJob)?.operations
+                            .filter(o => jobCheckedOps.includes(o.id))
+                            .map(o => o.name)
+                            .join(', ') || 'Chưa tích chọn công đoạn nào'}
+                        </span>
+                      </div>
+                      <div className="bg-white dark:bg-zinc-950 p-2 rounded-lg border border-slate-100 dark:border-zinc-850 flex justify-between items-center">
+                        <span className="text-slate-455 font-mono text-[8px] uppercase">Tổng Tiền Công Ước Tính:</span>
+                        <span className="font-mono text-xs font-black text-rose-500">
+                          {(() => {
+                            const unitPriceSum = operationBreakdowns.find(bd => bd.modelName === selectedModelForJob)?.operations
+                              .filter(o => jobCheckedOps.includes(o.id))
+                              .reduce((sum, o) => {
+                                const price = customOpPrices[o.id] !== undefined ? customOpPrices[o.id] : o.price;
+                                return sum + price;
+                              }, 0) || 0;
+                            return (unitPriceSum * jobQuantity).toLocaleString();
+                          })()}đ
                         </span>
                       </div>
                     </div>

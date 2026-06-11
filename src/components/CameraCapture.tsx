@@ -5,6 +5,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Camera, RefreshCw, X, Check, Trash2, Upload, AlertCircle } from 'lucide-react';
+import { LazyImage } from './LazyImage';
 
 interface CameraCaptureProps {
   onCapture: (dataUrl: string | null) => void;
@@ -168,7 +169,7 @@ export default function CameraCapture({
         {photo ? (
           /* Captured photo preview state */
           <div className="relative w-full aspect-[4/3] max-h-[220px] bg-slate-900 group">
-            <img
+            <LazyImage
               src={photo}
               alt="Hóa đơn / Đơn hàng chụp mẫu"
               referrerPolicy="no-referrer"

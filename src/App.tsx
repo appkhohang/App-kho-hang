@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
@@ -21,6 +21,7 @@ import { auth, db } from './utils/firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { formatVietnameseDate } from './utils/dateUtils';
+import { useAndroidBack } from './hooks/useAndroidBack';
 
 function getSavedArray<T>(key: string, fallback: T[]): T[] {
   const value = getSavedState<T[]>(key, fallback);
@@ -172,6 +173,11 @@ export default function App() {
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [showColorDropdown, setShowColorDropdown] = useState(false);
   
+  // Register Android back handlers for dropdowns and menus
+  useAndroidBack(isMobileMenuOpen, () => setIsMobileMenuOpen(false));
+  useAndroidBack(showNotificationsDropdown, () => setShowNotificationsDropdown(false));
+  useAndroidBack(showColorDropdown, () => setShowColorDropdown(false));
+  
   // Real-time auto updated dates and clock
   const [currentLiveTime, setCurrentLiveTime] = useState<string>(() => {
     const d = new Date();
@@ -184,6 +190,46 @@ export default function App() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => localStorage.getItem("xuongan_last_sync") || null);
   const [showCloudInfo, setShowCloudInfo] = useState(false);
+
+  // Tab scroll positions persistence
+  const tabScrollPositions = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    const handleScroll = () => {
+      tabScrollPositions.current[activeTab] = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [activeTab]);
+
+  useEffect(() => {
+    const savedPos = tabScrollPositions.current[activeTab] || 0;
+    
+    let timer1: any;
+    let timer2: any;
+    let timer3: any;
+    
+    const restore = () => {
+      window.scrollTo({
+        top: savedPos,
+        behavior: 'instant' as any
+      });
+    };
+
+    // Restore multiple times at different ticks to guarantee that different custom components with varied render times stabilize correctly.
+    restore();
+    timer1 = setTimeout(restore, 40);
+    timer2 = setTimeout(restore, 120);
+    timer3 = setTimeout(restore, 250);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  }, [activeTab]);
 
   const getUserRole = (): 'admin' | 'staff' | 'viewer' => {
     const email = authState.email?.toLowerCase().trim();
@@ -489,6 +535,24 @@ export default function App() {
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       isPoppingState.current = true;
+
+      // 1. Intercept if there are any active modal/drawer handlers
+      const w = window as any;
+      const handlers = w.androidBackHandlers || [];
+      if (handlers.length > 0) {
+        const lastHandler = handlers[handlers.length - 1];
+        const handled = lastHandler();
+        if (handled) {
+          // Since browser popped history, push state back to keep the history depth invariant
+          window.history.pushState({ tab: activeTab }, '', '');
+          setTimeout(() => {
+            isPoppingState.current = false;
+          }, 80);
+          return;
+        }
+      }
+
+      // 2. Default tab restoration
       if (event.state && event.state.tab) {
         setActiveTab(event.state.tab);
       } else {
@@ -499,7 +563,28 @@ export default function App() {
       }, 80);
     };
 
+    // 3. Native Android Wrapper hardware button event handler (Cordova/Capacitor/WebView)
+    const handleAndroidHardwareButton = (e: Event) => {
+      const w = window as any;
+      const handlers = w.androidBackHandlers || [];
+      if (handlers.length > 0) {
+        const lastHandler = handlers[handlers.length - 1];
+        const handled = lastHandler();
+        if (handled) {
+          e.preventDefault();
+          return;
+        }
+      }
+
+      // If no open overlays, back button navigates back to 'home' tab first
+      if (activeTab !== 'home') {
+        e.preventDefault();
+        setActiveTab('home');
+      }
+    };
+
     window.addEventListener('popstate', handlePopState);
+    document.addEventListener('backbutton', handleAndroidHardwareButton);
     
     // Set initial state
     if (!window.history.state) {
@@ -508,8 +593,9 @@ export default function App() {
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('backbutton', handleAndroidHardwareButton);
     };
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!isPoppingState.current) {
