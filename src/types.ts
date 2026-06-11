@@ -143,6 +143,7 @@ export interface WorkerJob {
   date: string;
   createdAt: number;
   customPrices?: Record<string, number>;
+  paidAmount?: number;
 }
 
 export interface RawMaterial {

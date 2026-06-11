@@ -174,44 +174,44 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
                     <span className="text-xs font-bold text-indigo-400 font-mono tracking-widest uppercase">XƯỞNG MAY AN (ĐT)</span>
                     <span className="text-[10px] text-slate-400 font-mono">{formatVietnameseDate(new Date().toISOString().split("T")[0])}</span>
                   </div>
-                  <h2 className="text-base font-bold text-white font-serif">BẢNG PHÂN TÍCH SẢN LƯỢNG & PHÍ SHEEPING</h2>
+                  <h2 className="text-base font-bold text-white font-serif">BẢNG PHÂN TÍCH SẢN LƯỢNG & PHÍ SHIPPING</h2>
                 </div>
 
                 {/* WEEKLY METRICS BLOCK */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-350 uppercase tracking-wider font-mono">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
                     <CalendarCheck className="w-4.5 h-4.5 text-indigo-400" />
                     <span>THỐNG KÊ CHI TIẾT THEO TUẦN (MỚI NHẤT)</span>
                   </div>
 
                   <div className="bg-slate-950/30 border border-slate-800 rounded-xl p-4 space-y-3">
-                    <p className="text-xs font-semibold text-slate-400 border-b border-slate-850 pb-1.5">{latestWeekLabel}</p>
+                    <p className="text-xs font-semibold text-slate-400 border-b border-slate-800 pb-1.5">{latestWeekLabel}</p>
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-450 uppercase font-mono">1. Tổng số sản phẩm may</span>
+                        <span className="text-[9px] text-slate-400 uppercase font-mono">1. Tổng số sản phẩm may</span>
                         <p className="text-sm font-extrabold text-white font-mono">{wQty.toLocaleString()} chiếc</p>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-450 uppercase font-mono">2. Tổng tiền công may (SL x Đơn giá)</span>
+                        <span className="text-[9px] text-slate-400 uppercase font-mono">2. Tổng tiền công may (SL x Đơn giá)</span>
                         <p className="text-sm font-extrabold text-indigo-400 font-mono">{wSewValue.toLocaleString()} đ</p>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-450 uppercase font-mono">3. Tổng ship ĐT ➔ TP</span>
-                        <p className="text-xs font-bold text-slate-350 font-mono">{wShipĐT_TP.toLocaleString()} đ</p>
+                        <span className="text-[9px] text-slate-400 uppercase font-mono">3. Tổng ship ĐT ➔ TP</span>
+                        <p className="text-xs font-bold text-slate-300 font-mono">{wShipĐT_TP.toLocaleString()} đ</p>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-450 uppercase font-mono">4. Tổng ship TP ➔ ĐT</span>
-                        <p className="text-xs font-bold text-slate-350 font-mono">{wShipTP_ĐT.toLocaleString()} đ</p>
+                        <span className="text-[9px] text-slate-400 uppercase font-mono">4. Tổng ship TP ➔ ĐT</span>
+                        <p className="text-xs font-bold text-slate-300 font-mono">{wShipTP_ĐT.toLocaleString()} đ</p>
                       </div>
                     </div>
 
                     <div className="border-t border-slate-800/80 pt-2.5 flex justify-between items-center text-xs">
                       <span className="text-slate-400">Chênh lệch Ship (TP➔ĐT trừ ĐT➔TP):</span>
-                      <span className={`font-mono font-black ${wNetShip >= 0 ? 'text-emerald-400' : 'text-red-405'}`}>
+                      <span className={`font-mono font-black ${wNetShip >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {wNetShip >= 0 ? '+' : ''}{wNetShip.toLocaleString()} đ
                       </span>
                     </div>
@@ -220,39 +220,39 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
 
                 {/* MONTHLY METRICS BLOCK */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-350 uppercase tracking-wider font-mono">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
                     <Calendar className="w-4.5 h-4.5 text-emerald-400" />
                     <span>THỐNG KÊ TỔNG HỢP THEO THÁNG</span>
                   </div>
 
                   <div className="bg-slate-950/30 border border-slate-800 rounded-xl p-4 space-y-3">
-                    <p className="text-xs font-semibold text-emerald-400 border-b border-slate-850 pb-1.5">{currentMonthKey}</p>
+                    <p className="text-xs font-semibold text-emerald-400 border-b border-slate-800 pb-1.5">{currentMonthKey}</p>
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-450 uppercase font-mono">Tổng SL may cả tháng</span>
+                        <span className="text-[9px] text-slate-400 uppercase font-mono">Tổng SL may cả tháng</span>
                         <p className="text-sm font-extrabold text-white font-mono">{mQty.toLocaleString()} chiếc</p>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-450 uppercase font-mono">Tổng tiền công may trong tháng</span>
+                        <span className="text-[9px] text-slate-400 uppercase font-mono">Tổng tiền công may trong tháng</span>
                         <p className="text-sm font-extrabold text-emerald-400 font-mono">{mSewValue.toLocaleString()} đ</p>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-450 uppercase font-mono">Nửa phí ship gửi lên ĐT-TP</span>
-                        <p className="text-xs font-bold text-slate-350 font-mono">{mShipĐT_TP.toLocaleString()} đ</p>
+                        <span className="text-[9px] text-slate-400 uppercase font-mono">Nửa phí ship gửi lên ĐT-TP</span>
+                        <p className="text-xs font-bold text-slate-300 font-mono">{mShipĐT_TP.toLocaleString()} đ</p>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-450 uppercase font-mono">Nửa phí ship gửi về TP-ĐT</span>
-                        <p className="text-xs font-bold text-slate-350 font-mono">{mShipTP_ĐT.toLocaleString()} đ</p>
+                        <span className="text-[9px] text-slate-400 uppercase font-mono">Nửa phí ship gửi về TP-ĐT</span>
+                        <p className="text-xs font-bold text-slate-300 font-mono">{mShipTP_ĐT.toLocaleString()} đ</p>
                       </div>
                     </div>
 
                     <div className="border-t border-slate-800/80 pt-2.5 flex justify-between items-center text-xs">
                       <span className="text-slate-400">Hiệu số chênh lệch ship cả tháng:</span>
-                      <span className={`font-mono font-black ${mNetShip >= 0 ? 'text-emerald-400' : 'text-red-405'}`}>
+                      <span className={`font-mono font-black ${mNetShip >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {mNetShip >= 0 ? '+' : ''}{mNetShip.toLocaleString()} đ
                       </span>
                     </div>
@@ -260,14 +260,14 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
                 </div>
 
                 {/* Footer security stamp details */}
-                <div className="text-center pt-2 font-mono text-[9px] text-slate-550 border-t border-slate-850/60 leading-relaxed">
+                <div className="text-center pt-2 font-mono text-[9px] text-slate-500 border-t border-slate-800 pb-2 leading-relaxed">
                   <p>MÃ HOÁ HỆ THỐNG XƯỞNG AN - BÁO CÁO CÓ GIÁ TRỊ PHÁP LÝ NỘI BỘ</p>
                   <p className="mt-0.5">CHUYỂN GIAO THIẾT BỊ LIÊN TỤC VÀ ĐƯỢC CHỐT TRỰC TUYẾN CHẶT CHẼ</p>
                 </div>
               </div>
 
               {/* Bottom footer bar */}
-              <div className="p-4 bg-slate-950 border-t border-slate-850 text-center flex justify-between items-center text-xs text-slate-400">
+              <div className="p-4 bg-slate-950 border-t border-slate-800 text-center flex justify-between items-center text-xs text-slate-400">
                 <span>Di chuột/tay vào tiêu đề để kéo di dời</span>
                 <button
                   type="button"

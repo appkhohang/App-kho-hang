@@ -111,6 +111,7 @@ export default function ProductionTab({
   const [showAddRecipe, setShowAddRecipe] = useState(false);
   const [showRunProduction, setShowRunProduction] = useState(false);
   const [showReplenishMaterial, setShowReplenishMaterial] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
 
   // Form states - Operation breakdowns
   const [newModelName, setNewModelName] = useState('');
@@ -189,11 +190,19 @@ export default function ProductionTab({
   const [prodQty, setProdQty] = useState<number>(500);
   const [prodDate, setProdDate] = useState(getCurrentDateStr());
 
+  // Expanded job rows and inline payment inputs
+  const [expandedJobIds, setExpandedJobIds] = useState<Record<string, boolean>>({});
+  const [payInputs, setPayInputs] = useState<Record<string, string>>({});
+  const [overallPayAmount, setOverallPayAmount] = useState<string>('');
+  const [showOverallPayPanel, setShowOverallPayPanel] = useState<boolean>(false);
+
   // Quick stats
   const totalWorkers = workers.length;
   const totalMaterials = rawMaterials.length;
   const lowStockMaterials = rawMaterials.filter(m => m.currentStock <= m.minAlertLevel);
   const totalLaborCostAccumulated = workerJobs.reduce((sum, j) => sum + j.totalAmount, 0);
+  const totalPaidAccumulated = workerJobs.reduce((sum, j) => sum + (j.paidAmount || 0), 0);
+  const totalLaborCostRemaining = workerJobs.reduce((sum, j) => sum + (j.totalAmount - (j.paidAmount || 0)), 0);
 
   // Form Ops functions
   const addTempOp = () => {
@@ -1065,22 +1074,7 @@ export default function ProductionTab({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <button
-              onClick={() => {
-                const proceed = confirm(`Xác nhận xóa hồ sơ thợ "${activeWorker.name}"? Thao tác này KHÔNG xóa nhật ký các đợt may đã lưu.`);
-                if (proceed) {
-                  setWorkers(workers.filter(w => w.id !== activeWorker.id));
-                  setActiveWorkerId(null);
-                }
-              }}
-              className="p-2.5 bg-red-50 hover:bg-red-100 text-red-650 dark:bg-red-950/20 dark:hover:bg-red-950/40 border border-red-200 dark:border-transparent rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-              title="Xóa hồ sơ thợ may"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Xóa hồ sơ thợ</span>
-            </button>
-          </div>
+
         </div>
 
         {/* Worker Info, Phone, and Stats Grid */}
@@ -1398,7 +1392,7 @@ export default function ProductionTab({
                           const currentVal = wkJobCustomPrices[o.id] !== undefined ? wkJobCustomPrices[o.id] : o.price;
                           return (
                             <div key={o.id} className="flex items-center justify-between gap-1.5 p-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg">
-                              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-805 dark:text-slate-200 min-w-0 flex-1 select-none">
+                              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800 dark:text-slate-200 min-w-0 flex-1 select-none">
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
@@ -1409,7 +1403,7 @@ export default function ProductionTab({
                                       setWkJobOps([...wkJobOps, o.id]);
                                     }
                                   }}
-                                  className="rounded border-slate-305 accent-indigo-600 scale-100"
+                                  className="rounded border-slate-300 accent-indigo-600 scale-100"
                                 />
                                 <span className="truncate">{o.name}</span>
                               </label>
@@ -1731,13 +1725,13 @@ export default function ProductionTab({
 
       {/* Sub tabs header selection */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/40 dark:bg-slate-900/40 p-1.5 rounded-2xl border border-slate-200/50 dark:border-slate-800 backdrop-blur-xs select-none">
-        <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl w-full sm:w-auto">
+        <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl w-full">
           <button
             onClick={() => setSubTab('breakdown')}
-            className={`flex-grow sm:flex-grow-0 py-2.5 px-5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
+            className={`flex-grow py-2.5 px-5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
               subTab === 'breakdown'
-                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-550 dark:text-slate-400 hover:text-slate-800'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-sm font-black'
+                : 'text-slate-550 dark:text-slate-400 hover:text-slate-800 font-bold'
             }`}
           >
             <Scissors className="w-3.5 h-3.5" />
@@ -1745,117 +1739,16 @@ export default function ProductionTab({
           </button>
           <button
             onClick={() => setSubTab('materials')}
-            className={`flex-grow sm:flex-grow-0 py-2.5 px-5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
+            className={`flex-grow py-2.5 px-5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
               subTab === 'materials'
-                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-550 dark:text-slate-400 hover:text-slate-800'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-sm font-black'
+                : 'text-slate-550 dark:text-slate-400 hover:text-slate-800 font-bold'
             }`}
           >
             <Package className="w-3.5 h-3.5" />
             <span>Kho Nguyên Liệu & Định Mức</span>
           </button>
         </div>
-
-        {subTab === 'breakdown' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={exportWorkerJobsToExcel}
-              className="py-2 px-3 bg-emerald-55 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 border border-emerald-250 dark:border-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Xuất bảng Excel lương nhân công chi tiết và tổng hợp công nợ thợ"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Xuất Excel Nhân Công</span>
-            </button>
-            <button
-              onClick={() => setShowAddWorker(true)}
-              className="py-2 px-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-855 border border-slate-200 dark:border-slate-800 text-slate-705 dark:text-slate-350 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Users className="w-3.5 h-3.5 text-indigo-600" />
-              <span>+ Thêm thợ</span>
-            </button>
-            <button
-              onClick={() => setShowAddTaskModal(true)}
-              className="py-2 px-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-855 border border-slate-200 dark:border-slate-800 text-slate-705 dark:text-slate-350 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              title="Quản lý danh sách các công việc mẫu trong xưởng"
-            >
-              <CheckSquare className="w-3.5 h-3.5 text-indigo-600" />
-              <span>+ Quản lý công việc</span>
-            </button>
-            <button
-              onClick={() => setShowAddBreakdown(true)}
-              className="py-2 px-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-850 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-350 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Scissors className="w-3.5 h-3.5 text-indigo-600" />
-              <span>+ Tạo bảng công đoạn</span>
-            </button>
-            <button
-              onClick={() => {
-                if (operationBreakdowns.length === 0) {
-                  alert('Vui lòng lập ít nhất 1 bảng phân bổ công đoạn mốc chiếc trước khi giao việc!');
-                  return;
-                }
-                if (workers.length === 0) {
-                  alert('Vui lòng tạo hồ sơ thợ may trước!');
-                  return;
-                }
-                setShowAddJob(true);
-              }}
-              className="py-2 px-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/10 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Giao việc / Nhật ký công thợ</span>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowAddMaterial(true)}
-              className="py-2 px-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-850 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-350 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Thêm loại vải/vật tư</span>
-            </button>
-            <button
-              onClick={() => {
-                if (rawMaterials.length === 0) {
-                  alert('Hãy tạo danh mục nguyên liệu trước khi nhập kho sỉ lẻ!');
-                  return;
-                }
-                setShowReplenishMaterial(true);
-              }}
-              className="py-2 px-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-850 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-350 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-emerald-600 animate-spin-slow" />
-              <span>Mở rộng / Nhập Kho</span>
-            </button>
-            <button
-              onClick={() => {
-                if (rawMaterials.length === 0) {
-                  alert('Vui lòng khởi tạo ít nhất 1 loại nguyên liệu (vải) trong kho trước!');
-                  return;
-                }
-                setShowAddRecipe(true);
-              }}
-              className="py-2 px-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-850 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-350 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Định mức mẫu mã</span>
-            </button>
-            <button
-              onClick={() => {
-                if (materialRecipes.length === 0) {
-                  alert('Vui lòng lập bảng định mức hao hụt cho một mẫu sản phẩm trước khi khởi chạy đợt sản xuất!');
-                  return;
-                }
-                setShowRunProduction(true);
-              }}
-              className="py-2 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/10 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Sản xuất đợt hàng mới</span>
-            </button>
-          </div>
-        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -1975,10 +1868,10 @@ export default function ProductionTab({
                             {activeBd.operations.map((op, idx) => {
                               const workerOpt = workers.find(w => w.id === op.defaultWorkerId);
                               return (
-                                <div key={op.id} className="flex justify-between items-center text-[11px] text-slate-100 dark:text-slate-400 pb-1.5 border-b border-slate-100/50 dark:border-zinc-850 font-semibold gap-2">
+                                <div key={op.id} className="flex justify-between items-center text-[11px] text-slate-700 dark:text-slate-300 pb-1.5 border-b border-slate-100/50 dark:border-zinc-850 font-semibold gap-2">
                                   <div className="flex items-center gap-1 shrink-0 truncate max-w-[155px]">
-                                    <span className="text-slate-450">{idx + 1}.</span>
-                                    <span className="truncate text-slate-800 dark:text-slate-205">{op.name}</span>
+                                    <span className="text-slate-500 dark:text-slate-400 font-bold">{idx + 1}.</span>
+                                    <span className="truncate text-slate-850 dark:text-slate-100 font-extrabold">{op.name}</span>
                                     <span className="text-[9px] bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-slate-400 px-1 py-0.2 rounded font-mono shrink-0">
                                       x{op.multiplier || 1}
                                     </span>
@@ -1989,14 +1882,14 @@ export default function ProductionTab({
                                         👤 {workerOpt.name}
                                       </span>
                                     )}
-                                    <span className="font-mono text-slate-900 dark:text-slate-205 shrink-0">+{op.price.toLocaleString()}đ</span>
+                                    <span className="font-mono text-slate-900 dark:text-slate-105 font-black shrink-0">+{op.price.toLocaleString()}đ</span>
                                   </div>
                                 </div>
                               );
                             })}
                           </div>
                           
-                          <div className="pt-2 font-black text-rose-500 text-xs flex justify-between items-center bg-white dark:bg-zinc-950 p-2.5 rounded-xl border border-rose-100/40 dark:border-rose-950/20">
+                          <div className="pt-2 font-black text-rose-500 text-xs flex justify-between items-center bg-white dark:bg-zinc-950 p-2.5 rounded-xl border border-rose-100/40 dark:border-rose-955/20">
                             <span>TỔNG ĐƠN GIÁ CHI CÔNG:</span>
                             <span className="font-mono text-[13px]">{totalModelPay.toLocaleString()}đ</span>
                           </div>
@@ -2011,7 +1904,7 @@ export default function ProductionTab({
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-xs">
                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center gap-2">
-                    <Users className="w-4.5 h-4.5 text-indigo-600" />
+                    <Users className="w-4.5 h-4.5 text-indigo-650" />
                     <h3 className="font-extrabold text-sm text-slate-800 dark:text-slate-200 uppercase tracking-tight">Danh sách thợ gia công</h3>
                   </div>
                   <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950 font-mono text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full font-bold">
@@ -2025,55 +1918,81 @@ export default function ProductionTab({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-2">Chọn thợ may (Click chọn để mở trang chi tiết sổ giao việc & tính lương thợ):</p>
-                    <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 px-1 bg-slate-50/50 dark:bg-slate-900/50 py-1 rounded-lg">
+                      <span className="text-slate-500 dark:text-slate-400">Danh bạ thợ may</span>
+                      <span className="text-rose-500 dark:text-rose-455 font-black text-[9px] lowercase tracking-normal flex items-center gap-0.5">Gạt sang trái (←) để xoá</span>
+                    </div>
+
+                    <div className="hide-scrollbar space-y-2 max-h-[240px] overflow-y-auto pr-1 scrollbar-thin">
                       {workers.map(wk => {
                         const isSelected = activeWorkerId === wk.id;
                         const workerJobQuantity = workerJobs.filter(j => j.workerId === wk.id).reduce((sum, j) => sum + j.quantity, 0);
                         const totalAcc = workerJobs.filter(j => j.workerId === wk.id).reduce((sum, j) => sum + j.totalAmount, 0);
                         return (
-                          <div 
-                            key={wk.id}
-                            onClick={() => {
-                              setActiveWorkerId(wk.id);
-                              setWorkerActiveTab('jobs');
-                              setWkJobModel('');
-                              setWkJobOps([]);
-                              setWkJobCustomPrices({});
-                              setWkJobQty(100);
-                              setWkPayAmount(0);
-                              setWkPayNote('');
-                              setWkPayDate(getCurrentDateStr());
-                              setWkJobDate(getCurrentDateStr());
-                            }}
-                            className={`p-2.5 rounded-xl border text-left flex items-center justify-between cursor-pointer select-none transition duration-150 ${
-                              isSelected
-                                ? 'bg-indigo-50/75 border-indigo-400 dark:bg-indigo-950/30 text-indigo-950 dark:text-indigo-300 ring-2 ring-indigo-500/10'
-                                : 'bg-slate-50 border-slate-150 hover:bg-slate-100/75 dark:bg-zinc-900/50 dark:border-slate-800 text-slate-700 hover:border-slate-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0 ${
-                                isSelected ? 'bg-indigo-650 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
-                              }`}>
-                                <Users className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-extrabold text-slate-800 dark:text-slate-100 text-[11px] leading-tight tracking-tight uppercase truncate">
-                                  {wk.name}
-                                </p>
-                                <span className="text-[9px] font-mono text-slate-400 block mt-0.5">{workerJobQuantity.toLocaleString()} sản phẩm</span>
-                              </div>
+                          <div key={wk.id} className="relative overflow-hidden rounded-xl">
+                            {/* Swipe left to delete background element */}
+                            <div 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteWorker(wk.id, wk.name);
+                              }}
+                              className="absolute right-0 top-0 bottom-0 w-[80px] bg-red-600 dark:bg-rose-700 text-white flex flex-col items-center justify-center cursor-pointer z-0 select-none hover:bg-red-700 transition"
+                            >
+                              <Trash2 className="w-4 h-4 mb-0.5 text-white animate-pulse" />
+                              <span className="text-[9.5px] font-black uppercase tracking-wider text-center px-1">Xoá Thợ</span>
                             </div>
-                            
-                            <div className="flex items-center gap-2.5 shrink-0 pl-1">
-                              <span className="text-[10px] font-mono font-black text-indigo-600 dark:text-indigo-400">{totalAcc.toLocaleString()}đ</span>
-                              <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
-                                isSelected ? 'bg-indigo-600 border-indigo-650' : 'border-slate-300 dark:border-slate-700'
-                              }`}>
-                                {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3.5]" />}
+
+                            <motion.div 
+                              drag="x"
+                              dragConstraints={{ left: -80, right: 0 }}
+                              dragElastic={{ left: 0.1, right: 0.5 }}
+                              onDragEnd={(e, info) => {
+                                if (info.offset.x < -65) {
+                                  deleteWorker(wk.id, wk.name);
+                                }
+                              }}
+                              onClick={() => {
+                                setActiveWorkerId(wk.id);
+                                setWorkerActiveTab('jobs');
+                                setWkJobModel('');
+                                setWkJobOps([]);
+                                setWkJobCustomPrices({});
+                                setWkJobQty(100);
+                                setWkPayAmount(0);
+                                setWkPayNote('');
+                                setWkPayDate(getCurrentDateStr());
+                                setWkJobDate(getCurrentDateStr());
+                              }}
+                              className={`p-2.5 rounded-xl border text-left flex items-center justify-between cursor-pointer select-none transition duration-150 relative z-10 bg-white dark:bg-slate-900 ${
+                                isSelected
+                                  ? 'bg-indigo-50/75 border-indigo-400 dark:bg-indigo-950/30 text-indigo-950 dark:text-indigo-300 ring-2 ring-indigo-500/10'
+                                  : 'bg-slate-50 border-slate-150 hover:bg-slate-100/75 dark:bg-zinc-900/50 dark:border-slate-800 text-slate-700 hover:border-slate-300'
+                              }`}
+                              style={{ x: 0 }}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 pointer-events-none">
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0 ${
+                                  isSelected ? 'bg-indigo-650 text-white shadow-xs' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
+                                }`}>
+                                  <Users className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-extrabold text-slate-800 dark:text-slate-100 text-[11px] leading-tight tracking-tight uppercase truncate">
+                                    {wk.name}
+                                  </p>
+                                  <span className="text-[9px] font-mono text-slate-400 block mt-0.5">{workerJobQuantity.toLocaleString()} sản phẩm</span>
+                                </div>
                               </div>
-                            </div>
+                              
+                              <div className="flex items-center gap-2.5 shrink-0 pl-1 pointer-events-none">
+                                <span className="text-[10px] font-mono font-black text-indigo-600 dark:text-indigo-400">{totalAcc.toLocaleString()}đ</span>
+                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                                  isSelected ? 'bg-indigo-600 border-indigo-650' : 'border-slate-300 dark:border-slate-700'
+                                }`}>
+                                  {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3.5]" />}
+                                </div>
+                              </div>
+                            </motion.div>
                           </div>
                         );
                       })}
@@ -2112,16 +2031,6 @@ export default function ProductionTab({
                                 <p className="text-[9.5px] text-slate-400 font-mono mt-0.5">SĐT: {activeWorker.phone}</p>
                               )}
                             </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteWorker(activeWorker.id, activeWorker.name);
-                              }}
-                              className="text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-zinc-805 p-1 rounded-lg transition"
-                              title="Xóa hồ sơ thợ may"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 text-center text-[10px]">
@@ -2301,13 +2210,129 @@ export default function ProductionTab({
                       Bảng theo dõi các đợt nhận hàng sản xuất mộc theo công đoạn chi tiết
                     </p>
                   </div>
-                  <div className="text-right sm:text-right">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Tổng hao phí công thợ:</p>
-                    <p className="text-base font-black text-rose-600 font-mono bg-rose-50 dark:bg-rose-950/20 px-3 py-1 rounded-xl inline-block mt-0.5">
-                      {totalLaborCostAccumulated.toLocaleString()}đ
-                    </p>
+                  <div className="flex flex-wrap items-center justify-end gap-3 text-right">
+                    <div>
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-black">Đã thanh toán:</p>
+                      <p className="text-sm font-black text-emerald-600 font-mono bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl inline-block mt-0.5 shadow-2xs">
+                        {totalPaidAccumulated.toLocaleString()}đ
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-rose-700 dark:text-rose-400 uppercase tracking-wider font-black">Tiền công:</p>
+                      <p className="text-sm font-bold text-rose-600 font-mono bg-rose-50/80 dark:bg-rose-950/40 px-3 py-1.5 rounded-xl inline-block mt-0.5 border border-rose-200/50 dark:border-rose-900/30 shadow-2xs">
+                        {totalLaborCostRemaining.toLocaleString()}đ
+                      </p>
+                    </div>
                   </div>
                 </div>
+
+                {workerJobs.length > 0 && totalLaborCostRemaining > 0 && (
+                  <div className="mt-4 bg-slate-50 dark:bg-zinc-950/40 border border-slate-200 dark:border-zinc-800 p-3.5 rounded-xl">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-extrabold text-indigo-650 dark:text-indigo-400 uppercase tracking-wider block">Thanh toán dồn tổng công thợ</span>
+                        <p className="text-xs text-slate-500">Hệ thống sẽ tự động trừ dồn số tiền vào các đợt công thợ chưa trả xong (từ cũ đến mới)</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowOverallPayPanel(!showOverallPayPanel);
+                          setOverallPayAmount(totalLaborCostRemaining.toString());
+                        }}
+                        className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-750 text-white text-[11px] font-bold rounded-lg cursor-pointer transition shrink-0 flex items-center gap-1.5 shadow-xs"
+                      >
+                        <DollarSign className="w-3.5 h-3.5" />
+                        <span>Thanh toán tổng nhanh</span>
+                      </button>
+                    </div>
+
+                    {showOverallPayPanel && (
+                      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-zinc-800/80 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Số tiền thanh toán (đ)</label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                placeholder="Nhập số tiền trả dồn..."
+                                value={overallPayAmount}
+                                onChange={(e) => setOverallPayAmount(e.target.value)}
+                                className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-slate-800 dark:text-slate-200 rounded-lg p-2 text-xs font-bold font-mono outline-none focus:border-indigo-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setOverallPayAmount(totalLaborCostRemaining.toString())}
+                                className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold border border-slate-250 transition cursor-pointer"
+                              >
+                                Trả hết
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Thao tác</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const amt = parseInt(overallPayAmount);
+                                if (isNaN(amt) || amt <= 0) {
+                                  alert('Vui lòng nhập số tiền thanh toán hợp lệ lớn hơn 0!');
+                                  return;
+                                }
+                                if (amt > totalLaborCostRemaining) {
+                                  alert(`Số tiền nhập (${amt.toLocaleString()}đ) lớn hơn tổng nợ công thợ hiện tại (${totalLaborCostRemaining.toLocaleString()}đ)!`);
+                                  return;
+                                }
+
+                                let remainingToDistribute = amt;
+                                const jobsWithDebt = workerJobs
+                                  .map((j, originalIndex) => ({
+                                    ...j,
+                                    originalIndex,
+                                    debt: j.totalAmount - (j.paidAmount || 0),
+                                  }))
+                                  .filter(j => j.debt > 0)
+                                  .sort((a, b) => a.createdAt - b.createdAt);
+
+                                const paymentsToCreate: LaborPayment[] = [];
+                                const updatedJobs = [...workerJobs];
+
+                                for (const j of jobsWithDebt) {
+                                  if (remainingToDistribute <= 0) break;
+                                  
+                                  const payForThisJob = Math.min(j.debt, remainingToDistribute);
+                                  remainingToDistribute -= payForThisJob;
+
+                                  const originalJob = { ...updatedJobs[j.originalIndex] };
+                                  originalJob.paidAmount = (originalJob.paidAmount || 0) + payForThisJob;
+                                  updatedJobs[j.originalIndex] = originalJob;
+
+                                  paymentsToCreate.push({
+                                    id: 'pay_overall_' + Date.now() + '_' + originalJob.id + '_' + Math.random().toString(36).substr(2, 5),
+                                    weekKey: getVietnameseWeekKey(getCurrentDateStr()),
+                                    amount: payForThisJob,
+                                    date: getCurrentDateStr(),
+                                    note: `Thanh toán dồn tổng: trừ ${payForThisJob.toLocaleString()}đ vào đợt ${originalJob.workerName} (${originalJob.quantity} cái ${originalJob.modelName})`,
+                                    createdAt: Date.now()
+                                  });
+                                }
+
+                                setWorkerJobs(updatedJobs);
+                                setLaborPayments([...paymentsToCreate, ...laborPayments]);
+
+                                alert(`Đã thanh toán dồn tổng ${amt.toLocaleString()}đ thành công và tự động trừ dồn vào ${paymentsToCreate.length} đợt công thợ chưa thanh toán!`);
+                                setOverallPayAmount('');
+                                setShowOverallPayPanel(false);
+                              }}
+                              className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-lg tracking-wider transition active:scale-98 cursor-pointer flex items-center justify-center gap-1 shadow-sm mt-0.5 sm:mt-5"
+                            >
+                              <span>Xác Nhận Nộp</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {workerJobs.length === 0 ? (
                   <div className="text-center py-20 text-slate-450 dark:text-slate-500 space-y-3 flex-grow flex flex-col justify-center">
@@ -2321,15 +2346,15 @@ export default function ProductionTab({
                   <div className="overflow-x-auto flex-grow max-h-[550px] overflow-y-auto mt-4 scrollbar-thin">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
-                        <tr className="bg-slate-50 dark:bg-zinc-900/60 text-slate-500 border-b border-slate-100 dark:border-slate-800 font-bold uppercase text-[9px] tracking-wider">
-                          <th className="py-3 px-3 text-center w-12 text-slate-450">Stt</th>
-                          <th className="py-3 px-3">Thợ Gia Công</th>
-                          <th className="py-3 px-3">Mã hàng (Mẫu)</th>
-                          <th className="py-3 px-3">Công đoạn đảm đương</th>
-                          <th className="py-3 px-3 text-center w-20">SL (Cái)</th>
-                          <th className="py-3 px-3 text-right">Đơn giá thợ</th>
-                          <th className="py-3 px-3 text-right">Thành Tiền</th>
-                          <th className="py-3 px-3 text-center w-28">Thao tác</th>
+                        <tr className="bg-slate-55 dark:bg-zinc-900/60 text-slate-500 border-b border-slate-100 dark:border-slate-800 font-bold uppercase text-[8.5px] tracking-wider">
+                          <th className="py-1.5 px-2 text-center w-10 text-slate-450">Stt</th>
+                          <th className="py-1.5 px-2">Thợ Gia Công</th>
+                          <th className="py-1.5 px-2">Mã hàng (Mẫu)</th>
+                          <th className="py-1.5 px-2">Công đoạn</th>
+                          <th className="py-1.5 px-2 text-center w-16">SL (Cái)</th>
+                          <th className="py-1.5 px-2 text-right">Đơn giá</th>
+                          <th className="py-1.5 px-2 text-right">Thành Tiền</th>
+                          <th className="py-1.5 px-2 text-center w-24">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-medium">
@@ -2337,73 +2362,228 @@ export default function ProductionTab({
                           const associatedBd = operationBreakdowns.find(bd => bd.modelName === job.modelName);
                           const totalBdOps = associatedBd ? associatedBd.operations.length : 0;
                           const activeCount = job.selectedOperationIds.length;
+                          const isExpanded = !!expandedJobIds[job.id];
+                          const remainingAmount = job.totalAmount - (job.paidAmount || 0);
 
                           return (
-                            <tr 
-                              key={job.id} 
-                              className="hover:bg-slate-50/50 dark:hover:bg-zinc-800/20 transition-all duration-150 group"
-                            >
-                              <td className="py-3 px-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                              <td className="py-3 px-3">
-                                <span className="font-extrabold text-slate-850 dark:text-slate-100 block">{job.workerName}</span>
-                                <span className="text-[9.5px] text-slate-400 font-mono">{formatVietnameseDate(job.date)}</span>
-                              </td>
-                              <td className="py-3 px-3">
-                                <span className="font-bold text-slate-800 dark:text-slate-200 block">{job.modelName}</span>
-                                <span className="text-[9.5px] text-slate-400">Giao mộc thủ công</span>
-                              </td>
-                              <td className="py-3 px-3">
-                                <div className="space-y-1">
-                                  <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-400 px-2 py-0.5 rounded-full inline-block">
-                                    Đảm nhận {activeCount}/{totalBdOps} việc
+                            <React.Fragment key={job.id}>
+                              <tr 
+                                className={`hover:bg-slate-50/50 dark:hover:bg-zinc-800/20 transition-all duration-150 text-[11px] ${isExpanded ? 'bg-indigo-50/10 dark:bg-indigo-950/10' : ''}`}
+                              >
+                                <td className="py-1 px-2 text-center text-slate-400 font-mono text-[10px]">{idx + 1}</td>
+                                <td className="py-1 px-2">
+                                  <span className="font-extrabold text-slate-850 dark:text-slate-100 block leading-tight">{job.workerName}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono leading-none block mt-0.5">{formatVietnameseDate(job.date)}</span>
+                                </td>
+                                <td className="py-1 px-2">
+                                  <span className="font-bold text-slate-800 dark:text-slate-200 block leading-tight">{job.modelName}</span>
+                                  <span className="text-[9px] text-slate-400 leading-none block mt-0.5">Mộc</span>
+                                </td>
+                                <td className="py-1 px-2">
+                                  <span className="text-[9px] font-bold text-indigo-650 bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-400 px-1.5 py-0.5 rounded-full inline-block">
+                                    {activeCount}/{totalBdOps} việc
                                   </span>
-                                  {associatedBd && (
-                                    <div className="space-y-0.5 text-[9.5px] max-h-[100px] overflow-y-auto pr-1">
-                                      {associatedBd.operations
-                                        .filter(o => job.selectedOperationIds.includes(o.id))
-                                        .map(o => {
-                                          const price = (job.customPrices && job.customPrices[o.id] !== undefined) ? job.customPrices[o.id] : o.price;
-                                          return (
-                                            <div key={o.id} className="flex justify-between gap-1.5 max-w-[190px] text-slate-500 dark:text-slate-400">
-                                              <span className="truncate">• {o.name}:</span>
-                                              <span className="font-mono text-[9.5px] font-extrabold text-slate-750 dark:text-slate-200 shrink-0">
-                                                {(price * job.quantity).toLocaleString()}đ
-                                              </span>
+                                </td>
+                                <td className="py-1 px-2 text-center font-mono font-bold text-slate-755 dark:text-slate-300">
+                                  {job.quantity.toLocaleString()}
+                                </td>
+                                <td className="py-1 px-2 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                                  {job.unitPrice.toLocaleString()}đ
+                                </td>
+                                <td className="py-1 px-2 text-right font-mono font-black text-rose-600">
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span>{job.totalAmount.toLocaleString()}đ</span>
+                                    {job.paidAmount && job.paidAmount > 0 ? (
+                                      <span className="text-[8px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/30 px-1 py-0.1 rounded mt-0.5">
+                                        Đã trả: {job.paidAmount.toLocaleString()}đ
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className="py-1 px-2 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nowExpanded = !isExpanded;
+                                        setExpandedJobIds({
+                                          ...expandedJobIds,
+                                          [job.id]: nowExpanded
+                                        });
+                                        if (nowExpanded) {
+                                          setPayInputs({
+                                            ...payInputs,
+                                            [job.id]: remainingAmount > 0 ? remainingAmount.toString() : ''
+                                          });
+                                        }
+                                      }}
+                                      className={`px-1.5 py-0.5 ${isExpanded ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-205'} rounded-md text-[9px] font-bold transition cursor-pointer`}
+                                    >
+                                      {isExpanded ? "Ẩn" : "Hiện"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteJob(job.id)}
+                                      className="p-0.5 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 dark:hover:bg-red-950/20 transition cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Expanded panel for selected details & payment */}
+                              {isExpanded && (
+                                <tr className="bg-slate-50/50 dark:bg-zinc-950/20 border-b border-indigo-100/50 dark:border-indigo-900/20">
+                                  <td colSpan={8} className="p-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      {/* Left sub-details */}
+                                      <div className="space-y-2 bg-white dark:bg-zinc-900 border border-slate-150 dark:border-zinc-800 rounded-xl p-3">
+                                        <p className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                                          Danh sách công đoạn đã làm:
+                                        </p>
+                                        {associatedBd ? (
+                                          <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
+                                            {associatedBd.operations
+                                              .filter(o => job.selectedOperationIds.includes(o.id))
+                                              .map(o => {
+                                                const price = (job.customPrices && job.customPrices[o.id] !== undefined) ? job.customPrices[o.id] : o.price;
+                                                return (
+                                                  <div key={o.id} className="flex justify-between items-center text-[11px] border-b border-dashed border-slate-100 dark:border-zinc-800 pb-1 text-slate-600 dark:text-slate-300">
+                                                    <span>• {o.name}:</span>
+                                                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                                                      {price.toLocaleString()}đ × {job.quantity.toLocaleString()} = {(price * job.quantity).toLocaleString()}đ
+                                                    </span>
+                                                  </div>
+                                                );
+                                              })}
+                                          </div>
+                                        ) : (
+                                          <p className="text-[10px] text-slate-400 italic">Không tìm thấy thông tin định mức mẫu.</p>
+                                        )}
+                                      </div>
+
+                                      {/* Right direct payments */}
+                                      <div className="bg-white dark:bg-zinc-900 border border-slate-150 dark:border-zinc-800 rounded-xl p-3 flex flex-col justify-between gap-3 shadow-xs">
+                                        <div>
+                                          <div className="flex items-center justify-between border-b pb-1.5 border-slate-100 dark:border-zinc-800 mb-2">
+                                            <span className="text-[10px] font-extrabold text-rose-650 dark:text-rose-400 uppercase tracking-wider">Thanh toán tiền thợ</span>
+                                            <span className="text-[10px] bg-indigo-50 dark:bg-zinc-800 text-indigo-700 dark:text-indigo-400 font-bold px-1.5 py-0.5 rounded">
+                                              Tổng: {job.totalAmount.toLocaleString()}đ
+                                            </span>
+                                          </div>
+
+                                          <div className="space-y-1 text-xs mb-3">
+                                            <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                                              <span>Đã trả: <strong className="text-emerald-600 font-mono">{(job.paidAmount || 0).toLocaleString()}đ</strong></span>
+                                              <span>Còn nợ: <strong className="text-rose-600 font-mono">{remainingAmount.toLocaleString()}đ</strong></span>
                                             </div>
-                                          );
-                                        })}
+                                            <div className="h-2 w-full bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                              <div 
+                                                className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                                                style={{ width: `${Math.min(100, ((job.paidAmount || 0) / job.totalAmount) * 100)}%` }}
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {remainingAmount > 0 ? (
+                                            <div className="space-y-2">
+                                              <div className="flex items-center gap-1.5">
+                                                <input
+                                                  type="number"
+                                                  placeholder="Nhập số tiền trả thợ..."
+                                                  value={payInputs[job.id] || ''}
+                                                  onChange={(e) => {
+                                                    setPayInputs({
+                                                      ...payInputs,
+                                                      [job.id]: e.target.value
+                                                    });
+                                                  }}
+                                                  className="flex-1 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-slate-200 rounded-lg p-1.5 text-xs font-bold outline-none focus:border-indigo-500 font-mono"
+                                                />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setPayInputs({
+                                                      ...payInputs,
+                                                      [job.id]: remainingAmount.toString()
+                                                    });
+                                                  }}
+                                                  className="py-1.5 px-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg text-[10px] font-bold border border-indigo-200/50 cursor-pointer text-center"
+                                                >
+                                                  Trả hết
+                                                </button>
+                                              </div>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const inputVal = payInputs[job.id] || '';
+                                                  const amt = parseInt(inputVal);
+                                                  if (isNaN(amt) || amt <= 0) {
+                                                    alert('Vui lòng nhập số tiền thanh toán hợp lệ lớn hơn 0!');
+                                                    return;
+                                                  }
+                                                  if (amt > remainingAmount) {
+                                                    alert(`Số tiền nhập (${amt.toLocaleString()}đ) lớn hơn số nợ còn lại của đợt này (${remainingAmount.toLocaleString()}đ)!`);
+                                                    return;
+                                                  }
+
+                                                  const updatedJobs = workerJobs.map(j => {
+                                                    if (j.id === job.id) {
+                                                      const currentPaid = j.paidAmount || 0;
+                                                      return {
+                                                        ...j,
+                                                        paidAmount: currentPaid + amt
+                                                      };
+                                                    }
+                                                    return j;
+                                                  });
+                                                  setWorkerJobs(updatedJobs);
+
+                                                  // Log payment to general list
+                                                  const newPayment: LaborPayment = {
+                                                    id: 'pay_job_' + Date.now() + '_' + job.id,
+                                                    weekKey: getVietnameseWeekKey(getCurrentDateStr()),
+                                                    amount: amt,
+                                                    date: getCurrentDateStr(),
+                                                    note: `Thanh toán ${job.workerName} - ${job.quantity} cái ${job.modelName} (Thuộc đợt việc ngày ${job.date})`,
+                                                    createdAt: Date.now()
+                                                  };
+
+                                                  setLaborPayments([newPayment, ...laborPayments]);
+                                                  alert(`Đã thanh toán thành công ${amt.toLocaleString()}đ và trừ vào tiền công của đợt này!`);
+                                                  
+                                                  const nextRemaining = remainingAmount - amt;
+                                                  if (nextRemaining <= 0) {
+                                                    setExpandedJobIds({
+                                                      ...expandedJobIds,
+                                                      [job.id]: false
+                                                    });
+                                                  } else {
+                                                    setPayInputs({
+                                                      ...payInputs,
+                                                      [job.id]: nextRemaining.toString()
+                                                    });
+                                                  }
+                                                }}
+                                                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg tracking-wider transition active:scale-98 cursor-pointer flex items-center justify-center gap-1 shadow-sm"
+                                              >
+                                                <span>XÁC NHẬN THANH TOÁN TIỀN CÔNG</span>
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="flex items-center justify-center bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 p-3 rounded-lg text-xs font-black border border-emerald-250/25">
+                                              <span>✓ ĐÃ THANH TOÁN TOÀN BỘ ĐỢT NÀY!</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">
-                                {job.quantity.toLocaleString()}
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                                {job.unitPrice.toLocaleString()}đ
-                              </td>
-                              <td className="py-3 px-3 text-right font-mono font-black text-rose-600">
-                                {job.totalAmount.toLocaleString()}đ
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    onClick={() => triggerQuickPay(job)}
-                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-transparent rounded-lg text-[9.5px] font-bold transition flex items-center gap-0.5 cursor-pointer"
-                                    title="Lập phiếu chi lương thợ may nhanh"
-                                  >
-                                    <DollarSign className="w-3 h-3" />
-                                    <span>Chi lương</span>
-                                  </button>
-                                  <button
-                                    onClick={() => deleteJob(job.id)}
-                                    className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 transition cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>
@@ -3674,8 +3854,8 @@ export default function ProductionTab({
               {/* Real-time calculated overall total for single worker mode */}
               {!isMultipleWorkers && selectedModelForJob && jobCheckedOps.length > 0 && (
                 <div className="p-4 bg-indigo-50/40 dark:bg-indigo-950/10 border border-indigo-200/50 dark:border-indigo-900/30 rounded-2xl space-y-3">
-                  <div className="flex items-center gap-1.5 pb-2 border-b border-dashed border-indigo-250 dark:border-indigo-900/40 text-indigo-950 dark:text-indigo-305 text-xs font-black">
-                    <Scissors className="w-4 h-4 text-indigo-505" />
+                  <div className="flex items-center gap-1.5 pb-2 border-b border-dashed border-indigo-200 dark:border-indigo-900/40 text-indigo-950 dark:text-indigo-300 text-xs font-black">
+                    <Scissors className="w-4 h-4 text-indigo-500" />
                     <span>LƯƠNG ĐƠN GIAO THỢ TẠM TÍNH ({jobQuantity.toLocaleString()} cái):</span>
                   </div>
                   
@@ -3689,9 +3869,9 @@ export default function ProductionTab({
                           const price = customOpPrices[op.id] !== undefined ? customOpPrices[op.id] : op.price;
                           const opTotal = price * jobQuantity;
                           return (
-                            <div key={op.id} className="flex justify-between items-center text-xs text-slate-700 dark:text-slate-355">
-                              <span className="font-semibold text-slate-800 dark:text-slate-205">• {op.name}</span>
-                              <span className="font-mono text-slate-605 dark:text-slate-400">
+                            <div key={op.id} className="flex justify-between items-center text-xs text-slate-700 dark:text-slate-300">
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">• {op.name}</span>
+                              <span className="font-mono text-slate-600 dark:text-slate-400">
                                 {price.toLocaleString()}đ × {jobQuantity.toLocaleString()} = <strong className="text-emerald-600 font-extrabold">{opTotal.toLocaleString()}đ</strong>
                               </span>
                             </div>
@@ -3970,7 +4150,7 @@ export default function ProductionTab({
               </div>
 
               <div className="bg-slate-50 dark:bg-zinc-950 p-4 rounded-xl border border-slate-150 dark:border-slate-850 space-y-3">
-                <p className="text-xs font-black text-slate-600 dark:text-slate-405 uppercase">Thành phần cấu thành & Định lượng tiêu hao:</p>
+                <p className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase">Thành phần cấu thành & Định lượng tiêu hao:</p>
                 
                 <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
                   {recipeItems.map(item => {
@@ -3979,7 +4159,7 @@ export default function ProductionTab({
                       <div key={item.materialId} className="flex justify-between items-center text-xs bg-white dark:bg-zinc-900 p-2.5 border border-slate-100 dark:border-slate-800/80 rounded-lg">
                         <span className="font-bold text-slate-700 dark:text-slate-300">• {material ? material.name : 'Chưa rõ'}</span>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-black text-slate-855 dark:text-slate-200">
+                          <span className="font-mono font-black text-slate-800 dark:text-slate-200">
                             {item.consumptionRate.toLocaleString()} {material?.unit || "mét"}/cái
                           </span>
                           <button 
@@ -4177,6 +4357,217 @@ export default function ProductionTab({
           </motion.div>
         </div>
       )}
+
+      {/* Floating Speed Dial FAB */}
+      {showFabMenu && (
+        <div 
+          onClick={() => setShowFabMenu(false)}
+          className="fixed inset-0 bg-slate-900/50 dark:bg-black/60 backdrop-blur-[2px] z-[990]"
+        />
+      )}
+
+      <AnimatePresence>
+        {showFabMenu && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            className="fixed bottom-[164px] right-6 z-[995] flex flex-col items-end gap-3"
+          >
+            <div className="bg-white dark:bg-zinc-950 p-2.5 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-2xl flex flex-col gap-1.5 min-w-[250px] select-none">
+              <div className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 px-3 py-1 border-b border-slate-100 dark:border-zinc-900 tracking-wider mb-1">
+                {subTab === 'breakdown' ? 'Thao tác Nhân công & Thợ' : 'Thao tác Nguyên liệu & Kho'}
+              </div>
+              
+              {subTab === 'breakdown' ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      if (operationBreakdowns.length === 0) {
+                        alert('Vui lòng lập ít nhất 1 bảng phân bổ công đoạn mốc chiếc trước khi giao việc!');
+                        return;
+                      }
+                      if (workers.length === 0) {
+                        alert('Vui lòng tạo hồ sơ thợ may trước!');
+                        return;
+                      }
+                      setShowAddJob(true);
+                    }}
+                    className="w-full text-left py-2 px-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold shrink-0">
+                        +
+                      </div>
+                      <span className="font-extrabold text-[11.5px] text-slate-905 dark:text-white">Giao việc / Nhật ký công</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      setShowAddBreakdown(true);
+                    }}
+                    className="w-full text-left py-2 px-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-xl text-xs text-slate-705 dark:text-slate-300 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50/45 dark:bg-indigo-950/20 flex items-center justify-center text-indigo-500 shrink-0">
+                        <Scissors className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-[11.5px]">Tạo bảng công đoạn</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      setShowAddWorker(true);
+                    }}
+                    className="w-full text-left py-2 px-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-xl text-xs text-slate-705 dark:text-slate-300 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50/45 dark:bg-indigo-950/20 flex items-center justify-center text-indigo-500 shrink-0">
+                        <Users className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-[11.5px]">Thêm thợ mới</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      setShowAddTaskModal(true);
+                    }}
+                    className="w-full text-left py-2 px-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-xl text-xs text-slate-705 dark:text-slate-300 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50/45 dark:bg-indigo-950/20 flex items-center justify-center text-indigo-500 shrink-0">
+                        <CheckSquare className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-[11.5px]">Quản lý công việc mẫu</span>
+                    </div>
+                  </button>
+
+                  <div className="border-t border-slate-100 dark:border-zinc-900 my-1"></div>
+
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      exportWorkerJobsToExcel();
+                    }}
+                    className="w-full text-left py-2 px-3 bg-emerald-55/10 hover:bg-emerald-50 dark:hover:bg-emerald-950/25 rounded-xl text-xs text-emerald-700 dark:text-emerald-400 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-55 dark:bg-emerald-950/30 flex items-center justify-center text-emerald-650 shrink-0">
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-extrabold text-[11.5px]">Xuất Excel Nhân Công</span>
+                    </div>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      if (materialRecipes.length === 0) {
+                        alert('Vui lòng lập bảng định mức hao hụt cho một mẫu sản phẩm trước khi khởi chạy đợt sản xuất!');
+                        return;
+                      }
+                      setShowRunProduction(true);
+                    }}
+                    className="w-full text-left py-2 px-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-xl text-xs font-bold text-slate-850 dark:text-slate-200 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                        +
+                      </div>
+                      <span className="font-extrabold text-[11.5px] text-slate-905 dark:text-white">Sản xuất đợt mới</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      if (rawMaterials.length === 0) {
+                        alert('Vui lòng khởi tạo ít nhất 1 loại nguyên liệu (vải) trong kho trước!');
+                        return;
+                      }
+                      setShowAddRecipe(true);
+                    }}
+                    className="w-full text-left py-2 px-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-xl text-xs text-slate-705 dark:text-slate-300 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50/45 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-500 shrink-0">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-[11.5px]">Định mức mẫu mã</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      if (rawMaterials.length === 0) {
+                        alert('Hãy tạo danh mục nguyên liệu trước khi nhập kho sỉ lẻ!');
+                        return;
+                      }
+                      setShowReplenishMaterial(true);
+                    }}
+                    className="w-full text-left py-2 px-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-xl text-xs text-slate-705 dark:text-slate-300 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50/45 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-505 shrink-0">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin-slow" />
+                      </div>
+                      <span className="font-bold text-[11.5px]">Nhập kho sỉ lẻ</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      setShowAddMaterial(true);
+                    }}
+                    className="w-full text-left py-2 px-3 hover:bg-slate-50 dark:hover:bg-zinc-900 rounded-xl text-xs text-slate-705 dark:text-slate-300 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50/45 dark:bg-emerald-950/20 flex items-center justify-center text-emerald-500 shrink-0">
+                        <Package className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-[11.5px]">Thêm vải/vật tư mới</span>
+                    </div>
+                  </button>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main floating button plus */}
+      <div className="fixed bottom-24 right-6 z-[998]">
+        <motion.button
+          onClick={() => setShowFabMenu(!showFabMenu)}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
+          className={`w-14 h-14 rounded-full flex items-center justify-center text-white shadow-2xl border-2 transition-all duration-300 cursor-pointer ${
+            showFabMenu 
+              ? 'bg-rose-600 hover:bg-rose-700 border-rose-500/30' 
+              : subTab === 'breakdown'
+                ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 border-indigo-400/40 shadow-indigo-600/20'
+                : 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 border-emerald-400/40 shadow-emerald-600/20'
+          }`}
+          style={{ touchAction: 'none' }}
+        >
+          {showFabMenu ? (
+            <X className="w-5 h-5 stroke-[3.5] transform rotate-90 transition-transform duration-250" />
+          ) : (
+            <Plus className="w-5.5 h-5.5 stroke-[3.5] animate-pulse" />
+          )}
+        </motion.button>
+      </div>
     </div>
   );
 }

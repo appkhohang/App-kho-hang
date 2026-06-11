@@ -1298,7 +1298,7 @@ export default function App() {
             }}
             className="bg-slate-900 hover:bg-slate-850 text-slate-200 hover:text-white px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 border border-slate-800 cursor-pointer shadow-md"
           >
-            <LogOut className="w-4 h-4 text-slate-405" />
+            <LogOut className="w-4 h-4 text-slate-400" />
             <span>Đăng xuất hệ thống</span>
           </button>
         </div>
@@ -1306,7 +1306,7 @@ export default function App() {
         <div className="flex flex-col min-h-screen">
           
           {/* Main Dashboard Navigation Header */}
-          <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#0b0f19]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-850 shadow-xs leading-none">
+          <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#0b0f19]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs leading-none">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
               
               {/* Left Logo / Hamburger Wrapper */}
@@ -1327,7 +1327,7 @@ export default function App() {
                     <Layers className="w-4.5 h-4.5" />
                   </div>
                   <div>
-                    <span className="text-xs sm:text-base font-black tracking-tight text-slate-850 dark:text-slate-105 font-sans block leading-none">Nhập Kho</span>
+                    <span className="text-xs sm:text-base font-black tracking-tight text-slate-800 dark:text-slate-100 font-sans block leading-none">Nhập Kho</span>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-1">
                       <div className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1344,7 +1344,7 @@ export default function App() {
                   <button
                     id="tab_home_btn"
                     onClick={() => setActiveTab('home')}
-                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'home' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-750' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'home' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
                   >
                     <Home className="w-3.5 h-3.5" />
                     <span>Trang chủ</span>
@@ -1354,7 +1354,7 @@ export default function App() {
                   <button
                     id="tab_import_btn"
                     onClick={() => setActiveTab('import')}
-                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'import' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-750' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'import' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
                   >
                     <span>1. Nhập Hàng Lên/Về</span>
                   </button>
@@ -1363,7 +1363,7 @@ export default function App() {
                   <button
                     id="tab_invoices_btn"
                     onClick={() => setActiveTab('invoices')}
-                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'invoices' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-750' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'invoices' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
                   >
                     <span>2. Viết Hoá Đơn Bán</span>
                   </button>
@@ -1372,7 +1372,7 @@ export default function App() {
                   <button
                     id="tab_production_btn"
                     onClick={() => setActiveTab('production')}
-                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'production' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-750' : 'text-slate-500 dark:text-slate-400 hover:text-slate-80s dark:hover:text-slate-200'}`}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'production' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
                   >
                     <span>3. Quản Lý Sản Xuất</span>
                   </button>
@@ -1381,7 +1381,7 @@ export default function App() {
                   <button
                     id="tab_report_btn"
                     onClick={() => setActiveTab('report')}
-                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'report' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-750' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'report' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-805 dark:hover:text-slate-200'}`}
                   >
                     <BarChart3 className="w-3.5 h-3.5" />
                     <span>Báo cáo</span>
@@ -1391,7 +1391,7 @@ export default function App() {
                   <button
                     id="tab_settings_btn"
                     onClick={() => setActiveTab('settings')}
-                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'settings' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-750' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'settings' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
                   >
                     <Settings className="w-3.5 h-3.5" />
                     <span>Cài đặt</span>
@@ -1632,9 +1632,9 @@ export default function App() {
                               setActiveTab('import');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'import' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-305' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800'}`}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'import' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800'}`}
                           >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'import' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-105 dark:bg-zinc-900 text-slate-505 dark:text-slate-400'}`}>
+                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'import' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
                               <Layers className="w-4 h-4" />
                             </div>
                             <div>
@@ -1651,9 +1651,9 @@ export default function App() {
                               setActiveTab('invoices');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'invoices' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-305' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'invoices' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800'}`}
                           >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'invoices' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-105 dark:bg-zinc-900 text-slate-505 dark:text-slate-400'}`}>
+                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'invoices' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
                               <Layers className="w-4 h-4 text-emerald-500" />
                             </div>
                             <div>
@@ -1670,10 +1670,10 @@ export default function App() {
                               setActiveTab('production');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'production' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-305' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800'}`}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'production' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800'}`}
                           >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'production' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-105 dark:bg-zinc-900 text-slate-505 dark:text-slate-400'}`}>
-                              <Scissors className="w-4 h-4 text-indigo-505" />
+                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'production' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                              <Scissors className="w-4 h-4 text-indigo-500" />
                             </div>
                             <div>
                               <span className="text-[12.5px] font-bold block leading-tight">3. Quản Lý Sản Xuất</span>

@@ -662,7 +662,7 @@ export default function GoodsImportTab({
       )}
 
       {/* Floating Action Button (FAB) for adding new record */}
-      <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-40">
+      <div className="fixed bottom-24 right-5 md:right-8 z-40">
         <motion.button
           id="fab_add_import"
           type="button"
@@ -704,14 +704,14 @@ export default function GoodsImportTab({
               <div className="p-4 bg-slate-50 dark:bg-zinc-950 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-indigo-500" />
-                  <span className="text-xs font-bold text-slate-705 dark:text-slate-200 uppercase tracking-wider font-mono">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider font-mono">
                     Nhập thông tin kho hàng mới
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsFormExpanded(false)}
-                  className="p-1 px-1.5 rounded-lg hover:bg-slate-205 dark:hover:bg-slate-800 text-slate-450 hover:text-slate-705 dark:hover:text-slate-200 transition cursor-pointer"
+                  className="p-1 px-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1233,7 +1233,7 @@ export default function GoodsImportTab({
                       <select
                         value={selectedMonthFilter}
                         onChange={(e) => setSelectedMonthFilter(e.target.value)}
-                        className="w-full text-xs font-semibold bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-905 border border-slate-250 dark:border-slate-800 py-3 px-3 pr-8 rounded-xl text-slate-800 dark:text-slate-150 outline-none focus:border-indigo-505 font-sans cursor-pointer transition appearance-none"
+                        className="w-full text-xs font-semibold bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 py-3 px-3 pr-8 rounded-xl text-slate-800 dark:text-slate-150 outline-none focus:border-indigo-500 font-sans cursor-pointer transition appearance-none"
                         style={{
                           backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%234f46e5' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E")`,
                           backgroundPosition: 'right 0.6rem center',
@@ -1366,11 +1366,11 @@ export default function GoodsImportTab({
               </div>
 
               {/* Modal Footer */}
-              <div className="p-4 bg-slate-50 dark:bg-zinc-950 border-t border-slate-205 dark:border-slate-850 flex justify-end">
+              <div className="p-4 bg-slate-50 dark:bg-zinc-950 border-t border-slate-200 dark:border-slate-800 flex justify-end">
                 <button
                   type="button"
                   onClick={() => setIsFilterModalOpen(false)}
-                  className="bg-indigo-650 hover:bg-indigo-750 text-white font-extrabold text-xs py-2 px-6 rounded-xl shadow-md transition active:scale-98 cursor-pointer"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2 px-6 rounded-xl shadow-md transition active:scale-98 cursor-pointer"
                 >
                   Áp Dụng bộ lọc & Xem
                 </button>
@@ -1558,7 +1558,7 @@ export default function GoodsImportTab({
                                 type="checkbox"
                                 checked={selectedItemIds.includes(item.id)}
                                 onChange={() => {}} // Click is handled by parent onClick wrapper
-                                className="w-4.5 h-4.5 rounded border-slate-350 dark:border-slate-705 text-indigo-650 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
+                                className="w-4.5 h-4.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
                               />
                             </div>
                           )}
@@ -2315,7 +2315,7 @@ export default function GoodsImportTab({
                       <button
                         type="button"
                         onClick={() => setIsDetailEditing(false)}
-                        className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-705 rounded-xl font-bold text-xs cursor-pointer select-none transition border border-slate-200"
+                        className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer select-none transition border border-slate-200"
                       >
                         Quay lại
                       </button>
@@ -2350,7 +2350,7 @@ export default function GoodsImportTab({
               <div className="w-5 h-5 rounded-md bg-indigo-600 dark:bg-indigo-500 flex items-center justify-center font-mono text-xs font-black text-white">
                 {selectedItemIds.length}
               </div>
-              <span className="text-[11px] sm:text-xs md:text-sm font-bold tracking-tight text-slate-205">
+              <span className="text-[11px] sm:text-xs md:text-sm font-bold tracking-tight text-slate-200">
                 đã chọn
               </span>
             </div>
