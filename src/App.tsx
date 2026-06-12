@@ -3,19 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
-import GoodsImportTab from './components/GoodsImportTab';
-import InvoicesTab from './components/InvoicesTab';
-import ProductionTab from './components/ProductionTab';
+
+// Lazy-loaded complex child components/tabs to cut boot time & latency on mobile
+const GoodsImportTab = lazy(() => import('./components/GoodsImportTab'));
+const InvoicesTab = lazy(() => import('./components/InvoicesTab'));
+const ProductionTab = lazy(() => import('./components/ProductionTab'));
+
 import ReportTab from './components/ReportTab';
 import SettingsTab from './components/SettingsTab';
 import GalleryTab from './components/GalleryTab';
 import FloatingStats from './components/FloatingStats';
 import CameraCapture from './components/CameraCapture';
-import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile } from './types';
+import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo } from './types';
 import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage } from './utils/storage';
 import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncService';
 import { useRealtimeSync } from './utils/realtimeSync';
@@ -24,6 +27,19 @@ import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { formatVietnameseDate } from './utils/dateUtils';
 import { useAndroidBack } from './hooks/useAndroidBack';
+import { checkAppUpdate } from './utils/updateService';
+import AppUpdateModal from './components/AppUpdateModal';
+import AnBrandLogo from './components/AnBrandLogo';
+
+
+const TabLoadingFallback = () => (
+  <div className="flex flex-col items-center justify-center py-20 px-4 text-slate-400 dark:text-[#657f76] animate-pulse">
+    <div className="w-9 h-9 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+    <span className="text-xs font-semibold tracking-widest uppercase font-mono">Đang tải phân hệ...</span>
+    <span className="text-[10px] text-slate-500 dark:text-[#556b62] mt-1">Vui lòng đợi trong giây lát</span>
+  </div>
+);
+
 
 function getSavedArray<T>(key: string, fallback: T[]): T[] {
   const value = getSavedState<T[]>(key, fallback);
@@ -114,20 +130,20 @@ export default function App() {
   });
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = getSavedState<AppSettings>("xuongan_settings", {
-      theme: 'light',
+      theme: 'system',
       currencySymbol: 'đ',
       exportFormat: 'xlsx'
     });
     if (!saved || typeof saved !== 'object') {
       return {
-        theme: 'light',
+        theme: 'system',
         currencySymbol: 'đ',
         exportFormat: 'xlsx'
       };
     }
     return {
       ...saved,
-      theme: 'light',
+      theme: saved.theme || 'system',
       currencySymbol: saved.currencySymbol || 'đ',
       exportFormat: saved.exportFormat || 'xlsx'
     };
@@ -185,6 +201,16 @@ export default function App() {
 
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
+  // Language translation dictionary
+  const [language, setLanguage] = useState<'vi' | 'en'>(() => (localStorage.getItem('xuongan_language') as 'vi' | 'en') || 'vi');
+  const changeLanguage = (lang: 'vi' | 'en') => {
+    setLanguage(lang);
+    localStorage.setItem('xuongan_language', lang);
+  };
+  const t = (viText: string, enText: string) => {
+    return language === 'vi' ? viText : enText;
+  };
+
   // Active Tab state
   const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery'>('home');
   
@@ -227,6 +253,35 @@ export default function App() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => localStorage.getItem("xuongan_last_sync") || null);
   const [showCloudInfo, setShowCloudInfo] = useState(false);
+
+  // OTA Update states
+  const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
+
+  // Auto check for updates on startup (silently, online-first)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const update = await checkAppUpdate();
+        if (update) {
+          const dismissedVer = localStorage.getItem('xuongan_dismissed_update_version');
+          if (update.critical || dismissedVer !== update.version) {
+            setUpdateInfo(update);
+          }
+        }
+      } catch (err) {
+        console.warn('Silent update lookup skipped.', err);
+      }
+    }, 2800); // 2.8s debounce delay after app boot
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleDismissUpdate = () => {
+    if (updateInfo) {
+      localStorage.setItem('xuongan_dismissed_update_version', updateInfo.version);
+    }
+    setUpdateInfo(null);
+  };
+
 
   // Tab scroll positions persistence
   const tabScrollPositions = useRef<Record<string, number>>({});
@@ -1468,10 +1523,10 @@ export default function App() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col min-h-screen">
+        <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-[#0b0f19]">
           
           {/* Main Dashboard Navigation Header */}
-          <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#0b0f19]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs leading-none">
+          <header className="shrink-0 z-30 bg-white/95 dark:bg-[#0b0f19]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs leading-none">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
               
               {/* Left Logo / Hamburger Wrapper */}
@@ -1488,17 +1543,8 @@ export default function App() {
 
                 {/* Brand Identity details */}
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-primary to-brand-primary/80 flex items-center justify-center text-white shadow-md shadow-brand-glow">
-                    <Layers className="w-4.5 h-4.5" />
-                  </div>
-                  <div>
-                    <span className="text-xs sm:text-base font-black tracking-tight text-slate-800 dark:text-slate-100 font-sans block leading-none">Nhập Kho</span>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-1">
-                      <div className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[9px] font-mono font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase leading-none">XƯỞNG MAY AN</span>
-                      </div>
-                    </div>
+                  <div className="w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
+                    <AnBrandLogo size={40} showText={false} />
                   </div>
                 </div>
               </div>
@@ -1729,14 +1775,12 @@ export default function App() {
                 </div>
                 
                 {/* Active user details and logout option */}
-
-                {/* 2. Active User badge / Identity details */}
                 <div className="flex items-center gap-2 border-l border-slate-150 dark:border-slate-800 pl-2.5">
                   <div className="w-8 h-8 rounded-full bg-white dark:bg-black border border-slate-200 dark:border-slate-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
                     <User className="w-4 h-4" />
                   </div>
                   <div className="hidden md:block text-left text-xs font-sans">
-                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{authState.displayName || 'Kế toán viên'}</p>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{authState.displayName || (language === 'vi' ? 'Kế toán viên' : 'Accountant')}</p>
                     <p className="text-[9px] text-slate-400 font-mono -mt-0.5">Role: Admin Chốt</p>
                   </div>
                 </div>
@@ -1746,10 +1790,10 @@ export default function App() {
                   id="dashboard_logout_btn"
                   onClick={handleLogout}
                   className="px-3 py-1.5 bg-transparent hover:bg-slate-100/10 text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white rounded-xl transition cursor-pointer border border-slate-200 dark:border-slate-800 flex items-center gap-1.5 text-xs font-bold leading-none shrink-0"
-                  title="Đăng xuất khỏi phiên"
+                  title={t('Đăng xuất khỏi phiên', 'Logout session')}
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>Đăng xuất</span>
+                  <span>{t('Đăng xuất', 'Logout')}</span>
                 </button>
 
               </div>
@@ -1781,15 +1825,15 @@ export default function App() {
                     {/* Header line inside cabinet */}
                     <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-650 flex items-center justify-center text-white shadow-xs">
-                          <Layers className="w-4 h-4" />
+                        <div className="w-8 h-8 flex items-center justify-center overflow-hidden shrink-0">
+                          <AnBrandLogo size={32} showText={false} />
                         </div>
-                        <span className="text-xs font-black tracking-tight text-slate-900 dark:text-white uppercase font-sans">QUẢN LÝ XƯỞNG AN</span>
+                        <span className="text-xs font-black tracking-tight text-slate-900 dark:text-white uppercase font-sans">{t('SỔ SÁCH XƯỞNG AN', 'AN FACTORY ACCOUNTBOOK')}</span>
                       </div>
                       <button
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-800 rounded-lg transition duration-200 cursor-pointer"
-                        aria-label="Đóng menu"
+                        aria-label={t('Đóng menu', 'Close menu')}
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1797,7 +1841,7 @@ export default function App() {
 
                     {/* Navigation Tab selection lists */}
                     <div className="space-y-3">
-                      <p className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase font-mono">DANH MỤC TRỰC QUAN</p>
+                      <p className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase font-mono">{t('DANH MỤC TRỰC QUAN', 'VISUAL CATEGORIES')}</p>
                       
                       <div className="space-y-2">
                         {/* Tab 1 button link */}
@@ -1813,8 +1857,8 @@ export default function App() {
                               <Layers className="w-4 h-4" />
                             </div>
                             <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">1. Hàng Hoá & Nhập Hàng</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal">Mẫu mã nhập về, lượng công thợ, đơn giá ship hai vùng</span>
+                              <span className="text-[12.5px] font-bold block leading-tight">{t('1. Hàng Hoá & Nhập Hàng', '1. Materials & Imports')}</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal">{t('Mẫu mã nhập về, lượng công thợ, đơn giá ship hai vùng', 'Imported models, worker workloads, shipping rates')}</span>
                             </div>
                           </button>
                         )}
@@ -1826,14 +1870,14 @@ export default function App() {
                               setActiveTab('invoices');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'invoices' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800'}`}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'invoices' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-850'}`}
                           >
                             <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'invoices' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
                               <Layers className="w-4 h-4 text-emerald-500" />
                             </div>
                             <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">2. Viết Hoá Đơn Bán</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal">Hóa đơn công nợ lũy kế, thu chi khách sỉ và in hóa đơn sành điệu</span>
+                              <span className="text-[12.5px] font-bold block leading-tight">{t('2. Viết Hoá Đơn Bán', '2. Create Sales Invoice')}</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal">{t('Hóa đơn công nợ lũy kế, thu chi khách sỉ và in hóa đơn sành điệu', 'Debt tracking, wholesale customer invoices & printing')}</span>
                             </div>
                           </button>
                         )}
@@ -1851,8 +1895,8 @@ export default function App() {
                               <Scissors className="w-4 h-4 text-indigo-500" />
                             </div>
                             <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">3. Quản Lý Sản Xuất</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">Định mức nguyên liệu kho, phân tổ công đoạn thợ may</span>
+                              <span className="text-[12.5px] font-bold block leading-tight">{t('3. Quản Lý Sản Xuất', '3. Production Control')}</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Định mức nguyên liệu kho, phân tổ công đoạn thợ may', 'Warehouse raw materials, tailor job allocation')}</span>
                             </div>
                           </button>
                         )}
@@ -1870,8 +1914,27 @@ export default function App() {
                               <Image className="w-4 h-4 text-purple-505" />
                             </div>
                             <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">Thư viện Ảnh chụp</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">Tìm kiếm và đối so sánh đồng thời hình ảnh đã chụp với Bill, Nhập hàng</span>
+                              <span className="text-[12.5px] font-bold block leading-tight">{t('Thư viện Ảnh chụp', 'Captured Photo Gallery')}</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Tìm kiếm và đối so sánh đồng thời hình ảnh đã chụp với Bill, Nhập hàng', 'Compare captured model photos across Bills & Imports')}</span>
+                            </div>
+                          </button>
+                        )}
+
+                        {/* Tab Settings button link */}
+                        {allowedTabs.includes('settings') && (
+                          <button
+                            onClick={() => {
+                              setActiveTab('settings');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'settings' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
+                          >
+                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                              <Settings className="w-4 h-4 text-blue-500" />
+                            </div>
+                            <div>
+                              <span className="text-[12.5px] font-bold block leading-tight">{t('Cài đặt hệ thống', 'System Settings')}</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Chọn giao diện hiển thị, sao lưu, khôi phục dữ liệu xưởng', 'Display options, secure backups & factory database recovery')}</span>
                             </div>
                           </button>
                         )}
@@ -2160,10 +2223,38 @@ export default function App() {
                   </div>
 
                   {/* Drawer Footer controls */}
-                  <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-100/40 dark:bg-slate-900/40 flex flex-col gap-2">
+                  <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-100/40 dark:bg-slate-900/40 flex flex-col gap-3">
+                    {/* Language Switcher Element (Chọn ngôn ngữ / Language Selection) */}
+                    <div className="p-2.5 bg-slate-200/50 dark:bg-slate-950/40 rounded-xl border border-slate-300/40 dark:border-slate-805 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9.5px] font-extrabold text-slate-450 dark:text-slate-400 uppercase tracking-wider font-mono">
+                          🌐 {t('NGÔN NGỮ', 'LANGUAGE')}
+                        </span>
+                        <span className="text-[9px] bg-slate-300/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1 py-0.5 rounded font-bold font-mono">
+                          {language === 'vi' ? 'VIETNAMESE' : 'ENGLISH'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 bg-white dark:bg-slate-900/30 p-0.5 rounded-lg border border-slate-200/50 dark:border-slate-800">
+                        <button
+                          onClick={() => changeLanguage('vi')}
+                          className={`py-1.5 px-2 rounded-md font-bold text-[10.5px] flex items-center justify-center gap-1 transition-all cursor-pointer ${language === 'vi' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+                        >
+                          <span>🇻🇳</span>
+                          <span>Tiếng Việt</span>
+                        </button>
+                        <button
+                          onClick={() => changeLanguage('en')}
+                          className={`py-1.5 px-2 rounded-md font-bold text-[10.5px] flex items-center justify-center gap-1 transition-all cursor-pointer ${language === 'en' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+                        >
+                          <span>🇬🇧</span>
+                          <span>English</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">{authState.displayName || 'Kế toán viên'} (Admin)</span>
+                      <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">{authState.displayName || (language === 'vi' ? 'Kế toán viên' : 'Accountant')} (Admin)</span>
                     </div>
                     <button
                       onClick={() => {
@@ -2173,7 +2264,7 @@ export default function App() {
                       className="w-full bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-650 hover:text-red-700 dark:text-red-400 p-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-red-100 dark:border-transparent cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
-                      <span>Đăng xuất hệ thống</span>
+                      <span>{t('Đăng xuất hệ thống', 'Logout System')}</span>
                     </button>
                   </div>
                 </motion.div>
@@ -2181,8 +2272,10 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Sub-body page wrapper components */}
-          <main className="flex-grow max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-4 sm:py-8 w-full relative">
+          {/* Scrollable Container */}
+          <div className="flex-1 overflow-y-auto min-h-0 relative" id="main_scroll_container">
+            {/* Sub-body page wrapper components */}
+            <main className="flex-grow max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-4 sm:py-8 w-full relative">
             
             {/* Display page logs / tab view */}
             <AnimatePresence mode="wait">
@@ -2204,22 +2297,24 @@ export default function App() {
                   exit={{ opacity: 0, y: -15 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <GoodsImportTab
-                    items={items}
-                    setItems={setItems}
-                    laborPayments={laborPayments}
-                    setLaborPayments={setLaborPayments}
-                    tpDtShippings={tpDtShippings || []}
-                    setTpDtShippings={setTpDtShippings}
-                    settings={settings}
-                    setSettings={setSettings}
-                    onImportBackup={handleImportBackup}
-                    selectedWeekFilter={selectedWeekFilter}
-                    setSelectedWeekFilter={setSelectedWeekFilter}
-                    userRole={userRole}
-                    autoExpandForm={autoExpandImportForm}
-                    onAutoExpandFormReset={() => setAutoExpandImportForm(false)}
-                  />
+                  <Suspense fallback={<TabLoadingFallback />}>
+                    <GoodsImportTab
+                      items={items}
+                      setItems={setItems}
+                      laborPayments={laborPayments}
+                      setLaborPayments={setLaborPayments}
+                      tpDtShippings={tpDtShippings || []}
+                      setTpDtShippings={setTpDtShippings}
+                      settings={settings}
+                      setSettings={setSettings}
+                      onImportBackup={handleImportBackup}
+                      selectedWeekFilter={selectedWeekFilter}
+                      setSelectedWeekFilter={setSelectedWeekFilter}
+                      userRole={userRole}
+                      autoExpandForm={autoExpandImportForm}
+                      onAutoExpandFormReset={() => setAutoExpandImportForm(false)}
+                    />
+                  </Suspense>
                 </motion.div>
               ) : activeTab === 'invoices' ? (
                 <motion.div
@@ -2229,18 +2324,20 @@ export default function App() {
                   exit={{ opacity: 0, y: -15 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <InvoicesTab
-                    customers={customers}
-                    setCustomers={setCustomers}
-                    bills={bills}
-                    setBills={setBills}
-                    payments={payments}
-                    setPayments={setPayments}
-                    userRole={userRole}
-                    resolvedTheme={resolvedTheme}
-                    autoOpenCreateBill={autoOpenCreateBill}
-                    onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
-                  />
+                  <Suspense fallback={<TabLoadingFallback />}>
+                    <InvoicesTab
+                      customers={customers}
+                      setCustomers={setCustomers}
+                      bills={bills}
+                      setBills={setBills}
+                      payments={payments}
+                      setPayments={setPayments}
+                      userRole={userRole}
+                      resolvedTheme={resolvedTheme}
+                      autoOpenCreateBill={autoOpenCreateBill}
+                      onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
+                    />
+                  </Suspense>
                 </motion.div>
               ) : activeTab === 'production' ? (
                 <motion.div
@@ -2250,28 +2347,30 @@ export default function App() {
                   exit={{ opacity: 0, y: -15 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <ProductionTab
-                    operationBreakdowns={operationBreakdowns}
-                    setOperationBreakdowns={setOperationBreakdowns}
-                    workers={workers}
-                    setWorkers={setWorkers}
-                    tasks={tasks}
-                    setTasks={setTasks}
-                    workerJobs={workerJobs}
-                    setWorkerJobs={setWorkerJobs}
-                    rawMaterials={rawMaterials}
-                    setRawMaterials={setRawMaterials}
-                    materialRecipes={materialRecipes}
-                    setMaterialRecipes={setMaterialRecipes}
-                    productionBatches={productionBatches}
-                    setProductionBatches={setProductionBatches}
-                    materialReimports={materialReimports}
-                    setMaterialReimports={setMaterialReimports}
-                    laborPayments={laborPayments}
-                    setLaborPayments={setLaborPayments}
-                    settings={settings}
-                    userRole={userRole}
-                  />
+                  <Suspense fallback={<TabLoadingFallback />}>
+                    <ProductionTab
+                      operationBreakdowns={operationBreakdowns}
+                      setOperationBreakdowns={setOperationBreakdowns}
+                      workers={workers}
+                      setWorkers={setWorkers}
+                      tasks={tasks}
+                      setTasks={setTasks}
+                      workerJobs={workerJobs}
+                      setWorkerJobs={setWorkerJobs}
+                      rawMaterials={rawMaterials}
+                      setRawMaterials={setRawMaterials}
+                      materialRecipes={materialRecipes}
+                      setMaterialRecipes={setMaterialRecipes}
+                      productionBatches={productionBatches}
+                      setProductionBatches={setProductionBatches}
+                      materialReimports={materialReimports}
+                      setMaterialReimports={setMaterialReimports}
+                      laborPayments={laborPayments}
+                      setLaborPayments={setLaborPayments}
+                      settings={settings}
+                      userRole={userRole}
+                    />
+                  </Suspense>
                 </motion.div>
               ) : activeTab === 'report' ? (
                 <motion.div
@@ -2287,6 +2386,7 @@ export default function App() {
                     productionBatches={productionBatches}
                     workers={workers}
                     workerJobs={workerJobs}
+                    setActiveTab={setActiveTab}
                   />
                 </motion.div>
               ) : activeTab === 'settings' ? (
@@ -2382,6 +2482,7 @@ export default function App() {
             {/* Floating stats is now placed inside ReportTab as a dedicated tab icon button */}
 
           </main>
+          </div>
 
           {/* Sticky floating bottom shelf navigation for mobile/tablet screen sizes */}
           <div className="lg:hidden fixed bottom-3 left-3 right-3 rounded-2xl bg-[#0c101d]/90 text-white border border-slate-800/80 backdrop-blur-md shadow-2xl z-40 px-5 py-3 flex justify-between items-center text-center">
@@ -2419,17 +2520,6 @@ export default function App() {
               </span>
               <span className="text-[9.5px]">Thông báo</span>
             </button>
-
-            {/* 4. Cài đặt */}
-            {allowedTabs.includes('settings') && (
-              <button
-                onClick={() => setActiveTab('settings')}
-                className={`flex-1 flex flex-col items-center gap-1 cursor-pointer transition-all ${activeTab === 'settings' ? 'text-indigo-400 scale-105 font-bold' : 'text-slate-400 hover:text-slate-250'}`}
-              >
-                <Settings className="w-4.5 h-4.5" />
-                <span className="text-[9.5px]">Cài đặt</span>
-              </button>
-            )}
 
             {/* 5. Thư viện ảnh */}
             {allowedTabs.includes('gallery') && (
@@ -2588,7 +2678,15 @@ export default function App() {
             </motion.form>
           </div>
         )}
+
+        {updateInfo && (
+          <AppUpdateModal
+            updateInfo={updateInfo}
+            onClose={handleDismissUpdate}
+          />
+        )}
       </AnimatePresence>
+
 
     </div>
   );

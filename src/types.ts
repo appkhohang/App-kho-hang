@@ -205,4 +205,16 @@ export interface UserProfile {
   photo?: string; // Ảnh đại diện người dùng
 }
 
+export const CURRENT_VERSION = '1.0.2';
+
+export interface AppUpdateInfo {
+  version: string;
+  releaseDate: string;
+  critical: boolean;
+  changelog: string[];
+  apkUrl: string;
+}
+
+
+
 

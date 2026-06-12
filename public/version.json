@@ -1,0 +1,12 @@
+{
+  "version": "1.0.4",
+  "releaseDate": "12/06/2026",
+  "critical": false,
+  "changelog": [
+    "Cải tiến cơ cấu nén ảnh hóa đơn gốc giúp chạy mượt khi mạng yếu",
+    "Sửa lỗi đồng bộ dữ liệu ngoại tuyến (Offline) khi mất kết nối mạng bất ngờ",
+    "Tối ưu độ chính xác của cảm biến định vị vệ tinh GPS trên các thiết bị Android từ phiên bản 11 trở lên",
+    "Hiển thị bảng chi tiết dung lượng lưu trữ đệm sạch sẽ trong cài đặt xưởng"
+  ],
+  "apkUrl": "https://app-kho-an.web.app/app-release.apk"
+}

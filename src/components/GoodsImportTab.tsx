@@ -3,14 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera, ChevronRight, Info, Calendar, CheckSquare } from 'lucide-react';
 import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietnameseMonthKey } from '../utils/dateUtils';
 import { exportDatabasePackage } from '../utils/storage';
-import LaborPaymentReceiptModal from './LaborPaymentReceiptModal';
-import CameraCapture from './CameraCapture';
+
+const LaborPaymentReceiptModal = lazy(() => import('./LaborPaymentReceiptModal'));
+const CameraCapture = lazy(() => import('./CameraCapture'));
+
 import { useAndroidBack } from '../hooks/useAndroidBack';
 import { LazyImage } from './LazyImage';
 import * as XLSX from 'xlsx';
@@ -850,11 +852,13 @@ export default function GoodsImportTab({
 
                     {/* Camera Capture for Goods Item */}
                     <div className="border-t border-slate-100 dark:border-slate-805/40 pt-2 pb-1">
-                      <CameraCapture
-                        onCapture={setImportPhoto}
-                        initialValue={importPhoto}
-                        resolvedTheme={settings.theme === 'dark' ? 'dark' : 'light'}
-                      />
+                      <Suspense fallback={<div className="h-20 flex items-center justify-center text-xs text-slate-400 font-mono">Đang khởi tạo máy ảnh...</div>}>
+                        <CameraCapture
+                          onCapture={setImportPhoto}
+                          initialValue={importPhoto}
+                          resolvedTheme={settings.theme === 'dark' ? 'dark' : 'light'}
+                        />
+                      </Suspense>
                     </div>
 
                     <div className="flex flex-col sm:flex-row justify-between items-center pt-2 gap-3">
@@ -2030,12 +2034,14 @@ export default function GoodsImportTab({
       {/* Labor payment receipt modal for snapshot/custom share */}
       <AnimatePresence>
         {selectedLaborPaymentForModal && (
-          <LaborPaymentReceiptModal
-            payment={selectedLaborPaymentForModal}
-            weekItems={items.filter(item => item.weekKey === selectedLaborPaymentForModal.weekKey)}
-            allLaborPayments={laborPayments}
-            onClose={() => setSelectedLaborPaymentForModal(null)}
-          />
+          <Suspense fallback={null}>
+            <LaborPaymentReceiptModal
+              payment={selectedLaborPaymentForModal}
+              weekItems={items.filter(item => item.weekKey === selectedLaborPaymentForModal.weekKey)}
+              allLaborPayments={laborPayments}
+              onClose={() => setSelectedLaborPaymentForModal(null)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 

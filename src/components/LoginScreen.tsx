@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mail, ShieldCheck, Key, Lock, Bell, UserCheck, RefreshCw, AlertTriangle, Eye, EyeOff, Sparkles, CheckCircle2 } from 'lucide-react';
 import { AuthState, UserProfile } from '../types';
+import AnBrandLogo from './AnBrandLogo';
 import { 
   signInWithPopup, 
   GoogleAuthProvider, 
@@ -254,12 +255,9 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
       >
         
         {/* Header Branding */}
-        <div className="text-center mb-8 relative">
-          <div className="mx-auto w-12 h-12 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center rounded-xl mb-3 shadow-inner">
-            <ShieldCheck className="w-6 h-6 text-emerald-500 animate-pulse" />
-          </div>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-850 dark:text-slate-100 mb-1 font-sans">XƯỞNG MAY AN</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 tracking-wider font-mono">BẢO MẬT & TỐI GIẢN SYSTEM</p>
+        <div className="text-center mb-6 relative flex flex-col items-center">
+          <AnBrandLogo size={130} className="mb-2" />
+          <p className="text-[10px] text-slate-450 dark:text-slate-400 tracking-[0.25em] font-mono mt-1 font-semibold uppercase">HỆ THỐNG QUẢN LÝ NỘI BỘ</p>
         </div>
 
         <AnimatePresence mode="wait">

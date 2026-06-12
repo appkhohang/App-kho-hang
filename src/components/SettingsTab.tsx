@@ -5,8 +5,10 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle } from 'lucide-react';
-import { AppSettings, ImportItem, Customer, UserProfile, Bill } from '../types';
+import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle } from 'lucide-react';
+import { AppSettings, ImportItem, Customer, UserProfile, Bill, CURRENT_VERSION, AppUpdateInfo } from '../types';
+import { isNewerVersion } from '../utils/updateService';
+
 import { auth, db } from '../utils/firebase';
 import { updatePassword, getAuth, createUserWithEmailAndPassword, signOut as logoutTemp, setPersistence, inMemoryPersistence } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -60,6 +62,68 @@ export default function SettingsTab({
   const [inputGroupCode, setInputGroupCode] = useState(() => {
     return localStorage.getItem("xuongan_group_code") || "";
   });
+
+  // OTA App Update States
+  const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
+  const [inputUpdateUrl, setInputUpdateUrl] = useState(() => {
+    return localStorage.getItem("xuongan_update_url") || "https://app-kho-an.web.app/version.json";
+  });
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [checkResult, setCheckResult] = useState<'idle' | 'up_to_date' | 'has_update' | 'error'>('idle');
+  const [updateDetail, setUpdateDetail] = useState<AppUpdateInfo | null>(null);
+  const [manualCheckError, setManualCheckError] = useState<string>('');
+
+  const handleManualCheckUpdate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsCheckingUpdate(true);
+    setCheckResult('idle');
+    setUpdateDetail(null);
+    setManualCheckError('');
+
+    try {
+      localStorage.setItem("xuongan_update_url", inputUpdateUrl.trim());
+
+      const fetchUrl = `${inputUpdateUrl.trim()}?t=${Date.now()}`;
+      const response = await fetch(fetchUrl, {
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Mã lỗi máy chủ: ${response.status}`);
+      }
+
+      const data = await response.json() as AppUpdateInfo;
+
+      if (data && typeof data.version === 'string') {
+        const hasNewer = isNewerVersion(data.version, CURRENT_VERSION);
+        setUpdateDetail(data);
+        if (hasNewer) {
+          setCheckResult('has_update');
+        } else {
+          setCheckResult('up_to_date');
+        }
+      } else {
+        throw new Error("Phản hồi không phải là định dạng update JSON hợp lệ.");
+      }
+    } catch (err: any) {
+      console.warn('[Manual Update Check] Error:', err);
+      setManualCheckError(err?.message || 'Không thể kết nối máy chủ update. Hãy kiểm tra kết nối internet.');
+      setCheckResult('error');
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleResetDefaultUrl = () => {
+    const defaultUrl = "https://app-kho-an.web.app/version.json";
+    setInputUpdateUrl(defaultUrl);
+    localStorage.setItem("xuongan_update_url", defaultUrl);
+    alert("Đã khôi phục đường dẫn máy chủ cập nhật xưởng về mặc định!");
+  };
 
   // States for changing password feature
   const [newPassword, setNewPassword] = useState('');
@@ -983,6 +1047,188 @@ export default function SettingsTab({
                   </button>
                 </div>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* 🚀 BẢN CẬP NHẬT HỆ THỐNG OTA (ONLINE / OFFLINE HYBRID UPDATE) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+        <div 
+          onClick={() => setIsUpdatesOpen(!isUpdatesOpen)}
+          className="flex items-center justify-between cursor-pointer select-none group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition duration-200">
+              <ArrowUpCircle className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2 flex-wrap">
+                <span>Cập nhật ứng dụng tự động (OTA)</span>
+                <span className="text-[9px] bg-indigo-600 dark:bg-indigo-550 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-mono">v{CURRENT_VERSION}</span>
+              </h3>
+              <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+                Kiểm tra và nâng cấp phiên bản APK mới trực tuyến thông qua máy chủ lưu trữ của xưởng.
+              </p>
+            </div>
+          </div>
+          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-405 group-hover:text-slate-705 dark:group-hover:text-indigo-400 transition ml-2 shrink-0">
+            {isUpdatesOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {isUpdatesOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800"
+            >
+              {/* Question Explainer for the user */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-indigo-950/20 rounded-xl space-y-2 text-xs text-slate-550 dark:text-slate-350 leading-relaxed text-left">
+                <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black uppercase text-[10.5px]">
+                  <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>Cơ chế cập nhật ngoại tuyến lai (Offline-first Hybrid OTA)</span>
+                </div>
+                <p>
+                  Ứng dụng được cài đặt trực tiếp dưới dạng tệp APK, cho phép hạch toán và ghi nhớ sổ sách <strong className="text-slate-800 dark:text-slate-100">hoàn toàn ngoại tuyến (Offline)</strong> khi không có mạng.
+                </p>
+                <p>
+                  Khi thiết bị có kết nối mạng (Online), ứng dụng sẽ tự động tải tệp metadata cấu hình nhỏ để so sánh phiên bản. Nếu phát hiện xưởng có bản nâng cấp mới, màn hình sẽ hiển thị thông báo để tải xuống file APK cập nhật an toàn.
+                </p>
+              </div>
+
+              {/* Server URL Config Form */}
+              <form onSubmit={(e) => { e.preventDefault(); handleManualCheckUpdate(); }} className="space-y-4 text-left">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider font-mono">
+                      Đường dẫn máy chủ cập nhật (JSON Endpoint)
+                    </label>
+                    <div className="relative">
+                      <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="url"
+                        value={inputUpdateUrl}
+                        onChange={(e) => setInputUpdateUrl(e.target.value)}
+                        placeholder="Hãy điền URL tệp version.json của xưởng"
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg py-2.5 pl-9 pr-4 text-xs font-mono text-slate-800 dark:text-slate-200 outline-none transition"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-end gap-2">
+                    <button
+                      type="submit"
+                      disabled={isCheckingUpdate}
+                      className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-sans font-black tracking-wide transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98]"
+                    >
+                      {isCheckingUpdate ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Đang kiểm tra...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          <span>Kiểm tra Cập nhật</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleResetDefaultUrl}
+                      className="p-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-500 hover:text-slate-700 dark:text-slate-400 rounded-lg text-xs font-bold transition flex items-center justify-center cursor-pointer"
+                      title="Khôi phục URL mặc định"
+                    >
+                      <Trash2 className="w-4.5 h-4.5" />
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {/* Dynamic Check results and logs */}
+              {checkResult !== 'idle' && (
+                <div className="border border-slate-150 dark:border-slate-800 rounded-2xl overflow-hidden text-left bg-slate-50/20 dark:bg-slate-950/10 text-xs">
+                  {/* Results Headers */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between">
+                    <span className="font-mono text-[10.5px] font-black text-slate-400 uppercase tracking-wider font-bold">Trạng thái phản hồi:</span>
+                    {checkResult === 'has_update' ? (
+                      <span className="font-bold py-0.5 px-2 bg-rose-50 dark:bg-rose-955/20 text-rose-650 dark:text-rose-450 rounded text-[10px] uppercase font-mono tracking-widest animate-pulse border border-rose-250 dark:border-rose-900/40">
+                        🔴 Có bản cập nhật mới
+                      </span>
+                    ) : checkResult === 'up_to_date' ? (
+                      <span className="font-bold py-0.5 px-2 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-650 dark:text-emerald-450 rounded text-[10px] uppercase font-mono tracking-widest border border-emerald-250 dark:border-emerald-990/40">
+                        🟢 Phiên bản mới nhất
+                      </span>
+                    ) : (
+                      <span className="font-bold py-0.5 px-2 bg-amber-50 dark:bg-[#1f1712] text-amber-65 border border-amber-250 dark:border-[#fbbf24]/10 rounded text-[10px] uppercase font-mono tracking-widest">
+                        ⚠️ Gặp lỗi kết nối
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Result Body content */}
+                  <div className="p-4 space-y-4 leading-relaxed text-slate-650 dark:text-slate-300">
+                    {checkResult === 'has_update' && updateDetail && (
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start flex-wrap gap-2 pb-2.5 border-b border-slate-150 dark:border-slate-800/80">
+                          <div>
+                            <p className="font-extrabold text-[#111827] dark:text-white text-[13px]">Bản nâng cấp tối ưu v{updateDetail.version}</p>
+                            <p className="text-[10px] text-slate-400">Ngày phát hành: {updateDetail.releaseDate || 'Mới đây'}</p>
+                          </div>
+                          
+                          <button
+                            type="button"
+                            onClick={() => window.open(updateDetail.apkUrl, '_blank', 'noopener,noreferrer')}
+                            className="py-1.5 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black tracking-wide transition flex items-center gap-1 cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Tải về file APK ngay</span>
+                          </button>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <p className="font-bold text-[11px] font-mono uppercase text-slate-400 tracking-wider">Thông tin thay đổi mới nhất:</p>
+                          <ul className="space-y-1 bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-slate-150 dark:border-slate-850">
+                            {updateDetail.changelog.map((line, idx) => (
+                              <li key={idx} className="flex gap-1.5 items-start text-[11.5px]">
+                                <span className="text-emerald-500 shrink-0 select-none font-bold">✓</span>
+                                <span>{line}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {checkResult === 'up_to_date' && updateDetail && (
+                      <div className="space-y-2">
+                        <p className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                          <span className="text-emerald-500 text-base font-bold">✓</span>
+                          <span>Ứng dụng của bạn đang chạy phiên bản hoàn hảo ({CURRENT_VERSION})!</span>
+                        </p>
+                        <p className="text-slate-500">
+                          Máy chủ chứa bản nâng cấp hiện tại: <strong className="text-slate-700 dark:text-slate-350 font-bold">v{updateDetail.version}</strong> (Phát hành ngày {updateDetail.releaseDate || 'Mới đây'}). Bạn đã có sẵn bản hoàn thiện, không cần nâng cấp gì thêm.
+                        </p>
+                      </div>
+                    )}
+
+                    {checkResult === 'error' && (
+                      <div className="space-y-2 p-3 border border-red-200 dark:border-red-950/40 bg-red-500/[0.02] rounded-xl text-red-650 dark:text-red-400 font-medium">
+                        <p className="font-bold uppercase tracking-wider text-[10.5px] font-mono flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /><span>Chi tiết nhật ký lỗi kết nối:</span></p>
+                        <p className="font-mono text-[11px] leading-relaxed select-all bg-white dark:bg-slate-950 p-2 rounded-lg border border-slate-150 dark:border-slate-850">{manualCheckError}</p>
+                        <p className="text-[10px] text-slate-400 font-sans font-normal leading-normal pt-1 border-t border-red-200/50 dark:border-slate-800">
+                          Hãy kiểm tra lại đường dẫn máy chủ URL ở trên có hoạt động được không (truy cập bằng điện thoại/máy tính xem có hiện JSON chữ không) hoặc kiểm tra xem thiết bị của bạn có đăng trực tuyến Wifi / 4G hay không.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
