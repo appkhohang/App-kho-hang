@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import GoodsImportTab from './components/GoodsImportTab';
 import InvoicesTab from './components/InvoicesTab';
@@ -14,6 +14,7 @@ import ReportTab from './components/ReportTab';
 import SettingsTab from './components/SettingsTab';
 import GalleryTab from './components/GalleryTab';
 import FloatingStats from './components/FloatingStats';
+import CameraCapture from './components/CameraCapture';
 import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile } from './types';
 import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage } from './utils/storage';
 import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncService';
@@ -152,10 +153,45 @@ export default function App() {
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => getSavedArray("xuongan_user_profiles", []));
   const [profileFetchCompleted, setProfileFetchCompleted] = useState<boolean>(false);
 
+  const [isEditingSelfProfile, setIsEditingSelfProfile] = useState<boolean>(false);
+  const [selfProfileName, setSelfProfileName] = useState<string>('');
+  const [selfProfilePhoto, setSelfProfilePhoto] = useState<string | null>(null);
+
+  // Synchronize state when the modal is opened
+  useEffect(() => {
+    if (isEditingSelfProfile) {
+      setSelfProfileName(authState.displayName || '');
+      setSelfProfilePhoto(authState.photo || null);
+    }
+  }, [isEditingSelfProfile, authState]);
+
+  const getAutoWelcomeText = () => {
+    const hr = new Date().getHours();
+    if (hr >= 5 && hr < 12) return "Chào buổi sáng ☀️ Chúc một ngày ngập tràn năng lượng!";
+    if (hr >= 12 && hr < 18) return "Chào buổi chiều 🌤️ Mong công việc của bạn hanh thông!";
+    if (hr >= 18 && hr < 22) return "Chào buổi tối 🌙 Chúc bạn có một khoảng thời gian ấm áp!";
+    return "Chào đêm muộn 🌟 Chúc bạn có một giấc ngủ thật ngon!";
+  };
+
+  const handleSaveSelfProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthState(prev => ({
+      ...prev,
+      displayName: selfProfileName || 'Kế toán viên',
+      photo: selfProfilePhoto || undefined
+    }));
+    setIsEditingSelfProfile(false);
+  };
+
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
   // Active Tab state
   const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery'>('home');
+  
+  // Quick transition states from Home FAB
+  const [autoExpandImportForm, setAutoExpandImportForm] = useState(false);
+  const [autoOpenCreateBill, setAutoOpenCreateBill] = useState(false);
+  const [isHomeFabOpen, setIsHomeFabOpen] = useState(false);
   
   // Mobile hamburger drawer state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -1015,16 +1051,46 @@ export default function App() {
           <div className="absolute right-0 top-0 w-36 h-36 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
           
           {/* Avatar frame */}
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#415ef4] to-[#6366f1] border-2 border-indigo-500/20 flex items-center justify-center text-white text-[18px] font-black shrink-0 shadow-lg shadow-indigo-500/10">
-            {initials}
+          <div 
+            onClick={() => setIsEditingSelfProfile(true)}
+            className="relative cursor-pointer group active:scale-95 transition shrink-0"
+            title="Nhấp để thay đổi ảnh đại diện"
+          >
+            {authState.photo ? (
+              <img
+                src={authState.photo}
+                alt={authState.displayName || 'User Photo'}
+                className="w-16 h-16 rounded-full object-cover border-2 border-indigo-500/20 shrink-0 shadow-lg group-hover:border-indigo-500/60 transition"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#415ef4] to-[#6366f1] border-2 border-indigo-500/20 flex items-center justify-center text-white text-[18px] font-black shrink-0 shadow-lg shadow-indigo-500/10 group-hover:border-indigo-500/60 transition">
+                {initials}
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/45 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-[9px] text-white font-black uppercase text-center p-1 font-mono tracking-tight select-none">
+              Sửa ảnh 📷
+            </div>
           </div>
           
-          <div className="space-y-0.5">
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tracking-widest uppercase font-mono">XIN CHÀO,</span>
-            <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+          <div className="space-y-1">
+            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tracking-widest uppercase font-mono mb-0.5">
+              XIN CHÀO,
+            </div>
+            
+            <h1 
+              onClick={() => setIsEditingSelfProfile(true)}
+              className="text-xl md:text-2xl font-black tracking-tight text-indigo-600 dark:text-indigo-400 leading-tight cursor-pointer hover:underline hover:text-[#415ef4] dark:hover:text-[#6366f1] transition-all"
+              title="Nhấp để chỉnh sửa tên hiển thị"
+            >
               {authState.displayName || 'Demo User'}
             </h1>
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono">
+            
+            <div className="text-[10px] font-black text-emerald-600 dark:text-[#10b981] font-mono tracking-wide bg-emerald-500/10 dark:bg-emerald-500/20 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 mt-1">
+              <span>{getAutoWelcomeText()}</span>
+            </div>
+
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono mt-1">
               {authState.email || 'demo@nhapkho.app'}
             </p>
           </div>
@@ -1258,6 +1324,78 @@ export default function App() {
               </div>
             </motion.div>
           )}
+        </div>
+
+        {/* Floating Action Button (FAB) with speed dial quick options */}
+        {/* Backdrop overlay for speed dial */}
+        {isHomeFabOpen && (
+          <div 
+            className="fixed inset-0 z-45 bg-slate-950/45 backdrop-blur-[2px] transition-opacity"
+            onClick={() => setIsHomeFabOpen(false)}
+          />
+        )}
+
+        <div className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-55 flex flex-col items-end gap-3 font-sans">
+          <AnimatePresence>
+            {isHomeFabOpen && (
+              <div className="flex flex-col items-end gap-3.5 pb-1 select-none">
+                {/* Option 1: Nhập hàng mới */}
+                {allowedTabs.includes('import') && (
+                  <motion.button
+                    initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 15, scale: 0.9 }}
+                    onClick={() => {
+                      setIsHomeFabOpen(false);
+                      setAutoExpandImportForm(true);
+                      setActiveTab('import');
+                    }}
+                    className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-[#10b981] hover:bg-[#059669] text-white text-xs font-black shadow-2xl border border-emerald-450/20 active:scale-95 transition cursor-pointer"
+                  >
+                    <ShoppingCart className="w-4 h-4 text-white" />
+                    <span>Nhập hàng mới</span>
+                  </motion.button>
+                )}
+
+                {/* Option 2: Viết bill hóa đơn */}
+                {allowedTabs.includes('invoices') && (
+                  <motion.button
+                    initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 15, scale: 0.9 }}
+                    onClick={() => {
+                      setIsHomeFabOpen(false);
+                      setAutoOpenCreateBill(true);
+                      setActiveTab('invoices');
+                    }}
+                    className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-black shadow-2xl border border-indigo-500/20 active:scale-95 transition cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4 text-white" />
+                    <span>Viết bill hóa đơn</span>
+                  </motion.button>
+                )}
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Main Floating Trigger Button with pulsing indicator */}
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsHomeFabOpen(!isHomeFabOpen)}
+            className="w-14 h-14 rounded-full bg-linear-to-tr from-[#415ef4] to-[#6366f1] text-white flex items-center justify-center shadow-2xl shadow-indigo-550/20 border border-indigo-500/25 cursor-pointer active:scale-95 transition relative group"
+            title="Tác vụ nhanh"
+          >
+            {/* Pulsing ring effect to attract focus */}
+            <span className="absolute inset-0 rounded-full bg-indigo-500/20 animate-ping pointer-events-none group-hover:bg-indigo-500/25" />
+            
+            <motion.div
+              animate={{ rotate: isHomeFabOpen ? 135 : 0 }}
+              transition={{ type: "spring", stiffness: 260, damping: 20 }}
+            >
+              <Plus className="w-7 h-7 font-black" />
+            </motion.div>
+          </motion.button>
         </div>
       </div>
     );
@@ -2079,6 +2217,8 @@ export default function App() {
                     selectedWeekFilter={selectedWeekFilter}
                     setSelectedWeekFilter={setSelectedWeekFilter}
                     userRole={userRole}
+                    autoExpandForm={autoExpandImportForm}
+                    onAutoExpandFormReset={() => setAutoExpandImportForm(false)}
                   />
                 </motion.div>
               ) : activeTab === 'invoices' ? (
@@ -2098,6 +2238,8 @@ export default function App() {
                     setPayments={setPayments}
                     userRole={userRole}
                     resolvedTheme={resolvedTheme}
+                    autoOpenCreateBill={autoOpenCreateBill}
+                    onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
                   />
                 </motion.div>
               ) : activeTab === 'production' ? (
@@ -2383,6 +2525,68 @@ export default function App() {
               <X className="w-4 h-4" />
             </button>
           </motion.div>
+        )}
+
+        {isEditingSelfProfile && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+            <div className="absolute inset-0" onClick={() => setIsEditingSelfProfile(false)} />
+            <motion.form
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onSubmit={handleSaveSelfProfile}
+              className={`max-w-md w-full p-6 shadow-2xl rounded-2xl z-20 space-y-4 border ${resolvedTheme === 'dark' ? 'bg-[#101424] border-slate-850 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+            >
+              <div className={`pb-3 flex justify-between items-center border-b ${resolvedTheme === 'dark' ? 'border-slate-850' : 'border-slate-150'}`}>
+                <div>
+                  <h3 className="text-sm font-black tracking-wider uppercase font-mono">Chỉnh sửa hồ sơ cá nhân</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Cập nhật họ tên hiển thị và ảnh đại diện của bạn</p>
+                </div>
+                <button type="button" onClick={() => setIsEditingSelfProfile(false)} className="text-slate-400 hover:text-slate-650 transition p-1 cursor-pointer">
+                  <X className="w-4.5 h-4.5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 tracking-wider">Họ tên hiển thị *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: Nguyễn Văn A, Thủ quỹ An..."
+                    value={selfProfileName}
+                    onChange={e => setSelfProfileName(e.target.value)}
+                    className={`w-full border rounded-xl py-2.5 px-3.5 outline-none focus:border-indigo-505 transition font-sans ${resolvedTheme === 'dark' ? 'bg-slate-900 border-slate-850 text-white' : 'bg-white border-slate-200'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 tracking-wider">Ảnh chân dung / Ảnh đại diện của bạn</label>
+                  <CameraCapture
+                    onCapture={setSelfProfilePhoto}
+                    initialValue={selfProfilePhoto}
+                    resolvedTheme={resolvedTheme}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingSelfProfile(false)}
+                  className="w-1/2 py-2.5 border border-slate-200 text-slate-500 rounded-xl font-medium cursor-pointer transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 bg-[#6366f1] hover:bg-[#5053e1] text-white py-2.5 rounded-xl font-bold transition active:scale-[0.98] cursor-pointer"
+                >
+                  Ghi Nhận Hồ Sơ
+                </button>
+              </div>
+            </motion.form>
+          </div>
         )}
       </AnimatePresence>
 

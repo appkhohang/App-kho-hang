@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, UserPlus, Receipt, DollarSign, Image, Save, Plus, 
   Trash2, Calendar, ChevronRight, Search, X, ArrowLeft, 
-  TrendingUp, Activity, Download, Camera
+  TrendingUp, Activity, Download, Camera, Edit
 } from 'lucide-react';
 import { Customer, Bill, BillItem, PaymentRecord } from '../types';
 import { getCurrentDateStr } from '../utils/dateUtils';
@@ -22,6 +22,8 @@ interface InvoicesTabProps {
   setPayments: React.Dispatch<React.SetStateAction<PaymentRecord[]>>;
   userRole?: 'admin' | 'staff' | 'viewer';
   resolvedTheme?: 'light' | 'dark';
+  autoOpenCreateBill?: boolean;
+  onAutoOpenCreateBillReset?: () => void;
 }
 
 export default function InvoicesTab({
@@ -32,7 +34,9 @@ export default function InvoicesTab({
   payments,
   setPayments,
   userRole = 'viewer',
-  resolvedTheme = 'light'
+  resolvedTheme = 'light',
+  autoOpenCreateBill = false,
+  onAutoOpenCreateBillReset
 }: InvoicesTabProps) {
   const isViewer = false;
   // Selected customer context
@@ -40,13 +44,25 @@ export default function InvoicesTab({
   
   // Search query for customers
   const [customerSearch, setCustomerSearch] = useState('');
+
+  // Search query for bought models of selected customer
+  const [modelSearch, setModelSearch] = useState('');
   
   // New Customer Form State
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
   const [newCustomerInitialDebt, setNewCustomerInitialDebt] = useState<number | ''>('');
+  const [newCustomerPhoto, setNewCustomerPhoto] = useState<string | null>(null);
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [isSpeedDialOpen, setIsSpeedDialOpen] = useState(false);
+
+  // Edit Customer Form State
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [editCustomerPhone, setEditCustomerPhone] = useState('');
+  const [editCustomerInitialDebt, setEditCustomerInitialDebt] = useState<number | ''>('');
+  const [editCustomerPhoto, setEditCustomerPhoto] = useState<string | null>(null);
 
   // Toggle invoice writer drawer & statistics overlay
   const [isWritingInvoice, setIsWritingInvoice] = useState(false);
@@ -61,11 +77,106 @@ export default function InvoicesTab({
   const [modalHasPaid, setModalHasPaid] = useState<boolean>(false);
   const [invoicePhoto, setInvoicePhoto] = useState<string | null>(null);
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
+
+  const handleOpenNewInvoice = () => {
+    setEditingBillId(null);
+    setModalDraftItems([{ mẫuMã: '', sốLượng: '', đơnGiá: '', thànhTiền: 0 } as any]);
+    setBillGhiChú('');
+    setModalPaymentAmount('');
+    setModalHasPaid(false);
+    setInvoicePhoto(null);
+    setIsWritingInvoice(true);
+  };
+
+  // Reset modelSearch when changing customer selection
+  useEffect(() => {
+    setModelSearch('');
+  }, [selectedCustomerId]);
+
+  // Auto open create bill if requested via floating action button from Home
+  useEffect(() => {
+    if (autoOpenCreateBill) {
+      if (customers.length > 0) {
+        setSelectedCustomerId(customers[0].id);
+        handleOpenNewInvoice();
+      } else {
+        setIsAddingCustomer(true);
+      }
+      if (onAutoOpenCreateBillReset) {
+        onAutoOpenCreateBillReset();
+      }
+    }
+  }, [autoOpenCreateBill, customers, onAutoOpenCreateBillReset]);
+
+  const handleOpenEditInvoice = (bill: Bill) => {
+    setEditingBillId(bill.id);
+    setModalDraftItems(bill.items.map(item => ({
+      mẫuMã: item.mẫuMã,
+      sốLượng: item.sốLượng,
+      đơnGiá: item.đơnGiá,
+      thànhTiền: item.thànhTiền,
+      id: item.id
+    } as any)));
+    setBillGhiChú('');
+    setModalPaymentAmount(bill.paymentAmount || '');
+    setModalHasPaid(!!bill.hasPaid || (bill.paymentAmount > 0));
+    setInvoicePhoto(bill.photo || null);
+    setBillDate(bill.date);
+    setIsWritingInvoice(true);
+  };
+
+  const calculateDebtForCustomerWithList = (custId: string, upToTime: number, customBills: Bill[]) => {
+    const cust = customers.find(c => c.id === custId);
+    if (!cust) return 0;
+
+    const custBills = customBills
+      .filter(b => b.customerId === custId && b.createdAt <= upToTime)
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    let runningBalance = cust.initialDebt;
+
+    custBills.forEach(bill => {
+      runningBalance += bill.subtotal - bill.paymentAmount;
+    });
+
+    const custPayments = payments
+      .filter(p => p.customerId === custId && p.createdAt <= upToTime);
+    
+    custPayments.forEach(p => {
+      runningBalance -= p.amount;
+    });
+
+    return runningBalance;
+  };
+
+  const recalculateCustomerBills = (custId: string, currentBills: Bill[]): Bill[] => {
+    const cust = customers.find(c => c.id === custId);
+    if (!cust) return currentBills;
+
+    const customerBills = currentBills
+      .filter(b => b.customerId === custId)
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    const otherBills = currentBills.filter(b => b.customerId !== custId);
+
+    const updatedCustomerBills = customerBills.map(bill => {
+      const prevDebt = calculateDebtForCustomerWithList(custId, bill.createdAt - 1, currentBills);
+      const grandTotal = bill.subtotal + prevDebt - bill.paymentAmount;
+      return {
+        ...bill,
+        previousDebt: prevDebt,
+        grandTotal: grandTotal
+      };
+    });
+
+    return [...otherBills, ...updatedCustomerBills];
+  };
 
   // Specialized save logic for the high-fidelity modal
   const handleSaveModalBill = () => {
     if (isViewer) {
-      alert("⚠️ Tài khoản của bạn là CHỈ XEM, không có quyền ghi sổ hóa đơn mới!");
+      alert("⚠️ Tài khoản của bạn là CHỈ XEM, không có quyền ghi sổ hóa đơn!");
       return;
     }
     if (!selectedCustomerId) {
@@ -85,40 +196,69 @@ export default function InvoicesTab({
     }
 
     const subtotal = activeItems.reduce((sum, item) => sum + (Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)), 0);
-    const previousDebt = calculateCustomerCumulativeDebt(selectedCustomerId);
     const payment = modalHasPaid ? Number(modalPaymentAmount || 0) : 0;
 
-    const newBill: Bill = {
-      id: "bill-" + Date.now(),
-      customerId: selectedCustomerId,
-      billNumber: "HD-" + (bills.filter(b => b.customerId === selectedCustomerId).length + 1).toString().padStart(3, '0'),
-      date: billDate,
-      items: activeItems.map((item, i) => ({
-        id: `bi-${Date.now()}-${i}`,
-        mẫuMã: item.mẫuMã.trim(),
-        sốLượng: Number(item.sốLượng || 0),
-        đơnGiá: Number(item.đơnGiá || 0),
-        thànhTiền: Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)
-      })),
-      subtotal,
-      paymentAmount: payment,
-      previousDebt,
-      grandTotal: subtotal + previousDebt - payment,
-      createdAt: Date.now(),
-      hasPaid: modalHasPaid,
-      photo: invoicePhoto || undefined
-    };
+    if (editingBillId) {
+      const updated = bills.map(b => {
+        if (b.id === editingBillId) {
+          return {
+            ...b,
+            date: billDate,
+            items: activeItems.map((item, i) => ({
+              id: (item as any).id || `bi-${Date.now()}-${i}`,
+              mẫuMã: item.mẫuMã.trim(),
+              sốLượng: Number(item.sốLượng || 0),
+              đơnGiá: Number(item.đơnGiá || 0),
+              thànhTiền: Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)
+            })),
+            subtotal,
+            paymentAmount: payment,
+            hasPaid: modalHasPaid,
+            photo: invoicePhoto || undefined
+          };
+        }
+        return b;
+      });
 
-    setBills(prev => [...prev, newBill]);
+      const finalBills = recalculateCustomerBills(selectedCustomerId, updated);
+      setBills(finalBills);
+
+      alert("Cập nhật hóa đơn thành công!");
+    } else {
+      const previousDebt = calculateCustomerCumulativeDebt(selectedCustomerId);
+      const newBill: Bill = {
+        id: "bill-" + Date.now(),
+        customerId: selectedCustomerId,
+        billNumber: "HD-" + (bills.filter(b => b.customerId === selectedCustomerId).length + 1).toString().padStart(3, '0'),
+        date: billDate,
+        items: activeItems.map((item, i) => ({
+          id: `bi-${Date.now()}-${i}`,
+          mẫuMã: item.mẫuMã.trim(),
+          sốLượng: Number(item.sốLượng || 0),
+          đơnGiá: Number(item.đơnGiá || 0),
+          thànhTiền: Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)
+        })),
+        subtotal,
+        paymentAmount: payment,
+        previousDebt,
+        grandTotal: subtotal + previousDebt - payment,
+        createdAt: Date.now(),
+        hasPaid: modalHasPaid,
+        photo: invoicePhoto || undefined
+      };
+
+      setBills(prev => [...prev, newBill]);
+      alert("Ghi sổ hóa đơn thành công!");
+    }
 
     // Reset draft
+    setEditingBillId(null);
     setModalDraftItems([{ mẫuMã: '', sốLượng: '', đơnGiá: '', thànhTiền: 0 } as any]);
     setBillGhiChú('');
     setModalPaymentAmount('');
     setModalHasPaid(false);
     setInvoicePhoto(null);
     setIsWritingInvoice(false);
-    alert("Ghi sổ hóa đơn thành công!");
   };
 
   const handleAddModalDraftItem = () => {
@@ -198,6 +338,7 @@ export default function InvoicesTab({
 
   // Android Back button wiring for InvoicesTab Overlays
   useAndroidBack(isAddingCustomer, () => setIsAddingCustomer(false));
+  useAndroidBack(isEditingCustomer, () => setIsEditingCustomer(false));
   useAndroidBack(isWritingInvoice, () => setIsWritingInvoice(false));
   useAndroidBack(isQuickPaymentOpen, () => setIsQuickPaymentOpen(false));
   useAndroidBack(selectedInvoiceForModal !== null, () => setSelectedInvoiceForModal(null));
@@ -224,7 +365,8 @@ export default function InvoicesTab({
       name: newCustomerName,
       phone: newCustomerPhone,
       initialDebt: Number(newCustomerInitialDebt || 0),
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      photo: newCustomerPhoto || undefined
     };
 
     setCustomers(prev => [...prev, newCust]);
@@ -234,7 +376,83 @@ export default function InvoicesTab({
     setNewCustomerName('');
     setNewCustomerPhone('');
     setNewCustomerInitialDebt('');
+    setNewCustomerPhoto(null);
     setIsAddingCustomer(false);
+  };
+
+  // EDIT CUSTOMER
+  const handleEditCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isViewer) {
+      alert("⚠️ Tài khoản của bạn là CHỈ XEM, không có quyền chỉnh sửa đối tác!");
+      return;
+    }
+    if (!editingCustomerId || !editCustomerName) return;
+
+    const updatedCusts = customers.map(c => {
+      if (c.id === editingCustomerId) {
+        return {
+          ...c,
+          name: editCustomerName,
+          phone: editCustomerPhone,
+          initialDebt: Number(editCustomerInitialDebt || 0),
+          photo: editCustomerPhoto || undefined
+        };
+      }
+      return c;
+    });
+
+    setCustomers(updatedCusts);
+
+    // If initialDebt changed, recalculate all bills for this customer and update bills state
+    const originalCust = customers.find(c => c.id === editingCustomerId);
+    if (originalCust && originalCust.initialDebt !== Number(editCustomerInitialDebt || 0)) {
+      const calculateDebtWithCusts = (custId: string, upToTime: number, customBills: Bill[]) => {
+        const cust = updatedCusts.find(c => c.id === custId);
+        if (!cust) return 0;
+
+        const custBills = customBills
+          .filter(b => b.customerId === custId && b.createdAt <= upToTime)
+          .sort((a, b) => a.createdAt - b.createdAt);
+
+        let runningBalance = cust.initialDebt;
+
+        custBills.forEach(bill => {
+          runningBalance += bill.subtotal - bill.paymentAmount;
+        });
+
+        const custPayments = payments
+          .filter(p => p.customerId === custId && p.createdAt <= upToTime);
+        
+        custPayments.forEach(p => {
+          runningBalance -= p.amount;
+        });
+
+        return runningBalance;
+      };
+
+      const customerBills = bills
+        .filter(b => b.customerId === editingCustomerId)
+        .sort((a, b) => a.createdAt - b.createdAt);
+
+      const otherBills = bills.filter(b => b.customerId !== editingCustomerId);
+
+      const updatedCustomerBills = customerBills.map(bill => {
+        const prevDebt = calculateDebtWithCusts(editingCustomerId, bill.createdAt - 1, bills);
+        const grandTotal = bill.subtotal + prevDebt - bill.paymentAmount;
+        return {
+          ...bill,
+          previousDebt: prevDebt,
+          grandTotal: grandTotal
+        };
+      });
+
+      setBills([...otherBills, ...updatedCustomerBills]);
+    }
+
+    setIsEditingCustomer(false);
+    setEditingCustomerId(null);
+    alert("Cập nhật thông tin khách hàng thành công!");
   };
 
   // CALCULATE STANDING DEBT FOR CUSTOMER
@@ -575,10 +793,18 @@ export default function InvoicesTab({
                     {/* Top block (matching Image 2 row structure) */}
                     <div className="p-4 flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        {/* Roundtable avatar purple */}
-                        <div className="w-10 h-10 rounded-full bg-[#6c5ce7] text-white flex items-center justify-center font-extrabold text-xs border border-indigo-400/20">
-                          {initials}
-                        </div>
+                        {cust.photo ? (
+                          <img 
+                            src={cust.photo} 
+                            alt={cust.name} 
+                            className="w-10 h-10 rounded-full object-cover border border-emerald-500/20" 
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-[#6c5ce7] text-white flex items-center justify-center font-extrabold text-xs border border-indigo-400/20">
+                            {initials}
+                          </div>
+                        )}
                         <div>
                           <div className="flex items-center gap-1.5">
                             <h4 className={`text-xs font-black leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
@@ -614,7 +840,7 @@ export default function InvoicesTab({
                           onClick={(e) => {
                              e.stopPropagation();
                              setSelectedCustomerId(cust.id);
-                             setIsWritingInvoice(true);
+                             handleOpenNewInvoice();
                           }}
                           className="mr-0.5 p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full flex items-center justify-center transition shadow-md active:scale-90 cursor-pointer"
                           title="Tạo nhanh hoá đơn"
@@ -715,6 +941,15 @@ export default function InvoicesTab({
                         className={`w-full border rounded-xl py-2 px-3 outline-none focus:border-emerald-600 transition font-mono ${isDark ? 'bg-[#111c18] border-[#1c2d27] text-white' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                       />
                     </div>
+
+                    <div>
+                      <label className={`block text-[9.5px] uppercase font-extrabold tracking-wide mb-1.5 font-mono ${isDark ? 'text-[#657f76]' : 'text-slate-500'}`}>Ảnh đại diện / Hình ảnh khách hàng</label>
+                      <CameraCapture
+                        onCapture={setNewCustomerPhoto}
+                        initialValue={newCustomerPhoto}
+                        resolvedTheme={isDark ? 'dark' : 'light'}
+                      />
+                    </div>
                   </div>
 
                   <div className="flex gap-2.5 pt-2 text-xs">
@@ -736,6 +971,8 @@ export default function InvoicesTab({
               </div>
             )}
           </AnimatePresence>
+
+
 
           {/* Elegant speed dial backdrop */}
           {isSpeedDialOpen && (
@@ -759,7 +996,7 @@ export default function InvoicesTab({
                       setIsSpeedDialOpen(false);
                       if (customers.length > 0) {
                         setSelectedCustomerId(customers[0].id);
-                        setIsWritingInvoice(true);
+                        handleOpenNewInvoice();
                       } else {
                         setIsAddingCustomer(true);
                       }
@@ -810,33 +1047,57 @@ export default function InvoicesTab({
         </div>
       ) : (
         /* ---------------------------------------------------- */
-        /* SCREEN B: DETAILED SEPARATE CUSTOMER PROFILE FEED   */
-        /* ---------------------------------------------------- */
+        /* SCREEN B: DETAILED SEPARATE CUSTOMER PROFILE FEED */
         <motion.div
-          key="separate-customer-profile-screen"
-          initial={{ opacity: 0, x: 15 }}
+          initial={{ opacity: 0, x: 25 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -15 }}
-          className="space-y-5 flex-grow pb-24"
+          exit={{ opacity: 0, x: -25 }}
+          className="space-y-5 pb-28"
         >
-          {/* Header Action Nav matching Image 1 exactly */}
-          <div className={`flex items-center justify-between text-xs border-b pb-3 mr-1 ${isDark ? 'border-[#14231d]' : 'border-slate-150'}`}>
-            <div className="flex items-center gap-2.5">
+          {/* Top header navigation with Back button matching Image 1 */}
+          <div className="flex justify-between items-center bg-transparent py-1 select-none">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setSelectedCustomerId('')}
-                className={`px-2.5 py-1.5 border rounded-xl transition font-semibold cursor-pointer active:scale-[0.95] text-xs ${isDark ? 'border-[#1c2d27] text-slate-300 hover:text-white bg-[#0e1613]' : 'border-slate-200 text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50'}`}
+                className={`p-2 border border-slate-200 hover:bg-slate-100 rounded-xl transition cursor-pointer active:scale-95 ${isDark ? 'bg-[#0f1715]/40 border-[#1a2d26] text-white hover:bg-[#121f1b]' : 'bg-white border-slate-250 text-slate-800'}`}
               >
-                ‹ Quay
+                <ArrowLeft className="w-4 h-4" />
               </button>
-
-              {/* Circle blue background avatar letter */}
-              <div className="w-8.5 h-8.5 rounded-full bg-[#2563eb] border border-blue-400/20 text-white flex items-center justify-center font-black text-xs select-none">
-                {currentCustomer?.name.trim().split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 1)}
-              </div>
               
-              <span className={`text-xs sm:text-sm font-black tracking-tight uppercase ${isDark ? 'text-white' : 'text-slate-800'}`}>
-                {currentCustomer?.name}
-              </span>
+              {/* Interactive customer profile edit trigger block - matching self account edit style */}
+              <div
+                onClick={() => {
+                  if (currentCustomer) {
+                    setEditingCustomerId(currentCustomer.id);
+                    setEditCustomerName(currentCustomer.name);
+                    setEditCustomerPhone(currentCustomer.phone || '');
+                    setEditCustomerInitialDebt(currentCustomer.initialDebt || 0);
+                    setEditCustomerPhoto(currentCustomer.photo || null);
+                    setIsEditingCustomer(true);
+                  }
+                }}
+                className="flex items-center gap-2 cursor-pointer group active:scale-98 transition select-none"
+                title="Nhấp để chỉnh sửa thông tin & ảnh khách sỉ 📷"
+              >
+                {/* Circle blue background avatar letter or customer photo */}
+                {currentCustomer?.photo ? (
+                  <img
+                    src={currentCustomer.photo}
+                    alt={currentCustomer.name}
+                    className="w-9 h-9 rounded-full object-cover border-2 border-[#10b981]/20 group-hover:border-[#10b981]/60 transition shrink-0 shadow-sm"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#2563eb] to-[#3b82f6] border-2 border-blue-400/20 text-white flex items-center justify-center font-black text-xs group-hover:border-blue-500 transition shrink-0 shadow-sm">
+                    {currentCustomer?.name ? currentCustomer.name.trim().split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 1) : "?"}
+                  </div>
+                )}
+                
+                <span className={`text-xs sm:text-sm font-black tracking-tight uppercase leading-none group-hover:underline ${isDark ? 'text-emerald-400 group-hover:text-emerald-300' : 'text-slate-800 group-hover:text-indigo-600'}`}>
+                  {currentCustomer?.name}
+                </span>
+                <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity font-mono text-slate-400 ml-0.5">Sửa ✏️</span>
+              </div>
             </div>
 
             {/* Excel export matching Image 1 */}
@@ -850,6 +1111,23 @@ export default function InvoicesTab({
                 <span className="text-[#10b981] font-mono font-black text-[9px] bg-[#10b981]/15 px-1 rounded">XLS</span>
                 <span>Excel</span>
               </button>
+
+              {currentCustomer && (
+                <button
+                  onClick={() => {
+                    setEditingCustomerId(currentCustomer.id);
+                    setEditCustomerName(currentCustomer.name);
+                    setEditCustomerPhone(currentCustomer.phone || '');
+                    setEditCustomerInitialDebt(currentCustomer.initialDebt || 0);
+                    setEditCustomerPhoto(currentCustomer.photo || null);
+                    setIsEditingCustomer(true);
+                  }}
+                  className={`p-1.5 border border-indigo-500/20 rounded-xl text-indigo-500 dark:text-indigo-400 hover:bg-indigo-550/10 transition cursor-pointer ${isDark ? 'bg-[#0e1613]' : 'bg-white hover:bg-slate-55'}`}
+                  title="Chỉnh sửa thông tin khách"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                </button>
+              )}
               
               <button
                 onClick={() => {
@@ -913,10 +1191,37 @@ export default function InvoicesTab({
             </div>
           )}
 
-          {/* Heading under cumulative debts: HOÁ ĐƠN list */}
-          <div className={`flex justify-between items-center px-1 pt-1 text-[10.5px] font-extrabold tracking-wider uppercase font-mono ${isDark ? 'text-[#657f76]' : 'text-slate-400'}`}>
-            <span>HOÁ ĐƠN</span>
-            <span>{bills.filter(b => b.customerId === selectedCustomerId).length} HOÁ ĐƠN</span>
+
+
+          {/* Heading under cumulative debts: HOÁ ĐƠN list & Model Search */}
+          <div className="space-y-2">
+            <div className={`flex justify-between items-center px-1 pt-1 text-[10.5px] font-extrabold tracking-wider uppercase font-mono ${isDark ? 'text-[#657f76]' : 'text-slate-400'}`}>
+              <span className="flex items-center gap-1.5">
+                <Receipt className="w-3.5 h-3.5 text-indigo-500" />
+                DANH SÁCH HOÁ ĐƠN
+              </span>
+              <span>{bills.filter(b => b.customerId === selectedCustomerId).length} HOÁ ĐƠN</span>
+            </div>
+
+            {/* Model Search Filter for this Customer */}
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all duration-300 ${isDark ? 'bg-[#0f1224] border-[#1c2d27] text-white shadow-inner' : 'bg-white border-slate-205 text-slate-800 shadow-2xs'}`}>
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Tìm mã / mẫu mã sản phẩm của riêng khách này..."
+                value={modelSearch}
+                onChange={e => setModelSearch(e.target.value)}
+                className="w-full bg-transparent text-xs outline-none placeholder-slate-400 font-medium"
+              />
+              {modelSearch && (
+                <button 
+                  onClick={() => setModelSearch('')} 
+                  className="p-1 hover:bg-slate-205 dark:hover:bg-slate-900 rounded-full text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Detailed listing of past bills matching Image 1 exactly */}
@@ -924,12 +1229,19 @@ export default function InvoicesTab({
             {(() => {
               const customerBills = bills
                 .filter(b => b.customerId === selectedCustomerId)
+                .filter(b => {
+                  if (!modelSearch.trim()) return true;
+                  const query = modelSearch.toLowerCase().trim();
+                  return b.items && b.items.some(item => item.mẫuMã && item.mẫuMã.toLowerCase().includes(query));
+                })
                 .sort((a, b) => b.createdAt - a.createdAt);
 
               if (customerBills.length === 0) {
                 return (
                   <div className={`text-center py-12 border border-dashed rounded-xl p-6 ${isDark ? 'bg-[#111c18] border-[#1c2d27]' : 'bg-slate-50 border-slate-200'}`}>
-                    <p className={`text-xs italic ${isDark ? 'text-[#657f76]' : 'text-slate-450'}`}>Chưa có hoá đơn nào cho khách sỉ này. Bấm [+ Tạo hoá đơn] ở góc dưới để lập phiếu!</p>
+                    <p className={`text-xs italic ${isDark ? 'text-[#657f76]' : 'text-slate-450'}`}>
+                      {modelSearch.trim() ? "Không tìm thấy hoá đơn nào chứa mẫu mã này." : "Chưa có hoá đơn nào cho khách sỉ này. Bấm [+ Tạo hoá đơn] ở góc dưới để lập phiếu!"}
+                    </p>
                   </div>
                 );
               }
@@ -952,17 +1264,17 @@ export default function InvoicesTab({
                 return (
                   <div
                     key={bill.id}
-                    className={`p-3.5 rounded-xl flex items-center justify-between gap-4 transition-all duration-200 hover:border-emerald-500/35 hover:shadow-lg border ${isDark ? 'bg-[#111c17] border-[#1c2d27] hover:bg-[#13231e] hover:shadow-emerald-950/20 text-white' : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70 hover:shadow-slate-200/50 text-slate-800'}`}
+                    className={`p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-200 hover:border-emerald-500/35 hover:shadow-lg border ${isDark ? 'bg-[#111c17] border-[#1c2d27] hover:bg-[#13231e] hover:shadow-emerald-950/20 text-white' : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70 hover:shadow-slate-200/50 text-slate-800'}`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       {/* Left representation: Bill abbreviation */}
-                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col items-center justify-center select-none">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col items-center justify-center select-none shrink-0">
                         <span className="text-[7.5px] uppercase text-indigo-400 font-extrabold tracking-wider font-mono">Bill</span>
                         <span className={`text-xs font-black font-mono leading-none ${isDark ? 'text-white' : 'text-indigo-600'}`}>#{billNum}</span>
                       </div>
                       
                       {/* Middle: Label / Date details */}
-                      <div className="space-y-1">
+                      <div className="space-y-1 flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`text-xs font-extrabold font-mono ${isDark ? 'text-white' : 'text-slate-800'}`}>{bill.billNumber || `HD-${billNum}`}</span>
                           
@@ -997,13 +1309,36 @@ export default function InvoicesTab({
                           <Calendar className="w-3.5 h-3.5 text-rose-500/80" />
                           <span>{bill.date}</span>
                         </div>
+
+                        {/* Direct Listing of bought item model codes (mẫu mã) with matching highlight */}
+                        {bill.items && bill.items.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap mt-2">
+                            {bill.items.map((it, idx) => {
+                              const isMatch = modelSearch.trim() && it.mẫuMã && it.mẫuMã.toLowerCase().includes(modelSearch.toLowerCase().trim());
+                              return (
+                                <span
+                                  key={idx}
+                                  className={`text-[9px] px-2 py-0.5 rounded-md font-medium transition-all ${
+                                    isMatch 
+                                      ? 'bg-yellow-500/25 border border-yellow-500 text-amber-600 dark:text-yellow-450 font-black scale-105 shadow-2xs' 
+                                      : isDark
+                                        ? 'bg-[#121c19] border border-[#1c2d27] text-[#10b981]'
+                                        : 'bg-indigo-50 border border-indigo-100/70 text-indigo-650'
+                                  }`}
+                                >
+                                  {it.mẫuMã || "mẫu sỉ"} {it.sốLượng ? `(x${it.sốLượng})` : ''}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* Right: Revenue total + instant triggers */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 pt-2 sm:pt-0 shrink-0">
                       {/* Total bill price */}
-                      <div className="text-right">
+                      <div className="text-left sm:text-right">
                         <span className={`text-[9px] block uppercase tracking-wider font-extrabold font-mono ${isDark ? 'text-[#657f76]' : 'text-slate-400'}`}>TỔNG BILL</span>
                         <span className={`text-xs sm:text-sm font-black font-mono ${isDark ? 'text-emerald-400' : 'text-emerald-650 font-bold'}`}>
                           {bill.subtotal.toLocaleString()}đ
@@ -1019,6 +1354,15 @@ export default function InvoicesTab({
                           title="Xem chi tiết & chụp ảnh hoá đơn"
                         >
                           <FileText className="w-4 h-4" />
+                        </button>
+
+                        {/* Edit Trigger */}
+                        <button
+                          onClick={() => handleOpenEditInvoice(bill)}
+                          className="p-2 bg-indigo-500/10 text-indigo-550 hover:text-white hover:bg-indigo-600 rounded-lg border border-indigo-500/10 transition cursor-pointer active:scale-90"
+                          title="Chỉnh sửa hóa đơn này"
+                        >
+                          <Edit className="w-4 h-4" />
                         </button>
                         
                         <button
@@ -1138,7 +1482,7 @@ export default function InvoicesTab({
                     <div className="border-b border-slate-200 pb-3 flex justify-between items-center text-xs">
                       <div className="flex items-center gap-2">
                         <span className="text-emerald-600 font-black text-sm uppercase tracking-wider flex items-center gap-1.5">
-                          📄 Tạo hoá đơn sỉ mới
+                          {editingBillId ? '✏️ Chỉnh sửa hoá đơn' : '📄 Tạo hoá đơn sỉ mới'}
                         </span>
                       </div>
                       <button 
@@ -1279,7 +1623,7 @@ export default function InvoicesTab({
                           onClick={handleAddModalDraftItem}
                           className="w-full border-2 border-dashed border-slate-200 hover:border-indigo-400 h-12 bg-slate-50 hover:bg-slate-100 text-indigo-600 font-bold rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer transition select-none text-xs"
                         >
-                          <span>+ Thêm đại sỉ dòng mặt hàng mới</span>
+                          <span>+ Thêm mặt hàng</span>
                         </button>
                       </div>
 
@@ -1443,7 +1787,7 @@ export default function InvoicesTab({
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setIsWritingInvoice(true)}
+              onClick={handleOpenNewInvoice}
               className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-2xl shadow-emerald-950/50 border border-emerald-500/25 cursor-pointer active:scale-95 transition relative group"
               title="Tạo hoá đơn mới cho khách hàng này"
             >
@@ -1464,7 +1808,7 @@ export default function InvoicesTab({
             </button>
 
             <button
-              onClick={() => setIsWritingInvoice(true)}
+              onClick={handleOpenNewInvoice}
               className="w-1/2 bg-[#6366f1] hover:bg-[#5053e1] text-white text-xs font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition active:scale-[0.98] shadow-lg shadow-indigo-950/40 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -1658,6 +2002,94 @@ export default function InvoicesTab({
                 />
               </div>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Customer Dialog Overlay (Matches design and behavior of Account profile update) */}
+      <AnimatePresence>
+        {isEditingCustomer && currentCustomer && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+            <div className="absolute inset-0" onClick={() => setIsEditingCustomer(false)} />
+            <motion.form
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onSubmit={handleEditCustomer}
+              className={`max-w-md w-full p-6 shadow-2xl rounded-2xl z-20 space-y-4 border ${isDark ? 'bg-[#0e1613] border-[#1b2f27] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+            >
+              <div className={`pb-3 flex justify-between items-center border-b ${isDark ? 'border-[#1b2f27]' : 'border-slate-150'}`}>
+                <div>
+                  <h3 className="text-sm font-black tracking-wider uppercase font-mono text-emerald-600 dark:text-[#10b981]">Chỉnh sửa đối tác sỉ</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Cập nhật họ tên, số điện thoại, nợ đầu kỳ và ảnh đại diện</p>
+                </div>
+                <button type="button" onClick={() => setIsEditingCustomer(false)} className="text-slate-400 hover:text-slate-650 transition p-1 cursor-pointer">
+                  <X className="w-4.5 h-4.5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 tracking-wider">Họ tên khách lấy sỉ *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: Nhà xe Chị A, Huỳnh Mai Đồng Tháp..."
+                    value={editCustomerName}
+                    onChange={e => setEditCustomerName(e.target.value)}
+                    className={`w-full border rounded-xl py-2.5 px-3.5 outline-none focus:border-indigo-500 transition font-sans ${isDark ? 'bg-[#111c18] border-[#1c2d27] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 tracking-wider">Số điện thoại liên hệ</label>
+                  <input
+                    type="text"
+                    placeholder="VD: 0914.xxx.xxx"
+                    value={editCustomerPhone}
+                    onChange={e => setEditCustomerPhone(e.target.value)}
+                    className={`w-full border rounded-xl py-2.5 px-3.5 outline-none focus:border-indigo-500 transition font-sans ${isDark ? 'bg-[#111c18] border-[#1c2d27] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 tracking-wider">Tổng nợ cũ gối đầu gạt lại (đ)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Nhập số nợ cũ còn tồn dồn..."
+                    value={editCustomerInitialDebt}
+                    onChange={e => setEditCustomerInitialDebt(e.target.value === '' ? '' : Number(e.target.value))}
+                    className={`w-full border rounded-xl py-2.5 px-3.5 outline-none focus:border-indigo-500 transition font-sans ${isDark ? 'bg-[#111c18] border-[#1c2d27] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 tracking-wider">Ảnh đại diện khách sỉ</label>
+                  <CameraCapture
+                    onCapture={setEditCustomerPhoto}
+                    initialValue={editCustomerPhoto}
+                    resolvedTheme={isDark ? 'dark' : 'light'}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingCustomer(false)}
+                  className={`w-1/2 py-2.5 border rounded-xl font-medium cursor-pointer transition text-center ${isDark ? 'border-[#1c2d27] text-slate-400 hover:text-white hover:bg-[#111c18]' : 'border-slate-200 text-slate-500 hover:text-slate-850 hover:bg-slate-50'}`}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 bg-[#6366f1] hover:bg-[#5053e1] text-white py-2.5 rounded-xl font-bold transition active:scale-[0.98] cursor-pointer"
+                >
+                  Lưu Thay Đổi
+                </button>
+              </div>
+            </motion.form>
           </div>
         )}
       </AnimatePresence>

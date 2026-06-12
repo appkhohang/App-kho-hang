@@ -28,6 +28,8 @@ interface GoodsImportTabProps {
   selectedWeekFilter?: string;
   setSelectedWeekFilter?: (week: string) => void;
   userRole?: 'admin' | 'staff' | 'viewer';
+  autoExpandForm?: boolean;
+  onAutoExpandFormReset?: () => void;
 }
 
 export default function GoodsImportTab({ 
@@ -42,9 +44,21 @@ export default function GoodsImportTab({
   onImportBackup,
   selectedWeekFilter: externalWeekFilter,
   setSelectedWeekFilter: setExternalWeekFilter,
-  userRole = 'viewer'
+  userRole = 'viewer',
+  autoExpandForm = false,
+  onAutoExpandFormReset
 }: GoodsImportTabProps) {
   const isViewer = false;
+
+  // React effect to auto expand the form if requested via floating action button on home
+  React.useEffect(() => {
+    if (autoExpandForm) {
+      setIsFormExpanded(true);
+      if (onAutoExpandFormReset) {
+        onAutoExpandFormReset();
+      }
+    }
+  }, [autoExpandForm, onAutoExpandFormReset]);
 
   // Get unique recent import items for Quick Action shortcuts
   const recentUniqueItems = React.useMemo(() => {

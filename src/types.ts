@@ -63,6 +63,7 @@ export interface Customer {
   phone?: string;
   initialDebt: number; // Số nợ ban đầu
   createdAt: number;
+  photo?: string; // Ảnh đại diện của khách hàng
 }
 
 export interface PaymentRecord {
@@ -87,6 +88,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   email: string | null;
   displayName: string | null;
+  photo?: string;
   twoFactorEnabled: boolean;
   twoFactorSetup: boolean;
   twoFactorSecret: string | null;
@@ -200,6 +202,7 @@ export interface UserProfile {
   createdAt: number;
   active: boolean;
   allowedTabs?: string[];
+  photo?: string; // Ảnh đại diện người dùng
 }
 
 
