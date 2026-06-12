@@ -1,6 +1,6 @@
 {
   "name": "Quản Lý Nhập Hàng & Hoá Đơn Xưởng An",
   "description": "Ứng dụng kế toán tối giản, bảo mật cho Xưởng An hỗ trợ chốt sổ nhập hàng Đồng Tháp - TP HCM, viết bill hoá đơn, quản lý công nợ lũy kế, xuất báo cáo hình ảnh và file Excel chuyên nghiệp.",
-  "requestFramePermissions": ["camera"],
+  "requestFramePermissions": ["camera", "geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

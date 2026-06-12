@@ -49,11 +49,22 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
       String(today.getMinutes()).padStart(2, '0') + ':' +
       String(today.getSeconds()).padStart(2, '0');
 
+    let userLoc = Math.random() > 0.5 ? "Cao Lãnh, Đồng Tháp" : "Quận 1, TP HCM";
+    const gpsCache = localStorage.getItem('precision_gps_data');
+    if (gpsCache) {
+      try {
+        const parsed = JSON.parse(gpsCache);
+        if (parsed && parsed.latitude && parsed.longitude) {
+          userLoc = `📍 GPS: ${parsed.latitude.toFixed(5)}, ${parsed.longitude.toFixed(5)} (±${Math.round(parsed.accuracy || 0)}m)`;
+        }
+      } catch (e) {}
+    }
+
     const newNotif = {
       id: "notif-" + Date.now(),
       time: formattedTime,
       ip: "113.161.42." + Math.floor(Math.random() * 254 + 1),
-      location: Math.random() > 0.5 ? "Cao Lãnh, Đồng Tháp" : "Quận 1, TP HCM",
+      location: userLoc,
       device: navigator.userAgent.includes("Mobile") ? "chrome, iPhone 15 Pro" : "Chrome, macOS Sequoia",
       isRead: false
     };

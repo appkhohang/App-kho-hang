@@ -13,6 +13,54 @@ interface CameraCaptureProps {
   resolvedTheme?: 'light' | 'dark';
 }
 
+// Helper function to scale down and compress image data URLs
+function compressImageDataUrl(
+  dataUrl: string, 
+  maxWidth = 1000, 
+  maxHeight = 1000, 
+  quality = 0.75, 
+  callback: (compressed: string) => void
+) {
+  if (!dataUrl || !dataUrl.startsWith('data:image')) {
+    callback(dataUrl);
+    return;
+  }
+  
+  const img = new Image();
+  img.onload = () => {
+    let width = img.width;
+    let height = img.height;
+
+    // Scale down while maintaining aspect ratio if limits exceeded
+    if (width > maxWidth || height > maxHeight) {
+      if (width > height) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      } else {
+        width = Math.round((width * maxHeight) / height);
+        height = maxHeight;
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(img, 0, 0, width, height);
+      // Quality factor reduces output size significantly
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+      callback(compressedDataUrl);
+    } else {
+      callback(dataUrl);
+    }
+  };
+  img.onerror = () => {
+    callback(dataUrl);
+  };
+  img.src = dataUrl;
+}
+
 export default function CameraCapture({
   onCapture,
   initialValue = null,
@@ -98,10 +146,15 @@ export default function CameraCapture({
         
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Convert to optimized base64 JPEG
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        setPhoto(dataUrl);
-        onCapture(dataUrl);
+        // Convert to base64 jpeg
+        const rawDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        
+        // Auto compress and downsize to save space in storage
+        compressImageDataUrl(rawDataUrl, 840, 840, 0.72, (compressed) => {
+          setPhoto(compressed);
+          onCapture(compressed);
+        });
+        
         stopCamera();
       }
     }
@@ -113,8 +166,11 @@ export default function CameraCapture({
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;
-        setPhoto(result);
-        onCapture(result);
+        // Auto compress high resolution camera uploads immediately
+        compressImageDataUrl(result, 840, 840, 0.72, (compressed) => {
+          setPhoto(compressed);
+          onCapture(compressed);
+        });
       };
       reader.readAsDataURL(file);
     }

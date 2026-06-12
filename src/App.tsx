@@ -5,13 +5,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import GoodsImportTab from './components/GoodsImportTab';
 import InvoicesTab from './components/InvoicesTab';
 import ProductionTab from './components/ProductionTab';
 import ReportTab from './components/ReportTab';
 import SettingsTab from './components/SettingsTab';
+import GalleryTab from './components/GalleryTab';
 import FloatingStats from './components/FloatingStats';
 import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile } from './types';
 import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage } from './utils/storage';
@@ -154,7 +155,7 @@ export default function App() {
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
   // Active Tab state
-  const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery'>('home');
   
   // Mobile hamburger drawer state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -242,7 +243,7 @@ export default function App() {
 
   const getUserAllowedTabs = (): string[] => {
     const email = authState.email?.toLowerCase().trim();
-    const allTabs = ['home', 'import', 'invoices', 'production', 'report', 'settings'];
+    const allTabs = ['home', 'import', 'invoices', 'production', 'report', 'settings', 'gallery'];
     if (!email) {
       console.log("[getUserAllowedTabs] No email found in current auth state. Returning fallback ['home']");
       return ['home'];
@@ -433,11 +434,24 @@ export default function App() {
         
         const activeEmail = auth.currentUser?.email || "vukuli.123@gmail.com";
         const todayStr = new Date().toLocaleDateString('vi-VN');
+        
+        // Use precision GPS if available
+        let locString = "Cao Lãnh, Đồng Tháp";
+        const savedGps = localStorage.getItem('precision_gps_data');
+        if (savedGps) {
+          try {
+            const parsed = JSON.parse(savedGps);
+            if (parsed && parsed.latitude && parsed.longitude) {
+              locString = `📍 GPS: ${parsed.latitude.toFixed(4)}, ${parsed.longitude.toFixed(4)}`;
+            }
+          } catch(err) {}
+        }
+
         const sysSyncLog: LoginNotification = {
           id: "sync-" + Date.now(),
           time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + " " + todayStr,
           ip: "Thành công",
-          location: "Cao Lãnh, Đồng Tháp",
+          location: locString,
           device: `Tài khoản ${activeEmail} đồng bộ dữ liệu đám mây Firestore tải xuống bộ nhớ máy khách thành công.`,
           isRead: false
         };
@@ -489,11 +503,24 @@ export default function App() {
       
       const activeEmail = auth.currentUser?.email || "vukuli.123@gmail.com";
       const todayStr = new Date().toLocaleDateString('vi-VN');
+
+      // Use precision GPS if available
+      let locString = "Cao Lãnh, Đồng Tháp";
+      const savedGps = localStorage.getItem('precision_gps_data');
+      if (savedGps) {
+        try {
+          const parsed = JSON.parse(savedGps);
+          if (parsed && parsed.latitude && parsed.longitude) {
+            locString = `📍 GPS: ${parsed.latitude.toFixed(4)}, ${parsed.longitude.toFixed(4)}`;
+          }
+        } catch(err) {}
+      }
+
       const sysSyncLog: LoginNotification = {
         id: "sync-" + Date.now(),
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + " " + todayStr,
         ip: "Thành công",
-        location: "Cao Lãnh, Đồng Tháp",
+        location: locString,
         device: `Tài khoản ${activeEmail} đăng tải đồng bộ lưu trữ đám mây Firestore thành công.`,
         isRead: false
       };
@@ -1397,6 +1424,16 @@ export default function App() {
                     <span>Cài đặt</span>
                   </button>
                 )}
+                {allowedTabs.includes('gallery') && (
+                  <button
+                    id="tab_gallery_btn"
+                    onClick={() => setActiveTab('gallery')}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'gallery' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                  >
+                    <Image className="w-3.5 h-3.5 text-indigo-505" />
+                    <span>Thư viện ảnh</span>
+                  </button>
+                )}
               </nav>
 
               {/* Right menu actions */}
@@ -1670,14 +1707,33 @@ export default function App() {
                               setActiveTab('production');
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'production' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800'}`}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'production' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
                           >
                             <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'production' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
                               <Scissors className="w-4 h-4 text-indigo-500" />
                             </div>
                             <div>
                               <span className="text-[12.5px] font-bold block leading-tight">3. Quản Lý Sản Xuất</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal">Định mức nguyên liệu kho, phân tổ công đoạn thợ may</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">Định mức nguyên liệu kho, phân tổ công đoạn thợ may</span>
+                            </div>
+                          </button>
+                        )}
+
+                        {/* Tab Gallery button link */}
+                        {allowedTabs.includes('gallery') && (
+                          <button
+                            onClick={() => {
+                              setActiveTab('gallery');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'gallery' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
+                          >
+                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'gallery' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                              <Image className="w-4 h-4 text-purple-505" />
+                            </div>
+                            <div>
+                              <span className="text-[12.5px] font-bold block leading-tight">Thư viện Ảnh chụp</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">Tìm kiếm và đối so sánh đồng thời hình ảnh đã chụp với Bill, Nhập hàng</span>
                             </div>
                           </button>
                         )}
@@ -2105,6 +2161,7 @@ export default function App() {
                     exportDatabasePackage={exportDatabasePackage}
                     onImportBackup={handleImportBackup}
                     items={items}
+                    bills={bills}
                     customers={customers}
                     syncStatus={syncStatus}
                     lastSyncTime={lastSyncTime}
@@ -2113,6 +2170,24 @@ export default function App() {
                     userRole={userRole}
                     userProfiles={userProfiles}
                     setUserProfiles={setUserProfiles}
+                  />
+                </motion.div>
+              ) : activeTab === 'gallery' ? (
+                <motion.div
+                  key="gallery-tab-view"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <GalleryTab
+                    items={items}
+                    setItems={setItems}
+                    bills={bills}
+                    setBills={setBills}
+                    customers={customers}
+                    setActiveTab={setActiveTab}
+                    resolvedTheme={resolvedTheme}
                   />
                 </motion.div>
               ) : (
@@ -2211,6 +2286,17 @@ export default function App() {
               >
                 <Settings className="w-4.5 h-4.5" />
                 <span className="text-[9.5px]">Cài đặt</span>
+              </button>
+            )}
+
+            {/* 5. Thư viện ảnh */}
+            {allowedTabs.includes('gallery') && (
+              <button
+                onClick={() => setActiveTab('gallery')}
+                className={`flex-1 flex flex-col items-center gap-1 cursor-pointer transition-all ${activeTab === 'gallery' ? 'text-indigo-400 scale-105 font-bold' : 'text-slate-400 hover:text-slate-250'}`}
+              >
+                <Image className="w-4.5 h-4.5" />
+                <span className="text-[9.5px]">Thư viện ảnh</span>
               </button>
             )}
 

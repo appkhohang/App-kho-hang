@@ -5,7 +5,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -38,7 +38,21 @@ const isProductionOrApk = !isSandbox || (typeof window !== 'undefined' && (
 
 const finalDbId = (isForceDefaultDb || isProductionOrApk) ? undefined : dbId;
 
-export const db = finalDbId ? getFirestore(app, finalDbId) : getFirestore(app);
+// Suppress warnings/info logs about connectivity such as "Could not reach Cloud Firestore backend"
+setLogLevel('error');
+
+export const db = finalDbId 
+  ? initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    }, finalDbId)
+  : initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+
 export const auth = getAuth(app);
 
 // Namespace helpers for Group Collaboration & Database Pooling (Tính năng Nhóm & Kết hợp liên kết)

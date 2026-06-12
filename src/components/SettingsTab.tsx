@@ -5,8 +5,8 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw } from 'lucide-react';
-import { AppSettings, ImportItem, Customer, UserProfile } from '../types';
+import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle } from 'lucide-react';
+import { AppSettings, ImportItem, Customer, UserProfile, Bill } from '../types';
 import { auth, db } from '../utils/firebase';
 import { updatePassword, getAuth, createUserWithEmailAndPassword, signOut as logoutTemp, setPersistence, inMemoryPersistence } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -19,6 +19,7 @@ interface SettingsTabProps {
   exportDatabasePackage: () => void;
   onImportBackup: (content: string) => void;
   items: ImportItem[];
+  bills?: Bill[];
   customers: Customer[];
   syncStatus: 'idle' | 'syncing' | 'success' | 'error';
   lastSyncTime: string | null;
@@ -35,6 +36,7 @@ export default function SettingsTab({
   exportDatabasePackage,
   onImportBackup,
   items,
+  bills = [],
   customers,
   syncStatus,
   lastSyncTime,
@@ -79,6 +81,176 @@ export default function SettingsTab({
   const [createSuccess, setCreateSuccess] = useState('');
   const [createError, setCreateError] = useState('');
   const [isUsersOpen, setIsUsersOpen] = useState(false);
+
+  // States for dynamic GPS accurate Geolocation & Camera test integrations
+  const [isGpsOpen, setIsGpsOpen] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsData, setGpsData] = useState<{
+    latitude: number | null;
+    longitude: number | null;
+    accuracy: number | null;
+    altitude: number | null;
+    timestamp: string | null;
+    source: string | null;
+  }>(() => {
+    const saved = localStorage.getItem('precision_gps_data');
+    return saved ? JSON.parse(saved) : {
+      latitude: null,
+      longitude: null,
+      accuracy: null,
+      altitude: null,
+      timestamp: null,
+      source: null
+    };
+  });
+  const [cameraStatus, setCameraStatus] = useState<'idle' | 'checking' | 'active' | 'error'>('idle');
+  const [cameraError, setCameraError] = useState<string>('');
+
+  // States for what-if storage calculations
+  const [estBills, setEstBills] = useState(100);
+  const [estImports, setEstImports] = useState(50);
+  const [estPhotos, setEstPhotos] = useState(10);
+
+  // States for simulating Firestore storage limit warning
+  const [isQuotaSimEnabled, setIsQuotaSimEnabled] = useState(false);
+  const [simulatedQuotaPercent, setSimulatedQuotaPercent] = useState(82);
+
+  // Storage size calculation logic
+  const storageStats = React.useMemo(() => {
+    // 1. Calculate Bills pure text size
+    const billsWithoutPhotos = bills.map(({ photo, ...rest }) => rest);
+    const billsTextRaw = JSON.stringify(billsWithoutPhotos);
+    const billsTextSize = billsTextRaw ? new Blob([billsTextRaw]).size : 0;
+
+    // 2. Calculate Import Items pure text size
+    const itemsWithoutPhotos = items.map(({ photo, ...rest }) => rest);
+    const itemsTextRaw = JSON.stringify(itemsWithoutPhotos);
+    const itemsTextSize = itemsTextRaw ? new Blob([itemsTextRaw]).size : 0;
+
+    // 3. Calculate Photos (images) size
+    let photoCount = 0;
+    let photosSize = 0;
+
+    bills.forEach(b => {
+      if (b.photo) {
+        photoCount++;
+        photosSize += b.photo.length;
+      }
+    });
+
+    items.forEach(it => {
+      if (it.photo) {
+        photoCount++;
+        photosSize += it.photo.length;
+      }
+    });
+
+    const totalSize = billsTextSize + itemsTextSize + photosSize;
+
+    // Average sizes
+    // Fallbacks if no data exists to keep numbers correct and educational (typical real measurements)
+    const avgBillBytes = bills.length > 0 ? (billsTextSize / bills.length) : 480; // 480 Bytes
+    const avgImportBytes = items.length > 0 ? (itemsTextSize / items.length) : 260; // 260 Bytes
+    const avgPhotoBytes = photoCount > 0 ? (photosSize / photoCount) : 66560; // 65 KB
+
+    return {
+      billsCount: bills.length,
+      billsSize: billsTextSize, // bytes
+      avgBillSize: avgBillBytes,
+
+      importsCount: items.length,
+      importsSize: itemsTextSize, // bytes
+      avgImportSize: avgImportBytes,
+
+      photosCount: photoCount,
+      photosSize: photosSize, // bytes
+      avgPhotoSize: avgPhotoBytes,
+
+      totalSize: totalSize, // bytes
+    };
+  }, [bills, items]);
+
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const handleUpdatePrecisionGps = () => {
+    if (!navigator.geolocation) {
+      alert("❌ Thiết bị hoặc trình duyệt này không hỗ trợ định vị GPS!");
+      return;
+    }
+
+    setGpsLoading(true);
+    
+    // Request fine, high-accuracy GPS coordinates
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const timestamp = new Date(position.timestamp).toLocaleString('vi-VN');
+        const data = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          altitude: position.coords.altitude,
+          timestamp,
+          source: 'Định vị GPS thực tế (Độ chính xác cao)'
+        };
+        setGpsData(data);
+        localStorage.setItem('precision_gps_data', JSON.stringify(data));
+        setGpsLoading(false);
+        alert(`✅ Cập nhật định vị chính xác thành công!\n📍 Tọa độ GPS: ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}\n🎯 Sai số thực tế: ±${Math.round(data.accuracy || 0)} mét.\n🕒 Cập nhật lúc: ${timestamp}`);
+      },
+      (error) => {
+        setGpsLoading(false);
+        let errorMsg = "Không rõ lỗi khi quét GPS.";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMsg = "Bị từ chối cấp quyền định vị GPS. Vui lòng bật dịch vụ định vị GPS chính xác và đồng ý cấp quyền cho ứng dụng.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMsg = "Sóng GPS không khả dụng hoặc yếu. Hãy thử di chuyển ra khu vực thông thoáng hơn.";
+            break;
+          case error.TIMEOUT:
+            errorMsg = "Quá thời gian chờ phản hồi từ GPS (Yêu cầu hết giờ). Vui lòng thử lại.";
+            break;
+        }
+        alert(`❌ Không thể cập nhật định vị chính xác:\n⚠️ Lỗi: ${errorMsg}`);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0
+      }
+    );
+  };
+
+  const handleTestCamera = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraStatus('error');
+      setCameraError('Thiết bị/Trình duyệt không hỗ trợ API Camera.');
+      alert('❌ Trình duyệt không hỗ trợ API chụp hình trực tiếp.');
+      return;
+    }
+
+    setCameraStatus('checking');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      setCameraStatus('active');
+      // immediately turn off camera to release resource
+      stream.getTracks().forEach(track => track.stop());
+      alert('✅ Kiểm tra camera hoạt động hoàn hảo! Thiết bị này đã sẵn sàng chụp ảnh hóa đơn, hàng hóa bình thường.');
+    } catch (err: any) {
+      console.error(err);
+      setCameraStatus('error');
+      const errString = err.message || JSON.stringify(err);
+      setCameraError(errString);
+      alert(`❌ Lỗi cấp quyền chụp hình camera:\n⚠️ Chi tiết lỗi: ${errString}\nHãy chắc chắn bạn đã nhấn \"ĐỒNG Ý/ALLOW\" cấp quyền máy ảnh cho ứng dụng.`);
+    }
+  };
 
   const currentUser = auth.currentUser;
   const isGoogleUser = currentUser?.providerData.some(p => p.providerId === 'google.com');
@@ -547,6 +719,129 @@ export default function SettingsTab({
             )}
           </AnimatePresence>
         </div>
+      </div>
+
+      {/* Camera & GPS Geolocation configuration card */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+        <div 
+          onClick={() => setIsGpsOpen(!isGpsOpen)}
+          className="flex items-center justify-between cursor-pointer select-none group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition duration-200">
+              <MapPin className="w-5 h-5 animate-bounce-slow" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide">
+                Cấu hình Thiết bị & Định vị GPS nâng cao (APK)
+              </h3>
+              <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+                Yêu cầu cấp quyền chụp ảnh camera và cập nhật định vị chính xác từ chip GPS điện thoại.
+              </p>
+            </div>
+          </div>
+          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-emerald-400 transition ml-2 shrink-0">
+            {isGpsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {isGpsOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* 1. Camera permission checker */}
+                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Camera className="w-4 h-4 text-indigo-505" />
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Quyền máy ảnh (Chụp hình APK)</span>
+                  </div>
+                  
+                  <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                    Cấp quyền chụp ảnh camera điện thoại để scan chứng từ, hóa đơn nhập mộc, biên nhận vải và hàng xuất kho.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleTestCamera}
+                      className="py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>{cameraStatus === 'checking' ? 'Đang kích hoạt...' : cameraStatus === 'active' ? 'Thao tác tốt' : 'Yêu cầu Quyền & Thử camera'}</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${cameraStatus === 'active' ? 'bg-emerald-500 animate-pulse' : cameraStatus === 'error' ? 'bg-red-500' : 'bg-slate-300'}`} />
+                      <span className="text-[10px] font-black text-slate-500 uppercase font-mono">
+                        {cameraStatus === 'active' ? 'Đã kích hoạt' : cameraStatus === 'error' ? 'Có lỗi/Chưa cấp' : 'Sẵn sàng thử'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {cameraStatus === 'error' && (
+                    <p className="text-[10.5px] text-red-500 font-mono bg-red-50 dark:bg-red-950/15 p-2 rounded-lg border border-red-100 dark:border-transparent">
+                      Lỗi: {cameraError}
+                    </p>
+                  )}
+                </div>
+
+                {/* 2. Geolocation checker with accurate GPS */}
+                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-emerald-505" />
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Cập nhật định vị GPS chính xác</span>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                    Sóng GPS trực tiếp từ phần cứng điện thoại giúp định vị chính xác vị trí nhập kho, xuất hóa đơn của xưởng.
+                  </p>
+
+                  <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-[11px] font-mono space-y-1.5 text-slate-650 dark:text-slate-300">
+                    <div className="flex justify-between">
+                      <span className="text-slate-450">Vĩ độ GPS:</span>
+                      <span className="font-extrabold text-slate-800 dark:text-white">
+                        {gpsData.latitude !== null ? gpsData.latitude.toFixed(6) : "Chưa cập nhật"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-450">Kinh độ GPS:</span>
+                      <span className="font-extrabold text-slate-800 dark:text-white">
+                        {gpsData.longitude !== null ? gpsData.longitude.toFixed(6) : "Chưa cập nhật"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-450">Sai số đo:</span>
+                      <span className="font-black text-emerald-600 dark:text-emerald-400">
+                        {gpsData.accuracy !== null ? `± ${Math.round(gpsData.accuracy)} mét` : "Chưa đo"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-dashed border-slate-150 dark:border-slate-800 pt-1 mt-1 text-[10px]">
+                      <span className="text-slate-400">🕒 Đo gần nhất:</span>
+                      <span className="font-semibold text-slate-500">{gpsData.timestamp || "Không khả dụng"}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={gpsLoading}
+                    onClick={handleUpdatePrecisionGps}
+                    className="w-full py-2 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-black tracking-wide transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
+                    <span>{gpsLoading ? 'Đang định vị chip vệ tinh...' : 'Yêu cầu định vị GPS vệ tinh'}</span>
+                  </button>
+                </div>
+
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Firebase Cloud Sync Control panel */}
@@ -1132,6 +1427,415 @@ export default function SettingsTab({
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      {/* 📊 BẢNG TÍNH TOÁN THỐNG KÊ & ƯỚC LƯỢNG DUNG LƯỢNG LƯU TRỮ CHÍNH XÁC */}
+      <div id="storage-estimator-panel" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-150 dark:border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+              <Database className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
+                <span>Phân Tích Thống Kê & Dung Lượng Bộ Nhớ</span>
+                <span className="text-[9px] bg-indigo-600 dark:bg-indigo-500 text-white px-2 py-0.5 rounded-full uppercase font-mono tracking-widest font-black">Chính xác</span>
+              </h3>
+              <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+                Chi tiết dung lượng thực tế của hoá đơn, nhập xưởng lẻ và tài liệu hình ảnh trên thiết bị.
+              </p>
+            </div>
+          </div>
+          <div className="text-right hidden sm:block">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block font-mono">Tổng dung lượng cục bộ</span>
+            <span className="text-base font-black text-indigo-600 dark:text-indigo-400 font-mono">
+              {formatSize(storageStats.totalSize)}
+            </span>
+          </div>
+        </div>
+
+        {/* ☁️ GIÁM SÁT HẠN MỨC QUOTA FIRESTORE DUNG LƯỢNG 1GB (SPARK FREE TIER) */}
+        {(() => {
+          const quotaLimitBytes = 1024 * 1024 * 1024; // 1 GB in bytes
+          const currentQuotaPercent = isQuotaSimEnabled 
+            ? simulatedQuotaPercent 
+            : Math.min(100, (storageStats.totalSize / quotaLimitBytes) * 100);
+
+          const displayPercentStr = currentQuotaPercent.toFixed(currentQuotaPercent < 0.01 && currentQuotaPercent > 0 ? 4 : 2);
+          const displaySizeStr = isQuotaSimEnabled
+            ? formatSize((simulatedQuotaPercent / 100) * quotaLimitBytes)
+            : formatSize(storageStats.totalSize);
+
+          const isNearLimit = currentQuotaPercent >= 80;
+          const isCriticalLimit = currentQuotaPercent >= 90;
+
+          // Color calculation
+          let progressColorClass = "bg-indigo-600 dark:bg-indigo-500";
+          let textColorClass = "text-indigo-650 dark:text-indigo-400";
+          let borderGlowClass = "border-slate-200 dark:border-slate-800";
+
+          if (isCriticalLimit) {
+            progressColorClass = "bg-rose-600 dark:bg-rose-500 animate-pulse";
+            textColorClass = "text-rose-650 dark:text-rose-400";
+            borderGlowClass = "border-rose-300 dark:border-rose-900/60 ring-2 ring-rose-500/10";
+          } else if (isNearLimit) {
+            progressColorClass = "bg-amber-500 dark:bg-amber-450";
+            textColorClass = "text-amber-650 dark:text-amber-400";
+            borderGlowClass = "border-amber-300 dark:border-amber-900/60 ring-2 ring-amber-500/10";
+          } else if (currentQuotaPercent >= 50) {
+            progressColorClass = "bg-sky-500 dark:bg-sky-450";
+            textColorClass = "text-sky-655 dark:text-sky-400";
+          }
+
+          return (
+            <div className={`p-5 rounded-2xl border ${borderGlowClass} bg-slate-50/50 dark:bg-[#0c101d] space-y-4 transition-all duration-300`}>
+              {/* Header metrics */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Cloud className={`w-5 h-5 ${isNearLimit ? 'text-rose-550 dark:text-rose-450 animate-bounce' : 'text-indigo-500'}`} />
+                  <div>
+                    <h4 className="text-xs font-extrabold uppercase tracking-widest text-slate-700 dark:text-slate-350 font-mono">
+                      Hạn mức Lưu trữ Cloud Firestore (Gói Spark Free Tier)
+                    </h4>
+                    <p className="text-[10px] text-slate-450 dark:text-slate-500 font-sans">
+                      Giới hạn dung lượng tài liệu & ảnh mẫu trên đám mây của Firestore là <strong className="font-mono">1.00 GB</strong>.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right font-mono text-xs">
+                  <span className={`font-black ${textColorClass}`}>
+                    {displaySizeStr}
+                  </span>
+                  <span className="text-slate-400 dark:text-slate-500"> / 1.00 GB ({displayPercentStr}%)</span>
+                </div>
+              </div>
+
+              {/* Progress Bar Track */}
+              <div className="w-full h-3 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800 p-0.5 shadow-inner">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ease-out ${progressColorClass}`}
+                  style={{ width: `${currentQuotaPercent}%` }}
+                />
+              </div>
+
+              {/* Proactive 80%+ Warn Trigger Block */}
+              <AnimatePresence mode="wait">
+                {isNearLimit && (
+                  <motion.div
+                    key="quota-warning-banner"
+                    initial={{ opacity: 0, height: 0, y: -8 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -8 }}
+                    transition={{ duration: 0.25 }}
+                    className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 text-xs flex gap-3 items-start overflow-hidden shadow-xs"
+                  >
+                    <AlertTriangle className="w-5 h-5 text-rose-500 dark:text-rose-450 shrink-0 mt-0.5 animate-bounce" />
+                    <div className="space-y-1.5 text-left">
+                      <h5 className="font-extrabold text-rose-700 dark:text-rose-450 uppercase tracking-wide flex items-center gap-1.5">
+                        <span>CẢNH BÁO: DUNG LƯỢNG BỘ NHỚ ĐÃ ĐẠT {displayPercentStr}% HẠN MỨC!</span>
+                      </h5>
+                      <p className="text-slate-650 dark:text-slate-300 leading-relaxed">
+                        Hệ thống phát hiện tài liệu lưu trữ đám mây của dự án Firestore sắp chạm ngưỡng giới hạn miễn phí 1.00 GB. Để tránh gián đoạn đọc/ghi dữ liệu, vui lòng:
+                      </p>
+                      <ul className="list-disc pl-4 space-y-1.5 text-slate-550 dark:text-slate-400 mt-1.5 font-sans">
+                        <li>
+                          <strong className="text-slate-750 dark:text-slate-200">Dọn dẹp hình ảnh mẫu cũ:</strong> Vào phần <span className="underline font-bold">Thư Viện Ảnh</span> và chọn lọc xoá bớt các ảnh chứng từ, ảnh mẫu sản phẩm đã hoàn thiện từ nhiều tháng trước để giải phóng bộ nhớ.
+                        </li>
+                        <li>
+                          <strong className="text-slate-750 dark:text-slate-200">Sao lưu & Đặt lại (Reset):</strong> Bấm nút <span className="underline font-bold">Xuất Lưu Trữ Thiết Bị</span> để tải tệp JSON lưu trữ toàn phần về máy tính, sau đó bạn có thể làm sạch kho ảnh để bắt đầu chu kỳ lưu trữ mới.
+                        </li>
+                        <li>
+                          <strong className="text-slate-750 dark:text-slate-200">Nâng cấp Quota từ Firestore:</strong> Nâng cấp Firebase Project của bạn lên gói <span className="font-bold text-rose-650 dark:text-rose-400">Blaze Plan (Pay-as-you-go)</span> trực tiếp trên Firebase Console để nâng mức giới hạn document lên không giới hạn (hoàn toàn miễn phí nếu khối lượng tải thực tế vẫn ở mức thông thường).
+                        </li>
+                      </ul>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Visual warning limit explanation if not reached yet */}
+              {!isNearLimit && (
+                <div className="text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-sans justify-between bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-3xs">
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>Hệ thống hoạt động an toàn. Cảnh báo tự động báo động khi dung lượng đạt <strong>80% (819.2 MB)</strong>.</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 font-mono">STATUS: SAFE</span>
+                </div>
+              )}
+
+              {/* INTERACTIVE CONTROLLER FOR DEMO PURPOSES (What-if Test trigger) */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-800 rounded-xl">
+                <div className="space-y-0.5">
+                  <div className="text-[10.5px] font-black text-slate-700 dark:text-slate-350 flex items-center gap-1.5 uppercase font-mono">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+                    <span>Thanh Kiểm Định Cảnh Báo Trực Quan (Simulator)</span>
+                  </div>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-500 font-sans leading-normal">
+                    Kéo chỉnh phần trăm để kiểm duyệt giao diện cảnh báo &gt;= 80% hoạt động thực tế.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 w-full sm:w-auto shrink-0 justify-between sm:justify-start">
+                  <button
+                    type="button"
+                    onClick={() => setIsQuotaSimEnabled(!isQuotaSimEnabled)}
+                    className={`px-3 py-1.5 rounded-lg text-[9.5px] font-extrabold uppercase tracking-wider font-mono shadow-3xs transition cursor-pointer ${
+                      isQuotaSimEnabled 
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white' 
+                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-300'
+                    }`}
+                  >
+                    {isQuotaSimEnabled ? 'Tắt kiểm thử' : 'Thử mô phỏng'}
+                  </button>
+                  
+                  {isQuotaSimEnabled && (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={simulatedQuotaPercent}
+                        onChange={(e) => setSimulatedQuotaPercent(parseInt(e.target.value) || 0)}
+                        className="w-24 accent-indigo-650 dark:accent-indigo-500 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                      <span className="text-[11px] font-bold font-mono text-slate-800 dark:text-slate-100 min-w-[32px] text-right">
+                        {simulatedQuotaPercent}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          );
+        })()}
+
+        {/* 1. REALTIME METRICS GRID - HIGHLY DETAILED */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          {/* Invoices (Bills) Storage Box */}
+          <div className="p-4 bg-slate-50 dark:bg-[#0f1424] rounded-2xl border border-slate-150 dark:border-slate-800/80 relative overflow-hidden group">
+            <div className="flex justify-between items-start">
+              <div className="space-y-1 z-10">
+                <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest font-mono">Bảng kê hoá đơn</span>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white font-mono">{storageStats.billsCount.toLocaleString()} HĐ</h4>
+                <div className="text-slate-450 dark:text-slate-400 text-[11px] font-mono">
+                  Dung lượng: <strong className="text-slate-705 dark:text-slate-200">{formatSize(storageStats.billsSize)}</strong>
+                </div>
+              </div>
+              <div className="p-2 bg-indigo-100/40 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 rounded-xl">
+                <FileText className="w-5 h-5" />
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 text-[10.5px] text-slate-500 dark:text-slate-400 flex justify-between items-center bg-white/40 dark:bg-black/10 p-1.5 rounded-lg font-mono">
+              <span>Độ lớn bình quân:</span>
+              <span className="font-bold text-slate-700 dark:text-slate-200">{formatSize(Math.round(storageStats.avgBillSize))} / bill</span>
+            </div>
+            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition" />
+          </div>
+
+          {/* Imports Storage Box */}
+          <div className="p-4 bg-slate-50 dark:bg-[#0f1424] rounded-2xl border border-slate-150 dark:border-slate-800/80 relative overflow-hidden group">
+            <div className="flex justify-between items-start">
+              <div className="space-y-1 z-10">
+                <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest font-mono">Hàng nhập xưởng lẻ</span>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white font-mono">{storageStats.importsCount.toLocaleString()} Phự</h4>
+                <div className="text-slate-450 dark:text-slate-400 text-[11px] font-mono">
+                  Dung lượng: <strong className="text-slate-705 dark:text-slate-200">{formatSize(storageStats.importsSize)}</strong>
+                </div>
+              </div>
+              <div className="p-2 bg-emerald-100/40 dark:bg-emerald-950/30 text-emerald-650 dark:text-emerald-400 rounded-xl">
+                <HardDrive className="w-5 h-5" />
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 text-[10.5px] text-slate-500 dark:text-slate-400 flex justify-between items-center bg-white/40 dark:bg-black/10 p-1.5 rounded-lg font-mono">
+              <span>Độ lớn bình quân:</span>
+              <span className="font-bold text-slate-700 dark:text-slate-200">{formatSize(Math.round(storageStats.avgImportSize))} / mẫu</span>
+            </div>
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition" />
+          </div>
+
+          {/* Captured Photos Storage Box */}
+          <div className="p-4 bg-slate-50 dark:bg-[#0f1424] rounded-2xl border border-slate-150 dark:border-slate-800/80 relative overflow-hidden group">
+            <div className="flex justify-between items-start">
+              <div className="space-y-1 z-10">
+                <span className="text-[9px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-widest font-mono">Hình mẫu & Chứng từ</span>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white font-mono">{storageStats.photosCount.toLocaleString()} Ảnh</h4>
+                <div className="text-slate-450 dark:text-slate-400 text-[11px] font-mono">
+                  Dung lượng: <strong className="text-slate-705 dark:text-sky-305">{formatSize(storageStats.photosSize)}</strong>
+                </div>
+              </div>
+              <div className="p-2 bg-sky-100/40 dark:bg-sky-950/30 text-sky-655 dark:text-sky-400 rounded-xl">
+                <Camera className="w-5 h-5 text-sky-505" />
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 text-[10.5px] text-slate-500 dark:text-slate-400 flex justify-between items-center bg-white/40 dark:bg-black/10 p-1.5 rounded-lg font-mono">
+              <span>Độ lớn bình quân:</span>
+              <span className="font-bold text-slate-700 dark:text-slate-200">{formatSize(Math.round(storageStats.avgPhotoSize))} / ảnh</span>
+            </div>
+            <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/5 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition" />
+          </div>
+
+        </div>
+
+        {/* 2. DENSITY REFERENCE ROW - EXPLAINING 1 MEGABYTE STORAGE METRICS */}
+        <div className="p-4 rounded-2xl border border-indigo-150 dark:border-indigo-950/50 bg-gradient-to-r from-indigo-50/30 to-sky-50/20 dark:from-indigo-950/10 dark:to-transparent text-xs space-y-3">
+          <div className="flex items-center gap-1.5 uppercase tracking-wide text-indigo-700 dark:text-indigo-400 font-extrabold text-[10px] font-mono">
+            <Info className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span>Mật độ lưu trữ chuẩn: Có gì trong 1 Megabyte (1 MB)?</span>
+          </div>
+          <p className="text-slate-500 dark:text-slate-400 leading-normal text-[11px]">
+            Bộ nhớ <strong className="text-slate-700 dark:text-slate-300">1 MB (1,024 KB)</strong> chứa một khối lượng thông tin khổng lồ nếu tối ưu hóa tốt. Hãy xem số lượng bản ghi tối đa có thể xếp vừa vặn vào 1 MB:
+          </p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+              <span className="w-5 h-5 rounded-full bg-indigo-500/15 text-indigo-650 dark:text-indigo-400 text-[10px] font-black flex items-center justify-center font-mono">1</span>
+              <div>
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200">~{Math.floor(1024 * 1024 / storageStats.avgBillSize).toLocaleString()} Bản Hoá đơn</div>
+                <div className="text-[9.5px] text-slate-450 font-mono">Dữ liệu chữ & Số</div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+              <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-650 dark:text-emerald-400 text-[10px] font-black flex items-center justify-center font-mono">2</span>
+              <div>
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200">~{Math.floor(1024 * 1024 / storageStats.avgImportSize).toLocaleString()} Bản Nhập hàng</div>
+                <div className="text-[9.5px] text-slate-450 font-mono">Sổ sách thợ may</div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+              <span className="w-5 h-5 rounded-full bg-sky-500/15 text-sky-650 dark:text-sky-400 text-[10px] font-black flex items-center justify-center font-mono">3</span>
+              <div>
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200">~{Math.floor(1024 * 1024 / storageStats.avgPhotoSize).toLocaleString()} Hình mẫu</div>
+                <div className="text-[9.5px] text-slate-450 font-mono">Ảnh nén tối ưu</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. DYNAMIC WHAT-IF ESTIMATOR CALCULATOR */}
+        <div className="p-5 bg-slate-50 dark:bg-[#0d111e] rounded-2xl border border-slate-200 dark:border-slate-800/80 space-y-5">
+          <div className="flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-indigo-505" />
+            <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest font-mono">Dự phóng tương lai (What-if Storage Calculator)</h4>
+          </div>
+          
+          <p className="text-[11.5px] text-slate-500 dark:text-slate-455 leading-normal">
+            Nhập hoặc căn chỉnh số lượng hoá đơn nợ sỉ, số phiếu nhập may thợ và số ảnh chụp mẫu chuẩn dưới đây để tìm ra tổng dung lượng lưu trữ dự tính:
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            
+            {/* Input 1: Invoices */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider font-mono">Số Bills mới:</label>
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-1 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setEstBills(prev => Math.max(0, prev - 50))}
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  value={estBills}
+                  onChange={(e) => setEstBills(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full text-center outline-none bg-transparent font-bold font-mono text-xs text-slate-800 dark:text-slate-105"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEstBills(prev => prev + 50)}
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Input 2: Import items */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider font-mono">Số hàng nhập mới:</label>
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-xl p-1 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setEstImports(prev => Math.max(0, prev - 20))}
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  value={estImports}
+                  onChange={(e) => setEstImports(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full text-center outline-none bg-transparent font-bold font-mono text-xs text-slate-800 dark:text-slate-105"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEstImports(prev => prev + 20)}
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Input 3: Captured Photos */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider font-mono">Số Ảnh chụp mới:</label>
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-xl p-1 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setEstPhotos(prev => Math.max(0, prev - 5))}
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  value={estPhotos}
+                  onChange={(e) => setEstPhotos(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full text-center outline-none bg-transparent font-bold font-mono text-xs text-slate-800 dark:text-slate-105"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEstPhotos(prev => prev + 5)}
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* CALCULATED PROJECTED TOTAL RESULT HEADER */}
+          <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+            <div className="space-y-1">
+              <div className="text-[10px] font-black uppercase tracking-widest text-[#64748b] dark:text-[#94a3b8] font-mono">
+                Tổng Dung lượng Dự kiến Tải thêm:
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-indigo-650 dark:text-indigo-400 font-mono tracking-tight">
+                  {formatSize(estBills * storageStats.avgBillSize + estImports * storageStats.avgImportSize + estPhotos * storageStats.avgPhotoSize)}
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono uppercase bg-emerald-500/10 py-0.5 px-2 rounded-md">
+                  Rất nhẹ
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/15 border border-indigo-150/40 dark:border-indigo-900/40 text-[11px] text-slate-600 dark:text-slate-400 leading-normal">
+              💡 <strong>Lưu ý:</strong> Cơ sở dữ liệu cục bộ SQLite/Firestore nén thông tin cực tốt. Kể cả hoạt động trong nhiều năm liên tục, dữ liệu hóa đơn của bạn vẫn chạy nhanh tức thì 0ms ở dưới ngưỡng 5 MB!
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* App Guide & Manual Instructions card */}

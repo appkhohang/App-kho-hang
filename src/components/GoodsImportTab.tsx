@@ -2170,7 +2170,7 @@ export default function GoodsImportTab({
                       </div>
                     </div>
 
-                    {/* Notice bar */}
+                     {/* Notice bar */}
                     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-2.5">
                       <Info className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />
                       <p className="text-[10px] text-slate-600 leading-normal">
