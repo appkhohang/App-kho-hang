@@ -52,10 +52,8 @@ export default function SettingsTab({
 
   // States of collapsible sections (defaulting to false / collapsed for tidiness)
   const [isDbOpen, setIsDbOpen] = useState(false);
-  const [isCloudOpen, setIsCloudOpen] = useState(false);
   const [isPwdOpen, setIsPwdOpen] = useState(false);
   const [isGroupOpen, setIsGroupOpen] = useState(false);
-  const [isSyncRepairOpen, setIsSyncRepairOpen] = useState(false);
   const [forceDefaultDb, setForceDefaultDb] = useState(() => {
     return localStorage.getItem("xuongan_force_default_db") === "true";
   });
@@ -106,14 +104,9 @@ export default function SettingsTab({
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'checking' | 'active' | 'error'>('idle');
   const [cameraError, setCameraError] = useState<string>('');
 
-  // States for what-if storage calculations
-  const [estBills, setEstBills] = useState(100);
-  const [estImports, setEstImports] = useState(50);
-  const [estPhotos, setEstPhotos] = useState(10);
-
-  // States for simulating Firestore storage limit warning
-  const [isQuotaSimEnabled, setIsQuotaSimEnabled] = useState(false);
-  const [simulatedQuotaPercent, setSimulatedQuotaPercent] = useState(82);
+  // States for storage statistics panel toggle and details card
+  const [isStorageStatsOpen, setIsStorageStatsOpen] = useState(false);
+  const [showDetailedInfo, setShowDetailedInfo] = useState(false);
 
   // Storage size calculation logic
   const storageStats = React.useMemo(() => {
@@ -674,13 +667,32 @@ export default function SettingsTab({
           >
             <div>
               <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-1.5 font-mono">
-                <Shield className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition" />
-                <span>Quản lý cơ sở dữ liệu</span>
+                <Database className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition animate-pulse" />
+                <span>Quản lý cơ sở dữ liệu & Đồng bộ</span>
+                <span 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDbOpen(true);
+                    setShowCloudInfo(prev => !prev);
+                  }}
+                  className={`p-1 rounded-md transition ${showCloudInfo ? 'bg-indigo-100 text-indigo-750 dark:bg-indigo-950/40 dark:text-indigo-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650'}`}
+                  title="Thông tin chi tiết cấu hình đám mây"
+                >
+                  <Info className="w-3.5 h-3.5 cursor-pointer" />
+                </span>
               </h3>
-              <p className="text-[11px] text-slate-450 mt-1">Lưu trữ dự phòng hoặc luân chuyển dữ liệu sang thiết bị mới.</p>
+              <p className="text-[11px] text-slate-450 mt-1">Đồng bộ đám mây, sao lưu dự phòng, và xử lý kết nối máy chủ.</p>
             </div>
-            <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-amber-450 transition ml-2 shrink-0">
-              {isDbOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0 hidden sm:flex">
+                <span className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-orange-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 font-mono uppercase">
+                  {syncStatus === 'syncing' ? 'Sync...' : syncStatus === 'error' ? 'Lỗi' : 'Sẵn sàng'}
+                </span>
+              </div>
+              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-amber-450 transition ml-1 shrink-0">
+                {isDbOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </div>
             </div>
           </div>
 
@@ -690,31 +702,164 @@ export default function SettingsTab({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800"
+                className="overflow-hidden space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800"
               >
-                <button
-                  onClick={exportDatabasePackage}
-                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-850 dark:bg-slate-800 dark:hover:bg-slate-755 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-                >
-                  <Download className="w-4 h-4 text-emerald-400" />
-                  <span>Xuất Tệp dự phòng (.json)</span>
-                </button>
+                {/* Hidden input file tag required for backup restore click trigger */}
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileUpload} 
+                  accept=".json" 
+                  className="hidden" 
+                />
 
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-                >
-                  <Upload className="w-4 h-4 text-sky-200" />
-                  <span>Phục hồi từ File (.json)</span>
-                </button>
+                {/* Grid of Square Small tiles */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  
+                  {/* 1. Tải từ Đám mây */}
+                  <button
+                    type="button"
+                    onClick={handleCloudPull}
+                    disabled={syncStatus === 'syncing'}
+                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-indigo-400 dark:hover:border-indigo-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer disabled:opacity-50 min-h-[84px]"
+                  >
+                    <Download className="w-4 h-4 text-indigo-500 mb-1" />
+                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Tải đám mây</span>
+                    <span className="text-[8.5px] text-indigo-650 dark:text-indigo-400 font-mono font-black mt-0.5">PULL CLOUD</span>
+                  </button>
 
-                <button
-                  onClick={handleResetApp}
-                  className="w-full py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-650 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:text-red-400 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-center gap-2 cursor-pointer border border-red-100 dark:border-transparent"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Xóa sạch & Khởi tạo lại bộ nhớ</span>
-                </button>
+                  {/* 2. Lưu lên Đám mây */}
+                  <button
+                    type="button"
+                    onClick={handleCloudPush}
+                    disabled={syncStatus === 'syncing' || userRole !== 'admin'}
+                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-emerald-400 dark:hover:border-emerald-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-emerald-500/10 cursor-pointer disabled:opacity-50 min-h-[84px]"
+                    title={userRole !== 'admin' ? "Chỉ Quản trị viên mới được sao lưu" : ""}
+                  >
+                    <Upload className="w-4 h-4 text-emerald-500 mb-1" />
+                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Lưu đám mây</span>
+                    <span className="text-[8.5px] text-emerald-650 dark:text-emerald-405 font-mono font-black mt-0.5">PUSH CLOUD</span>
+                  </button>
+
+                  {/* 3. Sửa lỗi & Pull (Wipe cache) */}
+                  <button
+                    type="button"
+                    onClick={handleWipeCacheAndSync}
+                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-amber-400 dark:hover:border-amber-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-amber-500/10 cursor-pointer min-h-[84px]"
+                  >
+                    <RefreshCw className="w-4 h-4 text-amber-500 mb-1" />
+                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Sửa lỗi & Pull</span>
+                    <span className="text-[8.5px] text-amber-650 dark:text-amber-405 font-mono font-black mt-0.5">XÓA CACHE</span>
+                  </button>
+
+                  {/* 4. Môi trường DB */}
+                  <button
+                    type="button"
+                    onClick={handleToggleForceDefaultDb}
+                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-blue-500/10 cursor-pointer min-h-[84px]"
+                  >
+                    {forceDefaultDb ? (
+                      <ToggleRight className="w-5 h-5 text-indigo-500 mb-0.5" />
+                    ) : (
+                      <ToggleLeft className="w-5 h-5 text-slate-400 dark:text-slate-600 mb-0.5" />
+                    )}
+                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Môi trường DB</span>
+                    <span className="text-[8.5px] text-blue-650 dark:text-blue-405 font-mono font-black truncate max-w-full">
+                      {forceDefaultDb ? "DEFAULT" : "SANDBOX"}
+                    </span>
+                  </button>
+
+                  {/* 5. Xuất tệp JSON (Local Backup) */}
+                  <button
+                    type="button"
+                    onClick={exportDatabasePackage}
+                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer min-h-[84px]"
+                  >
+                    <Download className="w-4 h-4 text-blue-550 dark:text-blue-400 mb-1" />
+                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Xuất file backup</span>
+                    <span className="text-[8.5px] text-blue-600 dark:text-blue-400 font-mono font-black mt-0.5">LOCAL JSON</span>
+                  </button>
+
+                  {/* 6. Nhập tệp JSON (Local Restore) */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer min-h-[84px]"
+                  >
+                    <Upload className="w-4 h-4 text-violet-550 dark:text-violet-400 mb-1" />
+                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Nhập file backup</span>
+                    <span className="text-[8.5px] text-violet-600 dark:text-violet-400 font-mono font-black mt-0.5">RESTORE</span>
+                  </button>
+
+                  {/* 7. Xóa sạch máy / Đăng xuất (Full Logout Reset) */}
+                  <button
+                    type="button"
+                    onClick={handleLogoutAndWipeAll}
+                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-rose-200 dark:border-rose-900/30 bg-rose-50/10 dark:bg-rose-955/5 hover:bg-rose-50 dark:hover:bg-rose-955/15 hover:border-rose-400 dark:hover:border-rose-900 transition col-span-2 sm:col-span-3 shadow-2xs hover:ring-1 hover:ring-rose-500/10 cursor-pointer min-h-[80px]"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-505 mb-1" />
+                    <span className="text-[10.5px] font-black text-rose-700 dark:text-rose-400">Xóa dữ liệu cục bộ & Đăng xuất</span>
+                    <span className="text-[8.5px] text-slate-400 dark:text-slate-500 mt-0.5 leading-none">
+                      (Bảo lưu tệp an tâm trên đám mây Firestore)
+                    </span>
+                  </button>
+
+                </div>
+
+                {/* Info Drawer inline */}
+                <AnimatePresence>
+                  {showCloudInfo && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-450 space-y-3 leading-relaxed relative mt-2 text-left"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setShowCloudInfo(false)}
+                        className="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-600 cursor-pointer font-bold font-mono text-[10px]"
+                      >
+                        ✕
+                      </button>
+
+                      <div className="space-y-1">
+                        <span className="font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[9.5px] flex items-center gap-1">
+                          <Cloud className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Cơ chế bộ nhớ & Tối ưu:</span>
+                        </span>
+                        <p>
+                          Dữ liệu của xưởng lưu trữ <strong className="text-slate-850 dark:text-slate-100">cache-first</strong> tại trình duyệt máy này. 
+                          Bạn chỉ tiêu thụ lượt đọc/ghi từ đám mây khi chủ động bấm Tải đám mây (Pull) hoặc Lưu đám mây (Push), đảm bảo ứng dụng chạy tức thời, tiết kiệm dung lượng Firestore.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1 pt-2 border-t border-slate-200/60 dark:border-slate-800/80">
+                        <span className="font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[9.5px] flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                          <Shield className="w-3.5 h-3.5" />
+                          <span>Hướng dẫn Khắc phục Lỗi Quyền (Permission Error):</span>
+                        </span>
+                        <p>
+                          Nếu gặp lỗi <strong>"Missing or insufficient permissions"</strong> (thường do môi trường Sandbox bị mất session hoặc hết hạn), hãy bấm nút <strong>"Sửa lỗi & Pull"</strong> để tái đồng bộ. Nếu chạy trong container Cloud Run riêng, hãy đổi <strong>Môi trường DB sang DEFAULT</strong>.
+                        </p>
+                      </div>
+
+                      {userRole !== 'admin' && (
+                        <div className="p-2 border border-amber-200/60 dark:border-amber-900/40 bg-amber-500/[0.03] dark:bg-amber-500/[0.01] rounded-lg text-amber-800 dark:text-amber-400 leading-normal">
+                          🔒 Tài khoản của bạn đang có vai trò <strong>{userRole === 'staff' ? 'Nhân viên nhập thợ' : 'Chỉ xem'}</strong>, chỉ dùng để cập nhật nghiệp vụ cục bộ, không thể PUSH ghi đè cơ sở dữ liệu chung trên đám mây.
+                        </div>
+                      )}
+
+                      {lastSyncTime && (
+                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 pt-2 border-t border-slate-200/65 dark:border-slate-800/80">
+                          <span>🔄 Lần đồng bộ máy này gần nhất:</span>
+                          <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{lastSyncTime}</strong>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
               </motion.div>
             )}
           </AnimatePresence>
@@ -831,131 +976,13 @@ export default function SettingsTab({
                     type="button"
                     disabled={gpsLoading}
                     onClick={handleUpdatePrecisionGps}
-                    className="w-full py-2 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-black tracking-wide transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                    className="w-full py-2 px-4 bg-emerald-650 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-black tracking-wide transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
                     <span>{gpsLoading ? 'Đang định vị chip vệ tinh...' : 'Yêu cầu định vị GPS vệ tinh'}</span>
                   </button>
                 </div>
-
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Firebase Cloud Sync Control panel */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
-        <div 
-          onClick={() => setIsCloudOpen(!isCloudOpen)}
-          className="flex items-center justify-between cursor-pointer select-none group pb-1"
-        >
-          <div className="space-y-1">
-            <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2 flex-wrap">
-              <Cloud className="w-5 h-5 text-indigo-500 group-hover:scale-110 transition" />
-              <span>Đồng bộ hóa đám mây Google Firestore</span>
-            </h3>
-            <p className="text-xs text-slate-450 dark:text-slate-400">
-              Sao lưu dự phòng an tâm và kết xuất các máy khác nhanh chóng, chính xác.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 shrink-0 hidden sm:flex">
-              <span className={`w-2.5 h-2.5 rounded-full ${syncStatus === 'syncing' ? 'bg-orange-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-              <span className="text-[10.5px] font-bold text-slate-550 dark:text-slate-400 font-mono uppercase">
-                {syncStatus === 'syncing' ? 'Đang đồng bộ...' : syncStatus === 'error' ? 'Ghi nhận lỗi' : 'Hệ thống sẵn sàng'}
-              </span>
-            </div>
-            <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-450 group-hover:text-slate-700 dark:group-hover:text-amber-400 transition ml-2 shrink-0">
-              {isCloudOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
-          </div>
-        </div>
-
-        <AnimatePresence initial={false}>
-          {isCloudOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden space-y-4 pt-3 border-t border-slate-150 dark:border-slate-800"
-            >
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCloudInfo(!showCloudInfo)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-indigo-600 dark:text-indigo-400 text-[10px] font-sans font-bold cursor-pointer transition active:scale-95 border border-slate-200 dark:border-slate-700"
-                >
-                  <Info className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Cơ chế bộ nhớ & Chi phí</span>
-                </button>
-                <div className="flex items-center gap-1.5 sm:hidden">
-                  <span className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-orange-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                  <span className="text-[10px] font-bold text-slate-550 dark:text-slate-400 font-mono uppercase">
-                    {syncStatus === 'syncing' ? 'Đang đồng bộ...' : syncStatus === 'error' ? 'Lỗi' : 'Sẵn sàng'}
-                  </span>
-                </div>
-              </div>
-
-              {showCloudInfo && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="bg-slate-50 dark:bg-[#0f1424] rounded-xl p-4 border border-slate-150 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-400 space-y-2 leading-relaxed relative"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setShowCloudInfo(false)}
-                    className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 cursor-pointer font-bold font-mono text-xs p-1"
-                    title="Đóng"
-                  >
-                    ✕
-                  </button>
-                  <p className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 uppercase font-mono text-[9.5px]">
-                    <Database className="w-3.5 h-3.5 text-blue-500" />
-                    <span>CƠ CHẾ TỐI ƯU TRUY VẤN:</span>
-                  </p>
-                  <p>
-                    Tất cả hoá đơn nợ cũ nợ mới và danh sách thợ may được lưu trữ <strong className="text-slate-800 dark:text-slate-100">cache-first</strong> tối ưu tại bộ nhớ cục bộ trong máy. 
-                    Bạn chỉ tốn lượt đọc/ghi từ đám mây khi chủ động bấm cập nhật tải hoặc lưu dưới đây. Điều này đảm bảo hiệu năng tối đa và tiết kiệm hoàn toàn dung lượng.
-                  </p>
-                  {lastSyncTime && (
-                    <p className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 pt-1 border-t border-slate-200 dark:border-slate-800">
-                      🔄 Lần đồng bộ máy này gần nhất: <strong className="font-bold">{lastSyncTime}</strong>
-                    </p>
-                  )}
-                </motion.div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={handleCloudPull}
-                  disabled={syncStatus === 'syncing'}
-                  className="py-1.5 px-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border border-slate-200 dark:border-slate-700 active:scale-98"
-                  title="Đồng bộ cập nhật cơ sở dữ liệu từ đám mây"
-                >
-                  <Download className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-                  <span>Tải dữ liệu từ đám mây</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleCloudPush}
-                  disabled={syncStatus === 'syncing' || userRole !== 'admin'}
-                  className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs active:scale-98"
-                  title={userRole !== 'admin' ? "Chỉ Quản trị viên mới được sao lưu" : ""}
-                >
-                  <Upload className="w-3.5 h-3.5 text-emerald-350" />
-                  <span>Lưu dự phòng lên đám mây</span>
-                </button>
-              </div>
-              {userRole !== 'admin' && (
-                <div className="p-3 bg-amber-50/50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-[10.5px] text-amber-800 dark:text-amber-400 leading-normal flex items-start gap-2">
-                  <span className="shrink-0 text-amber-500 font-bold">⚠️</span>
-                  <span>Tài khoản hiện quy định chế độ <strong>{userRole === 'staff' ? 'Nhân viên nhập thợ' : 'Chỉ xem'}</strong>. Phân quyền này chỉ dùng để cập nhật nghiệp vụ hàng ngày cục bộ, không thể ghi đè sao lưu trực tiếp lên cơ sở dữ liệu tổng của xưởng trên nền đám mây.</span>
-                </div>
-              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1069,106 +1096,6 @@ export default function SettingsTab({
                   )}
                 </div>
               </form>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Cloud Sync Repair & Database Environment Modes Toggle Section */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
-        <div 
-          onClick={() => setIsSyncRepairOpen(!isSyncRepairOpen)}
-          className="flex items-center justify-between cursor-pointer select-none group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-50 dark:bg-amber-955/20 text-amber-650 dark:text-amber-400 rounded-xl">
-              <Database className="w-5 h-5 group-hover:scale-110 transition shrink-0" />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2 flex-wrap">
-                <span>Khắc phục Đám mây & Đồng bộ dữ liệu</span>
-                <span className="text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-mono">Quản trị</span>
-              </h3>
-              <p className="text-xs text-slate-450 dark:text-slate-400">
-                Xử lý lỗi quyền truy cập (Permission) hoặc xóa sạch dữ liệu đệm máy cục bộ để kết nối tài khoản khác.
-              </p>
-            </div>
-          </div>
-          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-450 group-hover:text-slate-700 dark:group-hover:text-amber-400 transition ml-2 shrink-0">
-            {isSyncRepairOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </div>
-        </div>
-
-        <AnimatePresence initial={false}>
-          {isSyncRepairOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden space-y-4 pt-3 border-t border-slate-150 dark:border-slate-800"
-            >
-              <div className="p-4 bg-amber-50/20 dark:bg-amber-955/10 border border-amber-200/50 dark:border-amber-900/30 rounded-xl space-y-2 text-xs text-slate-650 dark:text-slate-350 leading-relaxed">
-                <span className="font-bold text-amber-700 dark:text-amber-400 block uppercase text-[10px] tracking-wider">🛠 Hướng dẫn Khắc phục Lỗi Quyền Đám mây (Permission Error)</span>
-                <p>
-                  Nếu thiết bị của bạn bị báo lỗi <strong>"Missing or insufficient permissions"</strong>, lỗi đó xuất phát từ việc máy chủ đám mây không tìm thấy tên cơ sở dữ liệu Sandbox của AI Studio trên dự án cá nhân hoặc phiên kết nối bị hết hạn đột ngột.
-                </p>
-                <p>
-                  Hãy sử dụng hai công cụ hạch toán mạnh mẽ dưới đây để tái cấu trúc hoặc đồng bộ tươi sạch.
-                </p>
-              </div>
-
-              {/* Toggle Database Mode */}
-              <div className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">Sử dụng Cơ sở dữ liệu mặc định (Default DB)</span>
-                    <p className="text-[11px] text-slate-400 leading-normal">
-                      Kích hoạt chế độ này nếu bạn đang chạy ứng dụng trong Container Cloud Run của tài khoản cá nhân. Hệ thống sẽ bỏ qua DB Sandbox để dùng DB chính chủ <code>(default)</code> của bạn.
-                    </p>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={handleToggleForceDefaultDb} 
-                    className="shrink-0 transition active:scale-95 cursor-pointer"
-                  >
-                    {forceDefaultDb ? (
-                      <ToggleRight className="w-10 h-10 text-emerald-500" />
-                    ) : (
-                      <ToggleLeft className="w-10 h-10 text-slate-300 dark:text-slate-700" />
-                    )}
-                  </button>
-                </div>
-                <div className="text-[10px] font-mono py-1 px-2.5 bg-slate-50 dark:bg-slate-950 rounded-lg text-slate-500 border border-slate-150 dark:border-slate-850">
-                  Môi trường DB: <span className="font-bold text-indigo-600 dark:text-indigo-400">{forceDefaultDb ? "CHÍNH CHỦ (default)" : "SANDBOX (ai-studio)"}</span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={handleWipeCacheAndSync}
-                  className="p-3 bg-indigo-50 hover:bg-indigo-105 dark:bg-indigo-950/35 dark:hover:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 rounded-xl text-xs font-bold font-sans transition flex items-center justify-center gap-2 border border-indigo-100 dark:border-indigo-900/45 cursor-pointer active:scale-95"
-                >
-                  <RefreshCw className="w-4.5 h-4.5 text-indigo-550 animate-pulse" />
-                  <div className="text-left">
-                    <span className="block text-[11px]">Xóa Cache Cục Bộ & Pull Mới</span>
-                    <span className="block text-[9px] font-normal text-slate-400 dark:text-slate-500">Giữ phiên, tải sạch từ đám mây</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleLogoutAndWipeAll}
-                  className="p-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-450 rounded-xl text-xs font-bold font-sans transition flex items-center justify-center gap-2 border border-rose-100 dark:border-rose-900/20 cursor-pointer active:scale-95"
-                >
-                  <Trash2 className="w-4.5 h-4.5 text-rose-550" />
-                  <div className="text-left">
-                    <span className="block text-[11px]">Xóa Sạch Máy & Đăng xuất</span>
-                    <span className="block text-[9px] font-normal text-slate-400 dark:text-slate-500">Đặt lại ban đầu để thay đổi tài khoản</span>
-                  </div>
-                </button>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1311,7 +1238,7 @@ export default function SettingsTab({
           className="flex items-center justify-between cursor-pointer select-none group"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
+            <div className="p-2 bg-[#818cf8]/14 dark:bg-indigo-950/40 text-indigo-605 dark:text-indigo-400 rounded-xl">
               <Lock className="w-5 h-5 group-hover:scale-110 transition shrink-0" />
             </div>
             <div>
@@ -1364,7 +1291,7 @@ export default function SettingsTab({
                         <button
                           type="button"
                           onClick={() => setShowPwd(!showPwd)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-405 hover:text-slate-600 dark:hover:text-slate-300 transition cursor-pointer"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-405 hover:text-slate-600 dark:hover:text-slate-300 transition cursor-pointer flex items-center justify-center"
                         >
                           {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         </button>
@@ -1429,412 +1356,207 @@ export default function SettingsTab({
         </AnimatePresence>
       </div>
 
-      {/* 📊 BẢNG TÍNH TOÁN THỐNG KÊ & ƯỚC LƯỢNG DUNG LƯỢNG LƯU TRỮ CHÍNH XÁC */}
-      <div id="storage-estimator-panel" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-150 dark:border-slate-800 pb-4">
+      {/* 📊 BẢNG TÍNH TOÁN THỐNG KÊ & DUNG LƯỢNG BỘ NHỚ LƯU TRỮ */}
+      <div id="storage-estimator-panel" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-3xs space-y-3">
+        
+        {/* Toggle Header Button */}
+        <button
+          type="button"
+          onClick={() => setIsStorageStatsOpen(!isStorageStatsOpen)}
+          className="w-full flex items-center justify-between text-left focus:outline-none transition group cursor-pointer"
+        >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
-              <Database className="w-5 h-5 animate-pulse" />
+            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition duration-200">
+              <Database className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
-                <span>Phân Tích Thống Kê & Dung Lượng Bộ Nhớ</span>
-                <span className="text-[9px] bg-indigo-600 dark:bg-indigo-500 text-white px-2 py-0.5 rounded-full uppercase font-mono tracking-widest font-black">Chính xác</span>
+              <h3 className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                <span>Thống Kê Dung Lượng & Cloud Storage</span>
+                <span className="text-[8px] bg-indigo-600 dark:bg-indigo-500 text-white px-2 py-0.5 rounded-full uppercase font-mono tracking-widest font-black">Chính xác</span>
               </h3>
-              <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
-                Chi tiết dung lượng thực tế của hoá đơn, nhập xưởng lẻ và tài liệu hình ảnh trên thiết bị.
+              <p className="text-[11px] text-slate-450 dark:text-slate-500 mt-0.5">
+                Xem chi tiết dung lượng hoá đơn, phiếu nhập hàng và hình ảnh trên đám mây.
               </p>
             </div>
           </div>
-          <div className="text-right hidden sm:block">
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block font-mono">Tổng dung lượng cục bộ</span>
-            <span className="text-base font-black text-indigo-600 dark:text-indigo-400 font-mono">
-              {formatSize(storageStats.totalSize)}
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block font-mono">Tổng dung lượng sử dụng</span>
+              <span className="text-sm font-black text-indigo-600 dark:text-[#818cf8] font-mono">
+                {formatSize(storageStats.totalSize)}
+              </span>
+            </div>
+            <div className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 transition">
+              {isStorageStatsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
           </div>
-        </div>
+        </button>
 
-        {/* ☁️ GIÁM SÁT HẠN MỨC QUOTA FIRESTORE DUNG LƯỢNG 1GB (SPARK FREE TIER) */}
-        {(() => {
-          const quotaLimitBytes = 1024 * 1024 * 1024; // 1 GB in bytes
-          const currentQuotaPercent = isQuotaSimEnabled 
-            ? simulatedQuotaPercent 
-            : Math.min(100, (storageStats.totalSize / quotaLimitBytes) * 100);
+        {/* Dynamic Inner Section (Only renders if expanded) */}
+        <AnimatePresence>
+          {isStorageStatsOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden space-y-4 pt-3 border-t border-slate-150 dark:border-slate-800"
+            >
+              
+              {/* 📊 COMPACTED CLOUD STORAGE TRACK & PROGRESS BAR */}
+              {(() => {
+                const quotaLimitBytes = 1024 * 1024 * 1024; // 1 GB
+                const currentQuotaPercent = Math.min(100, (storageStats.totalSize / quotaLimitBytes) * 100);
+                const displayPercentStr = currentQuotaPercent.toFixed(currentQuotaPercent < 0.01 && currentQuotaPercent > 0 ? 4 : 2);
+                
+                const isNearLimit = currentQuotaPercent >= 80;
+                const isCriticalLimit = currentQuotaPercent >= 90;
 
-          const displayPercentStr = currentQuotaPercent.toFixed(currentQuotaPercent < 0.01 && currentQuotaPercent > 0 ? 4 : 2);
-          const displaySizeStr = isQuotaSimEnabled
-            ? formatSize((simulatedQuotaPercent / 100) * quotaLimitBytes)
-            : formatSize(storageStats.totalSize);
+                // Color calculation
+                let progressColorClass = "bg-indigo-600 dark:bg-indigo-500";
+                let textColorClass = "text-indigo-650 dark:text-indigo-400";
+                let borderGlowClass = "border-slate-100 dark:border-slate-800";
 
-          const isNearLimit = currentQuotaPercent >= 80;
-          const isCriticalLimit = currentQuotaPercent >= 90;
+                if (isCriticalLimit) {
+                  progressColorClass = "bg-rose-600 dark:bg-rose-500 animate-pulse";
+                  textColorClass = "text-rose-650 dark:text-rose-400";
+                  borderGlowClass = "border-rose-200 dark:border-rose-900/40 ring-1 ring-rose-500/10";
+                } else if (isNearLimit) {
+                  progressColorClass = "bg-amber-500 dark:bg-amber-450";
+                  textColorClass = "text-amber-655 dark:text-amber-400";
+                  borderGlowClass = "border-amber-200 dark:border-amber-900/40 ring-1 ring-amber-500/10";
+                }
 
-          // Color calculation
-          let progressColorClass = "bg-indigo-600 dark:bg-indigo-500";
-          let textColorClass = "text-indigo-650 dark:text-indigo-400";
-          let borderGlowClass = "border-slate-200 dark:border-slate-800";
-
-          if (isCriticalLimit) {
-            progressColorClass = "bg-rose-600 dark:bg-rose-500 animate-pulse";
-            textColorClass = "text-rose-650 dark:text-rose-400";
-            borderGlowClass = "border-rose-300 dark:border-rose-900/60 ring-2 ring-rose-500/10";
-          } else if (isNearLimit) {
-            progressColorClass = "bg-amber-500 dark:bg-amber-450";
-            textColorClass = "text-amber-650 dark:text-amber-400";
-            borderGlowClass = "border-amber-300 dark:border-amber-900/60 ring-2 ring-amber-500/10";
-          } else if (currentQuotaPercent >= 50) {
-            progressColorClass = "bg-sky-500 dark:bg-sky-450";
-            textColorClass = "text-sky-655 dark:text-sky-400";
-          }
-
-          return (
-            <div className={`p-5 rounded-2xl border ${borderGlowClass} bg-slate-50/50 dark:bg-[#0c101d] space-y-4 transition-all duration-300`}>
-              {/* Header metrics */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Cloud className={`w-5 h-5 ${isNearLimit ? 'text-rose-550 dark:text-rose-450 animate-bounce' : 'text-indigo-500'}`} />
-                  <div>
-                    <h4 className="text-xs font-extrabold uppercase tracking-widest text-slate-700 dark:text-slate-350 font-mono">
-                      Hạn mức Lưu trữ Cloud Firestore (Gói Spark Free Tier)
-                    </h4>
-                    <p className="text-[10px] text-slate-450 dark:text-slate-500 font-sans">
-                      Giới hạn dung lượng tài liệu & ảnh mẫu trên đám mây của Firestore là <strong className="font-mono">1.00 GB</strong>.
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right font-mono text-xs">
-                  <span className={`font-black ${textColorClass}`}>
-                    {displaySizeStr}
-                  </span>
-                  <span className="text-slate-400 dark:text-slate-500"> / 1.00 GB ({displayPercentStr}%)</span>
-                </div>
-              </div>
-
-              {/* Progress Bar Track */}
-              <div className="w-full h-3 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800 p-0.5 shadow-inner">
-                <div 
-                  className={`h-full rounded-full transition-all duration-500 ease-out ${progressColorClass}`}
-                  style={{ width: `${currentQuotaPercent}%` }}
-                />
-              </div>
-
-              {/* Proactive 80%+ Warn Trigger Block */}
-              <AnimatePresence mode="wait">
-                {isNearLimit && (
-                  <motion.div
-                    key="quota-warning-banner"
-                    initial={{ opacity: 0, height: 0, y: -8 }}
-                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                    exit={{ opacity: 0, height: 0, y: -8 }}
-                    transition={{ duration: 0.25 }}
-                    className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 text-xs flex gap-3 items-start overflow-hidden shadow-xs"
-                  >
-                    <AlertTriangle className="w-5 h-5 text-rose-500 dark:text-rose-450 shrink-0 mt-0.5 animate-bounce" />
-                    <div className="space-y-1.5 text-left">
-                      <h5 className="font-extrabold text-rose-700 dark:text-rose-450 uppercase tracking-wide flex items-center gap-1.5">
-                        <span>CẢNH BÁO: DUNG LƯỢNG BỘ NHỚ ĐÃ ĐẠT {displayPercentStr}% HẠN MỨC!</span>
-                      </h5>
-                      <p className="text-slate-650 dark:text-slate-300 leading-relaxed">
-                        Hệ thống phát hiện tài liệu lưu trữ đám mây của dự án Firestore sắp chạm ngưỡng giới hạn miễn phí 1.00 GB. Để tránh gián đoạn đọc/ghi dữ liệu, vui lòng:
-                      </p>
-                      <ul className="list-disc pl-4 space-y-1.5 text-slate-550 dark:text-slate-400 mt-1.5 font-sans">
-                        <li>
-                          <strong className="text-slate-750 dark:text-slate-200">Dọn dẹp hình ảnh mẫu cũ:</strong> Vào phần <span className="underline font-bold">Thư Viện Ảnh</span> và chọn lọc xoá bớt các ảnh chứng từ, ảnh mẫu sản phẩm đã hoàn thiện từ nhiều tháng trước để giải phóng bộ nhớ.
-                        </li>
-                        <li>
-                          <strong className="text-slate-750 dark:text-slate-200">Sao lưu & Đặt lại (Reset):</strong> Bấm nút <span className="underline font-bold">Xuất Lưu Trữ Thiết Bị</span> để tải tệp JSON lưu trữ toàn phần về máy tính, sau đó bạn có thể làm sạch kho ảnh để bắt đầu chu kỳ lưu trữ mới.
-                        </li>
-                        <li>
-                          <strong className="text-slate-750 dark:text-slate-200">Nâng cấp Quota từ Firestore:</strong> Nâng cấp Firebase Project của bạn lên gói <span className="font-bold text-rose-650 dark:text-rose-400">Blaze Plan (Pay-as-you-go)</span> trực tiếp trên Firebase Console để nâng mức giới hạn document lên không giới hạn (hoàn toàn miễn phí nếu khối lượng tải thực tế vẫn ở mức thông thường).
-                        </li>
-                      </ul>
+                return (
+                  <div className={`p-4 rounded-xl border ${borderGlowClass} bg-slate-50/50 dark:bg-[#0c101d] space-y-3`}>
+                    
+                    {/* Header values & Clickable Helper Icon */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Cloud className={`w-4 h-4 ${isNearLimit ? 'text-rose-500 animate-bounce' : 'text-indigo-500'}`} />
+                        <span className="text-[11px] font-extrabold text-slate-705 dark:text-slate-300 font-mono uppercase tracking-wider">
+                          Dung lượng Firestore (Miễn phí 1GB)
+                        </span>
+                        
+                        {/* ℹ️ CLICKABLE HELPER i ON-DEMAND */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDetailedInfo(!showDetailedInfo);
+                          }}
+                          className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 transition cursor-pointer flex items-center justify-center"
+                          title="Click xem mật độ lưu trữ chi tiết"
+                        >
+                          <Info className={`w-4 h-4 ${showDetailedInfo ? 'text-indigo-600 dark:text-indigo-455' : 'text-slate-400'}`} />
+                        </button>
+                      </div>
+                      
+                      <div className="text-right font-mono text-[11px]">
+                        <span className={`font-black ${textColorClass}`}>{formatSize(storageStats.totalSize)}</span>
+                        <span className="text-slate-405 dark:text-slate-505"> / 1.00 GB ({displayPercentStr}%)</span>
+                      </div>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
-              {/* Visual warning limit explanation if not reached yet */}
-              {!isNearLimit && (
-                <div className="text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-sans justify-between bg-white dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-3xs">
-                  <span className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>Hệ thống hoạt động an toàn. Cảnh báo tự động báo động khi dung lượng đạt <strong>80% (819.2 MB)</strong>.</span>
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-400 font-mono">STATUS: SAFE</span>
-                </div>
-              )}
-
-              {/* INTERACTIVE CONTROLLER FOR DEMO PURPOSES (What-if Test trigger) */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-800 rounded-xl">
-                <div className="space-y-0.5">
-                  <div className="text-[10.5px] font-black text-slate-700 dark:text-slate-350 flex items-center gap-1.5 uppercase font-mono">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
-                    <span>Thanh Kiểm Định Cảnh Báo Trực Quan (Simulator)</span>
-                  </div>
-                  <p className="text-[10px] text-slate-450 dark:text-slate-500 font-sans leading-normal">
-                    Kéo chỉnh phần trăm để kiểm duyệt giao diện cảnh báo &gt;= 80% hoạt động thực tế.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 w-full sm:w-auto shrink-0 justify-between sm:justify-start">
-                  <button
-                    type="button"
-                    onClick={() => setIsQuotaSimEnabled(!isQuotaSimEnabled)}
-                    className={`px-3 py-1.5 rounded-lg text-[9.5px] font-extrabold uppercase tracking-wider font-mono shadow-3xs transition cursor-pointer ${
-                      isQuotaSimEnabled 
-                        ? 'bg-rose-600 hover:bg-rose-700 text-white' 
-                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-300'
-                    }`}
-                  >
-                    {isQuotaSimEnabled ? 'Tắt kiểm thử' : 'Thử mô phỏng'}
-                  </button>
-                  
-                  {isQuotaSimEnabled && (
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={simulatedQuotaPercent}
-                        onChange={(e) => setSimulatedQuotaPercent(parseInt(e.target.value) || 0)}
-                        className="w-24 accent-indigo-650 dark:accent-indigo-500 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg cursor-pointer"
+                    {/* Progress slider track */}
+                    <div className="w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800 p-[1px]">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-300 ${progressColorClass}`}
+                        style={{ width: `${currentQuotaPercent}%` }}
                       />
-                      <span className="text-[11px] font-bold font-mono text-slate-800 dark:text-slate-100 min-w-[32px] text-right">
-                        {simulatedQuotaPercent}%
-                      </span>
                     </div>
-                  )}
+
+                    {/* Expandable detailed Info popup inline (Interactive On Demand) */}
+                    <AnimatePresence>
+                      {showDetailedInfo && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="pt-2.5 border-t border-slate-200/50 dark:border-slate-800 text-[11px] text-slate-550 dark:text-slate-400 space-y-2 text-left"
+                        >
+                          <div className="font-extrabold text-slate-700 dark:text-slate-200 flex items-center gap-1 font-mono uppercase text-[10px]">
+                            <span>ℹ️ Bản dịch & mật độ lưu trữ bình quân:</span>
+                          </div>
+                          <ul className="list-disc pl-4 space-y-1 text-[10.5px]">
+                            <li><strong>Hóa đơn thanh toán (Bill):</strong> Bình quân ~{formatSize(Math.round(storageStats.avgBillSize))} / bill. 1 Megabyte (MB) lưu được khoảng ~{Math.floor(1024 * 1024 / storageStats.avgBillSize).toLocaleString()} hóa đơn.</li>
+                            <li><strong>Phiếu hàng nhập xưởng:</strong> Bình quân ~{formatSize(Math.round(storageStats.avgImportSize))} / phiếu. 1 MB lưu được khoảng ~{Math.floor(1024 * 1024 / storageStats.avgImportSize).toLocaleString()} phiếu.</li>
+                            <li><strong>Chứng từ hình ảnh mẫu:</strong> Bình quân ~{formatSize(Math.round(storageStats.avgPhotoSize))} / ảnh mẫu. 1 MB lưu được khoảng ~{Math.floor(1024 * 1024 / storageStats.avgPhotoSize).toLocaleString()} ảnh.</li>
+                          </ul>
+                          <p className="text-[10px] text-indigo-600 dark:text-indigo-400 italic leading-relaxed">
+                            * Cơ sở dữ liệu đám mây Firebase Firestore lưu trữ thông tin cực tốt và siêu nhẹ. Chỉ những hình ảnh chứng từ mẫu nguyên bản kích thước lớn mới tốn tài nguyên thực tế.
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Proactive 80%+ Warning UI triggers */}
+                    <AnimatePresence>
+                      {isNearLimit && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="p-3 rounded-lg border border-rose-250 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 text-[11px] flex gap-2.5 items-start mt-2"
+                        >
+                          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5 animate-bounce" />
+                          <div className="space-y-1 text-left text-slate-650 dark:text-slate-300">
+                            <h5 className="font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide">
+                              BÁO ĐỘNG: BỘ NHỚ LƯU TRỮ CLOUD ĐẠT {displayPercentStr}% HẠN MỨC!
+                            </h5>
+                            <p className="leading-relaxed">
+                              Vui lòng dọn dẹp bớt các hình chụp mẫu cũ trong <strong className="underline cursor-pointer" onClick={() => setShowDetailedInfo(true)}>Thư viện ảnh</strong> để giải phóng không gian bộ nhớ, hoặc chủ động tải bản sao lưu dữ liệu toàn phần về máy.
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                  </div>
+                );
+              })()}
+
+              {/* ⚡ COMPACT INDIVIDUAL COUNTERS IN ONE ROW FOR OPTIMAL SCREEN REAL ESTATE */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                
+                {/* Compact Invoices Block */}
+                <div className="p-2 bg-slate-50/60 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800/80 rounded-xl flex items-center justify-between gap-1.5 hover:ring-1 hover:ring-indigo-500/10 transition">
+                  <div className="text-left leading-tight">
+                    <span className="text-[9px] font-black text-indigo-650 dark:text-indigo-405 uppercase tracking-wider font-mono block">Bảng hoá đơn</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-white font-mono">{storageStats.billsCount.toLocaleString()} HĐ ({formatSize(storageStats.billsSize)})</span>
+                  </div>
+                  <div className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-slate-900 px-1.5 py-0.5 rounded-md border border-slate-200/50 dark:border-slate-800 font-mono shrink-0">
+                    TB: {formatSize(Math.round(storageStats.avgBillSize))}
+                  </div>
                 </div>
-              </div>
 
-            </div>
-          );
-        })()}
-
-        {/* 1. REALTIME METRICS GRID - HIGHLY DETAILED */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          {/* Invoices (Bills) Storage Box */}
-          <div className="p-4 bg-slate-50 dark:bg-[#0f1424] rounded-2xl border border-slate-150 dark:border-slate-800/80 relative overflow-hidden group">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1 z-10">
-                <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest font-mono">Bảng kê hoá đơn</span>
-                <h4 className="text-xl font-black text-slate-900 dark:text-white font-mono">{storageStats.billsCount.toLocaleString()} HĐ</h4>
-                <div className="text-slate-450 dark:text-slate-400 text-[11px] font-mono">
-                  Dung lượng: <strong className="text-slate-705 dark:text-slate-200">{formatSize(storageStats.billsSize)}</strong>
+                {/* Compact Imports Block */}
+                <div className="p-2 bg-slate-50/60 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800/80 rounded-xl flex items-center justify-between gap-1.5 hover:ring-1 hover:ring-emerald-500/10 transition">
+                  <div className="text-left leading-tight">
+                    <span className="text-[9px] font-black text-emerald-650 dark:text-emerald-405 uppercase tracking-wider font-mono block">Nhập xưởng lẻ</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-white font-mono">{storageStats.importsCount.toLocaleString()} Phiếu ({formatSize(storageStats.importsSize)})</span>
+                  </div>
+                  <div className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-slate-900 px-1.5 py-0.5 rounded-md border border-slate-200/50 dark:border-slate-800 font-mono shrink-0">
+                    TB: {formatSize(Math.round(storageStats.avgImportSize))}
+                  </div>
                 </div>
-              </div>
-              <div className="p-2 bg-indigo-100/40 dark:bg-indigo-950/30 text-indigo-650 dark:text-indigo-400 rounded-xl">
-                <FileText className="w-5 h-5" />
-              </div>
-            </div>
-            
-            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 text-[10.5px] text-slate-500 dark:text-slate-400 flex justify-between items-center bg-white/40 dark:bg-black/10 p-1.5 rounded-lg font-mono">
-              <span>Độ lớn bình quân:</span>
-              <span className="font-bold text-slate-700 dark:text-slate-200">{formatSize(Math.round(storageStats.avgBillSize))} / bill</span>
-            </div>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition" />
-          </div>
 
-          {/* Imports Storage Box */}
-          <div className="p-4 bg-slate-50 dark:bg-[#0f1424] rounded-2xl border border-slate-150 dark:border-slate-800/80 relative overflow-hidden group">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1 z-10">
-                <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest font-mono">Hàng nhập xưởng lẻ</span>
-                <h4 className="text-xl font-black text-slate-900 dark:text-white font-mono">{storageStats.importsCount.toLocaleString()} Phự</h4>
-                <div className="text-slate-450 dark:text-slate-400 text-[11px] font-mono">
-                  Dung lượng: <strong className="text-slate-705 dark:text-slate-200">{formatSize(storageStats.importsSize)}</strong>
+                {/* Compact Photo Block */}
+                <div className="p-2 bg-slate-50/60 dark:bg-slate-950/45 border border-slate-150 dark:border-slate-800/80 rounded-xl flex items-center justify-between gap-1.5 hover:ring-1 hover:ring-sky-500/10 transition">
+                  <div className="text-left leading-tight">
+                    <span className="text-[9px] font-black text-sky-655 dark:text-sky-405 uppercase tracking-wider font-mono block">Ảnh tài liệu</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-white font-mono">{storageStats.photosCount.toLocaleString()} Ảnh ({formatSize(storageStats.photosSize)})</span>
+                  </div>
+                  <div className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-slate-900 px-1.5 py-0.5 rounded-md border border-slate-200/50 dark:border-slate-800 font-mono shrink-0">
+                    TB: {formatSize(Math.round(storageStats.avgPhotoSize))}
+                  </div>
                 </div>
-              </div>
-              <div className="p-2 bg-emerald-100/40 dark:bg-emerald-950/30 text-emerald-650 dark:text-emerald-400 rounded-xl">
-                <HardDrive className="w-5 h-5" />
-              </div>
-            </div>
-            
-            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 text-[10.5px] text-slate-500 dark:text-slate-400 flex justify-between items-center bg-white/40 dark:bg-black/10 p-1.5 rounded-lg font-mono">
-              <span>Độ lớn bình quân:</span>
-              <span className="font-bold text-slate-700 dark:text-slate-200">{formatSize(Math.round(storageStats.avgImportSize))} / mẫu</span>
-            </div>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition" />
-          </div>
 
-          {/* Captured Photos Storage Box */}
-          <div className="p-4 bg-slate-50 dark:bg-[#0f1424] rounded-2xl border border-slate-150 dark:border-slate-800/80 relative overflow-hidden group">
-            <div className="flex justify-between items-start">
-              <div className="space-y-1 z-10">
-                <span className="text-[9px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-widest font-mono">Hình mẫu & Chứng từ</span>
-                <h4 className="text-xl font-black text-slate-900 dark:text-white font-mono">{storageStats.photosCount.toLocaleString()} Ảnh</h4>
-                <div className="text-slate-450 dark:text-slate-400 text-[11px] font-mono">
-                  Dung lượng: <strong className="text-slate-705 dark:text-sky-305">{formatSize(storageStats.photosSize)}</strong>
-                </div>
               </div>
-              <div className="p-2 bg-sky-100/40 dark:bg-sky-950/30 text-sky-655 dark:text-sky-400 rounded-xl">
-                <Camera className="w-5 h-5 text-sky-505" />
-              </div>
-            </div>
-            
-            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 text-[10.5px] text-slate-500 dark:text-slate-400 flex justify-between items-center bg-white/40 dark:bg-black/10 p-1.5 rounded-lg font-mono">
-              <span>Độ lớn bình quân:</span>
-              <span className="font-bold text-slate-700 dark:text-slate-200">{formatSize(Math.round(storageStats.avgPhotoSize))} / ảnh</span>
-            </div>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/5 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition" />
-          </div>
 
-        </div>
-
-        {/* 2. DENSITY REFERENCE ROW - EXPLAINING 1 MEGABYTE STORAGE METRICS */}
-        <div className="p-4 rounded-2xl border border-indigo-150 dark:border-indigo-950/50 bg-gradient-to-r from-indigo-50/30 to-sky-50/20 dark:from-indigo-950/10 dark:to-transparent text-xs space-y-3">
-          <div className="flex items-center gap-1.5 uppercase tracking-wide text-indigo-700 dark:text-indigo-400 font-extrabold text-[10px] font-mono">
-            <Info className="w-4 h-4 text-indigo-500 shrink-0" />
-            <span>Mật độ lưu trữ chuẩn: Có gì trong 1 Megabyte (1 MB)?</span>
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 leading-normal text-[11px]">
-            Bộ nhớ <strong className="text-slate-700 dark:text-slate-300">1 MB (1,024 KB)</strong> chứa một khối lượng thông tin khổng lồ nếu tối ưu hóa tốt. Hãy xem số lượng bản ghi tối đa có thể xếp vừa vặn vào 1 MB:
-          </p>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
-              <span className="w-5 h-5 rounded-full bg-indigo-500/15 text-indigo-650 dark:text-indigo-400 text-[10px] font-black flex items-center justify-center font-mono">1</span>
-              <div>
-                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200">~{Math.floor(1024 * 1024 / storageStats.avgBillSize).toLocaleString()} Bản Hoá đơn</div>
-                <div className="text-[9.5px] text-slate-450 font-mono">Dữ liệu chữ & Số</div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
-              <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-650 dark:text-emerald-400 text-[10px] font-black flex items-center justify-center font-mono">2</span>
-              <div>
-                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200">~{Math.floor(1024 * 1024 / storageStats.avgImportSize).toLocaleString()} Bản Nhập hàng</div>
-                <div className="text-[9.5px] text-slate-450 font-mono">Sổ sách thợ may</div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
-              <span className="w-5 h-5 rounded-full bg-sky-500/15 text-sky-650 dark:text-sky-400 text-[10px] font-black flex items-center justify-center font-mono">3</span>
-              <div>
-                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200">~{Math.floor(1024 * 1024 / storageStats.avgPhotoSize).toLocaleString()} Hình mẫu</div>
-                <div className="text-[9.5px] text-slate-450 font-mono">Ảnh nén tối ưu</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. DYNAMIC WHAT-IF ESTIMATOR CALCULATOR */}
-        <div className="p-5 bg-slate-50 dark:bg-[#0d111e] rounded-2xl border border-slate-200 dark:border-slate-800/80 space-y-5">
-          <div className="flex items-center gap-2">
-            <Calculator className="w-4 h-4 text-indigo-505" />
-            <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest font-mono">Dự phóng tương lai (What-if Storage Calculator)</h4>
-          </div>
-          
-          <p className="text-[11.5px] text-slate-500 dark:text-slate-455 leading-normal">
-            Nhập hoặc căn chỉnh số lượng hoá đơn nợ sỉ, số phiếu nhập may thợ và số ảnh chụp mẫu chuẩn dưới đây để tìm ra tổng dung lượng lưu trữ dự tính:
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            
-            {/* Input 1: Invoices */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider font-mono">Số Bills mới:</label>
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-1 shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setEstBills(prev => Math.max(0, prev - 50))}
-                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
-                >
-                  -
-                </button>
-                <input
-                  type="number"
-                  value={estBills}
-                  onChange={(e) => setEstBills(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full text-center outline-none bg-transparent font-bold font-mono text-xs text-slate-800 dark:text-slate-105"
-                />
-                <button
-                  type="button"
-                  onClick={() => setEstBills(prev => prev + 50)}
-                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {/* Input 2: Import items */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider font-mono">Số hàng nhập mới:</label>
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-xl p-1 shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setEstImports(prev => Math.max(0, prev - 20))}
-                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
-                >
-                  -
-                </button>
-                <input
-                  type="number"
-                  value={estImports}
-                  onChange={(e) => setEstImports(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full text-center outline-none bg-transparent font-bold font-mono text-xs text-slate-800 dark:text-slate-105"
-                />
-                <button
-                  type="button"
-                  onClick={() => setEstImports(prev => prev + 20)}
-                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {/* Input 3: Captured Photos */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider font-mono">Số Ảnh chụp mới:</label>
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-950 border border-slate-205 dark:border-slate-800 rounded-xl p-1 shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setEstPhotos(prev => Math.max(0, prev - 5))}
-                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
-                >
-                  -
-                </button>
-                <input
-                  type="number"
-                  value={estPhotos}
-                  onChange={(e) => setEstPhotos(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full text-center outline-none bg-transparent font-bold font-mono text-xs text-slate-800 dark:text-slate-105"
-                />
-                <button
-                  type="button"
-                  onClick={() => setEstPhotos(prev => prev + 5)}
-                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition flex items-center justify-center cursor-pointer font-mono"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-          </div>
-
-          {/* CALCULATED PROJECTED TOTAL RESULT HEADER */}
-          <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-            <div className="space-y-1">
-              <div className="text-[10px] font-black uppercase tracking-widest text-[#64748b] dark:text-[#94a3b8] font-mono">
-                Tổng Dung lượng Dự kiến Tải thêm:
-              </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-black text-indigo-650 dark:text-indigo-400 font-mono tracking-tight">
-                  {formatSize(estBills * storageStats.avgBillSize + estImports * storageStats.avgImportSize + estPhotos * storageStats.avgPhotoSize)}
-                </span>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold font-mono uppercase bg-emerald-500/10 py-0.5 px-2 rounded-md">
-                  Rất nhẹ
-                </span>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/15 border border-indigo-150/40 dark:border-indigo-900/40 text-[11px] text-slate-600 dark:text-slate-400 leading-normal">
-              💡 <strong>Lưu ý:</strong> Cơ sở dữ liệu cục bộ SQLite/Firestore nén thông tin cực tốt. Kể cả hoạt động trong nhiều năm liên tục, dữ liệu hóa đơn của bạn vẫn chạy nhanh tức thì 0ms ở dưới ngưỡng 5 MB!
-            </div>
-          </div>
-        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       </div>
 
