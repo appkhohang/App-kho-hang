@@ -260,6 +260,25 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
           <p className="text-[10px] text-slate-450 dark:text-slate-400 tracking-[0.25em] font-mono mt-1 font-semibold uppercase">HỆ THỐNG QUẢN LÝ NỘI BỘ</p>
         </div>
 
+        {/* Global Firebase Bootstrapping Initialization Error Alert */}
+        {typeof window !== "undefined" && (window as any).__firebase_init_error && (
+          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl text-xs text-amber-750 dark:text-amber-400 text-left space-y-2">
+            <div className="flex items-center gap-2 font-bold uppercase font-mono">
+              <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse" />
+              <span>Sự Cố Khởi Tạo Firebase</span>
+            </div>
+            <p className="leading-relaxed">
+              Ứng dụng Xưởng An không thể kết nối hoặc khởi tạo cơ sở dữ liệu đám mây Firebase. Sự cố thường gặp do các rào cản chính sách bảo mật cookie hoặc Iframe trong khung hiển thị AI Studio.
+            </p>
+            <div className="p-2 bg-slate-100 dark:bg-slate-950 rounded font-mono text-[10px] text-slate-600 dark:text-slate-400 overflow-x-auto max-h-20 whitespace-pre">
+              {(window as any).__firebase_init_error?.message || String((window as any).__firebase_init_error)}
+            </div>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
+              👉 Hãy thử bấm nút <strong>"Mở trong tab mới"</strong> ở góc phải phía trên AI Studio để tải phiên độc lập đầy đủ quyền truy cập cho trình duyệt!
+            </p>
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
           {step === 'login' && (
             <motion.div

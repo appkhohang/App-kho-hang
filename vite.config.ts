@@ -7,9 +7,9 @@ import {defineConfig} from 'vite';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
-  // Use VITE_BASE_URL if explicitly defined, otherwise default to relative paths './'
-  // to guarantee full mobility across subdirectories, custom domains, local builds, or mobile APKs.
-  const base = process.env.VITE_BASE_URL || './';
+  // Use VITE_BASE_URL if explicitly defined, otherwise default to absolute '/'
+  // to guarantee robust asset routing on web deployments like Cloud Run.
+  const base = process.env.VITE_BASE_URL || '/';
 
   return {
     base: base,
