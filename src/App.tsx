@@ -202,7 +202,7 @@ export default function App() {
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
   // Language translation dictionary
-  const [language, setLanguage] = useState<'vi' | 'en'>(() => (localStorage.getItem('xuongan_language') as 'vi' | 'en') || 'vi');
+  const [language, setLanguage] = useState<'vi' | 'en'>(() => 'vi');
   
   const syncGoogleTranslate = (lang: 'vi' | 'en') => {
     try {
@@ -250,29 +250,7 @@ export default function App() {
     return language === 'vi' ? viText : enText;
   };
 
-  // Synchronize Google translation cookie on mounting state silently (no reload) and programmatic select combo
-  useEffect(() => {
-    const savedLang = localStorage.getItem('xuongan_language') || 'vi';
-    const cleanHostname = window.location.hostname;
-    const expectedRawValue = savedLang === 'en' ? '/vi/en' : '/vi/vi';
-    
-    // Write the cookies silently so Google Translate uses the correct target language
-    document.cookie = `googtrans=${expectedRawValue}; path=/;`;
-    document.cookie = `googtrans=${expectedRawValue}; path=/; domain=.${cleanHostname};`;
-    document.cookie = `googtrans=${expectedRawValue}; path=/; domain=${cleanHostname};`;
 
-    // Periodically check and auto-sync translation combo as soon as Google Translate API script initializes
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      const synced = syncGoogleTranslate(savedLang as 'vi' | 'en');
-      if (synced || attempts > 25) {
-        clearInterval(interval);
-      }
-    }, 400);
-
-    return () => clearInterval(interval);
-  }, [language]);
 
   // Active Tab state
   const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery'>('home');
@@ -286,7 +264,7 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Active settings tab state inside the hamburger drawer
-  const [settingsActiveTab, setSettingsActiveTab] = useState<'charts' | 'backup' | 'theme' | 'guide'>('charts');
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'backup' | 'theme' | 'guide'>('backup');
 
   // File input reference for database restoration upload
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -2080,7 +2058,6 @@ export default function App() {
                       
                       <div className="flex bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800 text-xs font-semibold gap-0.5">
                         {[
-                          { id: 'charts', label: 'Biểu đồ', icon: BarChart3 },
                           { id: 'backup', label: 'Sao lưu', icon: Database },
                           { id: 'theme', label: 'Sáng/Tối', icon: Sun },
                           { id: 'guide', label: 'H.Dẫn', icon: HelpCircle }
@@ -2136,96 +2113,7 @@ export default function App() {
                           </div>
                         )}
 
-                        {settingsActiveTab === 'charts' && (
-                          <div className="space-y-3">
-                            {weekStatsForChart.length === 0 ? (
-                              <div className="text-center py-6 text-[11px] text-slate-400">
-                                Chưa có dữ liệu tuần để hiển thị biểu đồ.
-                              </div>
-                            ) : (
-                              <div className="space-y-3">
-                                {/* Custom SVG Line chart for production count */}
-                                <div className="space-y-1">
-                                  <span className="text-[9px] uppercase font-bold text-slate-450 dark:text-slate-400 tracking-wider">Sản lượng may (chiếc)</span>
-                                  <div className="bg-slate-50/50 dark:bg-slate-950/40 p-2 rounded-xl border border-slate-100 dark:border-slate-800/60 mt-1">
-                                    <svg viewBox="0 0 300 110" className="w-full overflow-visible">
-                                      <defs>
-                                        <linearGradient id="qtyGradient" x1="0" y1="0" x2="0" y2="1">
-                                          <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.25" />
-                                          <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
-                                        </linearGradient>
-                                      </defs>
-                                      {/* Horizontal helper dashed lines */}
-                                      <line x1="15" y1="20" x2="285" y2="20" stroke="currentColor" className="text-slate-100 dark:text-slate-800/50" strokeDasharray="3" />
-                                      <line x1="15" y1="50" x2="285" y2="50" stroke="currentColor" className="text-slate-100 dark:text-slate-800/50" strokeDasharray="3" />
-                                      <line x1="15" y1="80" x2="285" y2="80" stroke="currentColor" className="text-slate-100 dark:text-slate-800/50" strokeDasharray="3" />
 
-                                      {(() => {
-                                        const maxQty = Math.max(...weekStatsForChart.map(w => w.qty)) || 1;
-                                        const points = weekStatsForChart.map((ws, i) => {
-                                          const x = 20 + (i * 260) / (weekStatsForChart.length - 1 || 1);
-                                          // Map qty to Y coord: top is 15px, bottom is 80px
-                                          const y = 80 - ((ws.qty / maxQty) * 60);
-                                          return { x, y, qty: ws.qty, name: ws.name };
-                                        });
-
-                                        // Form solid line path
-                                        const lineD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-                                        const areaD = points.length > 0 
-                                          ? `${lineD} L ${points[points.length - 1].x} 80 L ${points[0].x} 80 Z`
-                                          : '';
-
-                                        return (
-                                          <>
-                                            {/* Filled gradient area under line chart */}
-                                            {areaD && <path d={areaD} fill="url(#qtyGradient)" />}
-                                            
-                                            {/* Polyline line path */}
-                                            {lineD && <path d={lineD} fill="none" stroke="#4f46e5" strokeWidth="2" />}
-                                            
-                                            {/* Highlight points & markers */}
-                                            {points.map((p, idx) => (
-                                              <g key={idx}>
-                                                <circle cx={p.x} cy={p.y} r="3.5" className="fill-white dark:fill-slate-900 stroke-indigo-600 dark:stroke-indigo-400" strokeWidth="2" />
-                                                <text x={p.x} y={p.y - 7} textAnchor="middle" className="text-[8px] font-bold font-mono fill-indigo-600 dark:fill-indigo-400">
-                                                  {p.qty}
-                                                </text>
-                                                <text x={p.x} y="95" textAnchor="middle" className="text-[8px] font-mono fill-slate-450 dark:fill-slate-500">
-                                                  {p.name}
-                                                </text>
-                                              </g>
-                                            ))}
-                                          </>
-                                        );
-                                      })()}
-                                    </svg>
-                                  </div>
-                                </div>
-
-                                {/* Custom SVG Line chart for Costs */}
-                                <div className="space-y-1 pt-1">
-                                  <span className="text-[9px] uppercase font-bold text-slate-455 dark:text-slate-400 tracking-wider">Tiền may tuần (đồng)</span>
-                                  <div className="h-28 flex items-end justify-between gap-1 border-b border-slate-100 dark:border-slate-800 pb-1">
-                                    {weekStatsForChart.map((ws, i) => {
-                                      const maxVal = Math.max(...weekStatsForChart.map(w => w.val)) || 1;
-                                      const heightPr = (ws.val / maxVal) * 100;
-                                      return (
-                                        <div key={i} className="flex-1 flex flex-col items-center h-full justify-end">
-                                          <span className="text-[8px] font-mono text-slate-505 mb-0.5">{(ws.val / 1000000).toFixed(1)}M</span>
-                                          <div 
-                                            className="w-4 bg-emerald-500 dark:bg-emerald-605 rounded-t-[3px]"
-                                            style={{ height: `${heightPr}%`, minHeight: '2px' }}
-                                          />
-                                          <span className="text-[8px] text-slate-400 mt-1 truncate max-w-full font-mono">{ws.name}</span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
 
                         {settingsActiveTab === 'backup' && (
                           <div className="space-y-2">
@@ -2290,37 +2178,9 @@ export default function App() {
 
                   {/* Drawer Footer controls */}
                   <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-100/40 dark:bg-slate-900/40 flex flex-col gap-3">
-                    {/* Language Switcher Element (Chọn ngôn ngữ / Language Selection) */}
-                    <div className="p-2.5 bg-slate-200/50 dark:bg-slate-950/40 rounded-xl border border-slate-300/40 dark:border-slate-805 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9.5px] font-extrabold text-slate-450 dark:text-slate-400 uppercase tracking-wider font-mono">
-                          🌐 {t('NGÔN NGỮ', 'LANGUAGE')}
-                        </span>
-                        <span className="text-[9px] bg-slate-300/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1 py-0.5 rounded font-bold font-mono">
-                          {language === 'vi' ? 'VIETNAMESE' : 'ENGLISH'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1 bg-white dark:bg-slate-900/30 p-0.5 rounded-lg border border-slate-200/50 dark:border-slate-800">
-                        <button
-                          onClick={() => changeLanguage('vi')}
-                          className={`py-1.5 px-2 rounded-md font-bold text-[10.5px] flex items-center justify-center gap-1 transition-all cursor-pointer ${language === 'vi' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
-                        >
-                          <span>🇻🇳</span>
-                          <span>Tiếng Việt</span>
-                        </button>
-                        <button
-                          onClick={() => changeLanguage('en')}
-                          className={`py-1.5 px-2 rounded-md font-bold text-[10.5px] flex items-center justify-center gap-1 transition-all cursor-pointer ${language === 'en' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
-                        >
-                          <span>🇬🇧</span>
-                          <span>English</span>
-                        </button>
-                      </div>
-                    </div>
-
                     <div className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">{authState.displayName || (language === 'vi' ? 'Kế toán viên' : 'Accountant')} (Admin)</span>
+                      <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">{authState.displayName || 'Kế toán viên'} (Admin)</span>
                     </div>
                     <button
                       onClick={() => {
@@ -2453,6 +2313,8 @@ export default function App() {
                     workers={workers}
                     workerJobs={workerJobs}
                     setActiveTab={setActiveTab}
+                    payments={payments}
+                    laborPayments={laborPayments}
                   />
                 </motion.div>
               ) : activeTab === 'settings' ? (

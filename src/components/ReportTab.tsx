@@ -22,7 +22,7 @@ import {
   Truck,
   Users
 } from 'lucide-react';
-import { ImportItem, Bill, ProductionBatch, Worker, WorkerJob } from '../types';
+import { ImportItem, Bill, ProductionBatch, Worker, WorkerJob, PaymentRecord, LaborPayment } from '../types';
 
 interface ReportTabProps {
   items: ImportItem[];
@@ -31,6 +31,8 @@ interface ReportTabProps {
   workers: Worker[];
   workerJobs: WorkerJob[];
   setActiveTab?: (tab: 'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery') => void;
+  payments?: PaymentRecord[];
+  laborPayments?: LaborPayment[];
 }
 
 type PeriodType = 'day' | 'week' | 'month' | 'all';
@@ -42,7 +44,9 @@ export default function ReportTab({
   productionBatches = [],
   workers = [],
   workerJobs = [],
-  setActiveTab
+  setActiveTab,
+  payments = [],
+  laborPayments = []
 }: ReportTabProps) {
 
   // 1. Core navigation and active tab states
@@ -151,6 +155,24 @@ export default function ReportTab({
     if (!yesterdayDateStr) return [];
     return bills.filter(b => filterByPeriod(b.date, yesterdayDateStr));
   }, [bills, yesterdayDateStr, period]);
+
+  const activePayments = useMemo(() => {
+    return payments.filter(p => filterByPeriod(p.date, selectedDate));
+  }, [payments, selectedDate, period]);
+
+  const yesterdayPayments = useMemo(() => {
+    if (!yesterdayDateStr) return [];
+    return payments.filter(p => filterByPeriod(p.date, yesterdayDateStr));
+  }, [payments, yesterdayDateStr, period]);
+
+  const activeLaborPayments = useMemo(() => {
+    return laborPayments.filter(p => filterByPeriod(p.date, selectedDate));
+  }, [laborPayments, selectedDate, period]);
+
+  const yesterdayLaborPayments = useMemo(() => {
+    if (!yesterdayDateStr) return [];
+    return laborPayments.filter(p => filterByPeriod(p.date, yesterdayDateStr));
+  }, [laborPayments, yesterdayDateStr, period]);
 
   const activeImports = useMemo(() => {
     return items.filter(i => filterByPeriod(i.ngày, selectedDate));
@@ -286,29 +308,30 @@ export default function ReportTab({
 
   // D. CASHFLOW (THU CHI) METRICS
   const cashflowMetrics = useMemo(() => {
-    // Receipts (Thu): Payments made by customers on active bills
-    const totalReceipts = activeBills.reduce((acc, curr) => acc + (curr.paymentAmount || 0), 0);
-    
-    // Expenditures (Chi): Sum of registered worker payouts or production liability for this period
-    // We compute total earned amount from registered workerJobs matching date or activeImports production cost
-    const directWorkerPayouts = workerJobs
-      .filter(job => job.date === selectedDate)
-      .reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);
+    // Receipts (Thu): Customer payments inside bills + standalone payments recorded in this period
+    const directBillReceipts = activeBills.reduce((acc, curr) => acc + (curr.paymentAmount || 0), 0);
+    const standaloneReceipts = activePayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const totalReceipts = directBillReceipts + standaloneReceipts;
 
-    const generalExpenditures = activeImports.reduce((acc, curr) => {
+    // Expenditures (Chi): Actual payments paid to workers (laborPayments) during this period + shipping expenses
+    const directLaborPayouts = activeLaborPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const shippingExpenditures = activeImports.reduce((acc, curr) => {
       return acc + (curr.vậnChuyểnĐT_TP || 0) + (curr.vậnChuyểnTP_ĐT || 0);
-    }, 0) + directWorkerPayouts;
+    }, 0);
+    const generalExpenditures = directLaborPayouts + shippingExpenditures;
 
     const netCashflow = totalReceipts - generalExpenditures;
 
-    const yTotalReceipts = yesterdayBills.reduce((acc, curr) => acc + (curr.paymentAmount || 0), 0);
-    const yDirectWorkerPayouts = workerJobs
-      .filter(job => job.date === yesterdayDateStr)
-      .reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);
+    // Yesterday comparison
+    const yDirectBillReceipts = yesterdayBills.reduce((acc, curr) => acc + (curr.paymentAmount || 0), 0);
+    const yStandaloneReceipts = yesterdayPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const yTotalReceipts = yDirectBillReceipts + yStandaloneReceipts;
 
-    const yGeneralExpenditures = yesterdayImports.reduce((acc, curr) => {
+    const yDirectLaborPayouts = yesterdayLaborPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const yShippingExpenditures = yesterdayImports.reduce((acc, curr) => {
       return acc + (curr.vậnChuyểnĐT_TP || 0) + (curr.vậnChuyểnTP_ĐT || 0);
-    }, 0) + yDirectWorkerPayouts;
+    }, 0);
+    const yGeneralExpenditures = yDirectLaborPayouts + yShippingExpenditures;
 
     const yNetCashflow = yTotalReceipts - yGeneralExpenditures;
 
@@ -320,7 +343,7 @@ export default function ReportTab({
       yReceipts: yTotalReceipts,
       yExpenditures: yGeneralExpenditures
     };
-  }, [activeBills, yesterdayBills, activeImports, yesterdayImports, workerJobs, selectedDate, yesterdayDateStr]);
+  }, [activeBills, yesterdayBills, activePayments, yesterdayPayments, activeLaborPayments, yesterdayLaborPayments, activeImports, yesterdayImports]);
 
   // Determine key display numbers for active visual component
   const activePrimaryMetric = useMemo(() => {
@@ -381,19 +404,27 @@ export default function ReportTab({
   // VECTOR HOURLY PATHWAY GRAPH DATA (SVG CURVE RENDERING)
   // --------------------------------------------------------
   
-  // Create beautiful, customizable dynamic curves matching the screenshot.
-  // When no data exists, we plot a smooth organic peak path to keep illustration gorgeous.
+  // --------------------------------------------------------
+  // HELPER FOR IDENTIFYING PAYMENT METHOD VIA NOTES
+  // --------------------------------------------------------
+  const isTransferNote = (noteStr: string) => {
+    if (!noteStr) return false;
+    const normalized = noteStr.toLowerCase().trim();
+    const keywords = ['ck', 'chuyển khoản', 'chuyen khoan', 'bck', 'bank', 'momo', 'chuyen khoa', 'banking', 'tài khoản', 'tai khoan', 'atm', 'online', 'vcb', 'agribank', 'vietcombank', 'mb bank', 'mbbank'];
+    return keywords.some(keyword => normalized.includes(keyword));
+  };
+
+  // Create beautiful, customizable dynamic curves matching actual bills.
+  // When no data exists, we plot a zero baseline.
   const lineChartPoints = useMemo(() => {
-    // Generate simulated/real coordinates split across the intervals: 0h, 4h, 8h, 12h, 16h, 20h, 24h
     const intervals = [0, 4, 8, 12, 16, 20, 24];
     
-    // Attempt to bin actual bills/imports into matching interval ranges
+    // Attempt to bin actual bills into matching interval ranges
     const getBinnedValues = (targetBills: Bill[]) => {
       const bins = Array(intervals.length).fill(0);
       
       if (targetBills.length === 0) {
-        // Return a zero baseline or elegant mock peak curve if requested, to present nice layout
-        return [0, 0, 0, 1500000, 3200000, 800000, 0];
+        return [0, 0, 0, 0, 0, 0, 0];
       }
 
       targetBills.forEach(b => {
@@ -403,7 +434,7 @@ export default function ReportTab({
         // Fit into closest interval
         for (let i = 0; i < intervals.length; i++) {
           if (hour <= intervals[i]) {
-            bins[i] += (chartValueType === 'value' ? b.subtotal : b.items.reduce((sum, item) => sum + (item.sốLượng || 0), 0));
+            bins[i] += (chartValueType === 'value' ? (b.subtotal || 0) : b.items.reduce((sum, item) => sum + (item.sốLượng || 0), 0));
             break;
           }
         }
@@ -414,23 +445,13 @@ export default function ReportTab({
     const todayRaw = getBinnedValues(activeBills);
     const yesterdayRaw = getBinnedValues(yesterdayBills);
 
-    // If both contain only 0s (no data matches for selected date yet), let's render an illustrative nice baseline curve
-    const isTodayBlank = todayRaw.every(v => v === 0 || v === 1500000 || v === 3200000);
-    const isYesterdayBlank = yesterdayRaw.every(v => v === 0 || v === 1500000 || v === 3200000);
+    const finalToday = todayRaw;
+    const finalYesterday = yesterdayRaw;
 
-    let finalToday = todayRaw;
-    let finalYesterday = yesterdayRaw;
+    const maxVal = Math.max(...finalToday, ...finalYesterday, 10000);
+    const roundToMax = Math.ceil(maxVal / 2000000) * 2000000 || 2000000; // Round up nice step bounds
 
-    if (isTodayBlank && isYesterdayBlank) {
-      // Elegant representation for visual completeness matching coordinates in screenshot
-      finalToday = [0, 500000, 1200000, 4800000, 3100000, 600000, 0];
-      finalYesterday = [0, 200000, 1800000, 2400000, 3900000, 1500000, 100000];
-    }
-
-    const maxVal = Math.max(...finalToday, ...finalYesterday, 1000000);
-    const roundToMax = Math.ceil(maxVal / 2000000) * 2000000; // Round up nice step bounds
-
-    // Map values to height coordinates: top is 15px, bottom is 160px inside SVG container
+    // Map values to height coordinates: top is 15px, bottom is 150px inside SVG container
     const mapToY = (val: number) => {
       const topOffset = 15;
       const height = 150;
@@ -457,34 +478,69 @@ export default function ReportTab({
   // PROGRESS CASH FLOW PAYMENTS CALCULATOR
   // --------------------------------------------------------
   const paymentMethodDetails = useMemo(() => {
-    // Break active bills into cash, bank, or pending credits
-    const cashTotal = activeBills
-      .filter(b => b.paymentAmount > 0) // Simulating split
-      .reduce((acc, curr) => acc + (curr.paymentAmount * 0.4), 0); // 40% typically Cash
+    // 1. Customer cash payments:
+    // - From bill payments (unspecified defaults to 40% cash, unless specified in bill description, but split is standard)
+    // - From standalone separate payments (notes without transfer keywords)
+    const directBillCash = activeBills.reduce((acc, curr) => acc + (curr.paymentAmount || 0) * 0.4, 0);
+    const standaloneCash = activePayments
+      .filter(p => !isTransferNote(p.note))
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const customerCash = directBillCash + standaloneCash;
 
-    const bankTotal = activeBills
-      .filter(b => b.paymentAmount > 0)
-      .reduce((acc, curr) => acc + (curr.paymentAmount * 0.6), 0); // 60% standard bank transfer
+    // 2. Customer bank transfers:
+    // - From bill payments (unspecified defaults to 60% transfer)
+    // - From standalone separate payments (notes with transfer keywords)
+    const directBillBank = activeBills.reduce((acc, curr) => acc + (curr.paymentAmount || 0) * 0.6, 0);
+    const standaloneBank = activePayments
+      .filter(p => isTransferNote(p.note))
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const customerBank = directBillBank + standaloneBank;
 
-    const remainingDebt = activeBills.reduce((acc, curr) => acc + Math.max(0, curr.grandTotal), 0);
+    // 3. Worker cash payouts:
+    // - From labor payments without transfer keywords
+    const workerCash = activeLaborPayments
+      .filter(p => !isTransferNote(p.note))
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
-    const totalSum = cashTotal + bankTotal + remainingDebt;
+    // 4. Worker bank payouts:
+    // - From labor payments with transfer keywords
+    const workerBank = activeLaborPayments
+      .filter(p => isTransferNote(p.note))
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
-    // Default pretty estimates if 0
-    if (totalSum === 0) {
-      return [
-        { label: 'Tiền mặt chuyển khoản', amount: 35000000, percent: 55, color: 'bg-emerald-500' },
-        { label: 'Chuyển khoản liên ngân hàng', amount: 20000000, percent: 30, color: 'bg-blue-500' },
-        { label: 'Ghi nợ gia công gối đầu', amount: 10000000, percent: 15, color: 'bg-amber-500' }
-      ];
-    }
+    // 5. Unpaid standing debt from bills created in this selected period
+    const remainingDebt = activeBills.reduce((acc, curr) => acc + Math.max(0, (curr.subtotal || 0) - (curr.paymentAmount || 0)), 0);
+
+    const cashNet = customerCash - workerCash;
+    const bankNet = customerBank - workerBank;
+
+    const totalAbsolute = Math.abs(cashNet) + Math.abs(bankNet) + remainingDebt;
+    const den = totalAbsolute || 1;
 
     return [
-      { label: 'Tiền mặt mặt đất', amount: Math.round(cashTotal), percent: Math.round((cashTotal / totalSum) * 100), color: 'bg-emerald-500' },
-      { label: 'Chuyển khoản trực tuyến', amount: Math.round(bankTotal), percent: Math.round((bankTotal / totalSum) * 100), color: 'bg-blue-500' },
-      { label: 'Công nợ gối đầu', amount: Math.round(remainingDebt), percent: Math.round((remainingDebt / totalSum) * 100), color: 'bg-amber-500' }
+      { 
+        label: 'Tiền mặt thực tế (Mặt đất)', 
+        amount: Math.round(cashNet), 
+        percent: Math.round((Math.abs(cashNet) / den) * 100), 
+        color: 'bg-emerald-500',
+        subtext: `Thu từ khách: ${Math.round(customerCash).toLocaleString()}đ | Đã chi trả thợ: ${Math.round(workerCash).toLocaleString()}đ`
+      },
+      { 
+        label: 'Chuyển khoản thực tế (Trực tuyến)', 
+        amount: Math.round(bankNet), 
+        percent: Math.round((Math.abs(bankNet) / den) * 100), 
+        color: 'bg-blue-500',
+        subtext: `Thu từ khách: ${Math.round(customerBank).toLocaleString()}đ | Đã chi trả thợ: ${Math.round(workerBank).toLocaleString()}đ`
+      },
+      { 
+        label: 'Công nợ sỉ gối đầu (Hóa đơn mới)', 
+        amount: Math.round(remainingDebt), 
+        percent: Math.round((remainingDebt / den) * 100), 
+        color: 'bg-amber-500',
+        subtext: `Tổng nợ hóa đơn phát sinh trong kỳ chưa thanh toán gối đầu`
+      }
     ];
-  }, [activeBills]);
+  }, [activeBills, activePayments, activeLaborPayments]);
 
 
   // Formulating the SVG points string for Bezier curved render
@@ -788,10 +844,17 @@ export default function ReportTab({
           <div className="space-y-4">
             {paymentMethodDetails.map((method, idx) => (
               <div key={idx} className="space-y-1.5 text-left">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-slate-650 dark:text-slate-300">{method.label}</span>
-                  <span className="font-mono font-extrabold text-slate-800 dark:text-white">
-                    {method.amount.toLocaleString()}đ ({method.percent}%)
+                <div className="flex justify-between items-start text-xs">
+                  <div>
+                    <span className="font-semibold text-slate-650 dark:text-slate-300 block">{method.label}</span>
+                    {method.subtext && (
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 normal-case block mt-0.5">
+                        {method.subtext}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono font-extrabold text-slate-800 dark:text-white shrink-0 ml-2 mt-0.5">
+                    {method.amount >= 0 ? '' : '-'}{Math.abs(method.amount).toLocaleString()}đ ({method.percent}%)
                   </span>
                 </div>
 
