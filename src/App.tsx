@@ -411,7 +411,10 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const fetchUserProfile = async () => {
-      if (fbAuthLoading) return;
+      if (fbAuthLoading || (db as any)._isMock) {
+        if (active) setProfileFetchCompleted(true);
+        return;
+      }
       const email = authState.email?.toLowerCase().trim();
       if (!email || !authState.isAuthenticated) {
         if (active) setProfileFetchCompleted(false);

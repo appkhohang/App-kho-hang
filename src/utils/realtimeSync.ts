@@ -227,7 +227,7 @@ export function useRealtimeSync({
   const debounceTimeouts = useRef<Record<string, NodeJS.Timeout | number>>({});
 
   useEffect(() => {
-    if (fbAuthLoading || !isAuthenticated || !db) {
+    if (fbAuthLoading || !isAuthenticated || !db || (db as any)._isMock) {
       return;
     }
 
@@ -368,7 +368,7 @@ export function useRealtimeSync({
 
   // Monitor and Auto-Push local changes value-by-value back to Cloud securely
   const syncLocalToCloud = (key: string, colName: string, localList: any[]) => {
-    if (!isAuthenticated || !isUserAdmin() || !db) return;
+    if (!isAuthenticated || !isUserAdmin() || !db || (db as any)._isMock) return;
     
     // Safety check: Skip pushing local list data before the collection's initial cloud load has initialized
     if (!listenersInitialized.current[key]) return;
@@ -468,7 +468,7 @@ export function useRealtimeSync({
   // Sync settings when they update locally (excluding echoes)
   useEffect(() => {
     const syncSettingsLocalToCloud = async () => {
-      if (!isAuthenticated || !isUserAdmin() || !db) return;
+      if (!isAuthenticated || !isUserAdmin() || !db || (db as any)._isMock) return;
       if (!settingsListenerInitialized.current) return;
 
       const localStr = JSON.stringify(cleanAndSort(settings));
