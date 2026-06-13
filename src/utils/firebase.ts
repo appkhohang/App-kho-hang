@@ -41,17 +41,35 @@ const finalDbId = (isForceDefaultDb || isProductionOrApk) ? undefined : dbId;
 // Suppress warnings/info logs about connectivity such as "Could not reach Cloud Firestore backend"
 setLogLevel('error');
 
-export const db = finalDbId 
-  ? initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    }, finalDbId)
-  : initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
+let dbInstance;
+try {
+  dbInstance = finalDbId 
+    ? initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      }, finalDbId)
+    : initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      });
+  console.log("[Firebase] Firestore initialized successfully with persistent local cache.");
+} catch (error) {
+  console.warn("[Firebase] Failed to initialize Firestore with persistent local cache, falling back to default/memory cache: ", error);
+  try {
+    const fallbackConfig = {};
+    dbInstance = finalDbId 
+      ? initializeFirestore(app, fallbackConfig, finalDbId)
+      : initializeFirestore(app, fallbackConfig);
+    console.log("[Firebase] Firestore initialized successfully with default fallback configuration.");
+  } catch (fallbackError) {
+    console.error("[Firebase] Fatal: Failed to initialize Firestore fallback: ", fallbackError);
+    throw fallbackError;
+  }
+}
+
+export const db = dbInstance;
 
 export const auth = getAuth(app);
 
