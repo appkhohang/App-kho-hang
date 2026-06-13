@@ -203,13 +203,76 @@ export default function App() {
 
   // Language translation dictionary
   const [language, setLanguage] = useState<'vi' | 'en'>(() => (localStorage.getItem('xuongan_language') as 'vi' | 'en') || 'vi');
+  
+  const syncGoogleTranslate = (lang: 'vi' | 'en') => {
+    try {
+      const combo = document.querySelector('.goog-te-combo') as HTMLSelectElement;
+      if (combo) {
+        if (combo.value !== lang) {
+          combo.value = lang;
+          combo.dispatchEvent(new Event('change'));
+        }
+        return true;
+      }
+    } catch (e) {
+      console.warn("Google Translate combo sync error:", e);
+    }
+    return false;
+  };
+
   const changeLanguage = (lang: 'vi' | 'en') => {
     setLanguage(lang);
     localStorage.setItem('xuongan_language', lang);
+    
+    // Programmatically trigger direct combo select (instant перевод without full load)
+    const synced = syncGoogleTranslate(lang);
+    
+    // Set cookie backup
+    const cookieValue = lang === 'en' ? '/vi/en' : '/vi/vi';
+    const cleanHostname = window.location.hostname;
+    
+    // Clear and override potential cookie scopes
+    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${cleanHostname};`;
+    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${cleanHostname};`;
+    
+    document.cookie = `googtrans=${cookieValue}; path=/;`;
+    document.cookie = `googtrans=${cookieValue}; path=/; domain=.${cleanHostname};`;
+    document.cookie = `googtrans=${cookieValue}; path=/; domain=${cleanHostname};`;
+    
+    // If translation widget combo wasn't loaded yet, refresh page to let cookie fallback execute
+    if (!synced) {
+      window.location.reload();
+    }
   };
+
   const t = (viText: string, enText: string) => {
     return language === 'vi' ? viText : enText;
   };
+
+  // Synchronize Google translation cookie on mounting state silently (no reload) and programmatic select combo
+  useEffect(() => {
+    const savedLang = localStorage.getItem('xuongan_language') || 'vi';
+    const cleanHostname = window.location.hostname;
+    const expectedRawValue = savedLang === 'en' ? '/vi/en' : '/vi/vi';
+    
+    // Write the cookies silently so Google Translate uses the correct target language
+    document.cookie = `googtrans=${expectedRawValue}; path=/;`;
+    document.cookie = `googtrans=${expectedRawValue}; path=/; domain=.${cleanHostname};`;
+    document.cookie = `googtrans=${expectedRawValue}; path=/; domain=${cleanHostname};`;
+
+    // Periodically check and auto-sync translation combo as soon as Google Translate API script initializes
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      const synced = syncGoogleTranslate(savedLang as 'vi' | 'en');
+      if (synced || attempts > 25) {
+        clearInterval(interval);
+      }
+    }, 400);
+
+    return () => clearInterval(interval);
+  }, [language]);
 
   // Active Tab state
   const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery'>('home');

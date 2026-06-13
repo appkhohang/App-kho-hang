@@ -19,8 +19,42 @@
         }
       })();
     </script>
+    <!-- Google Translate Style Overrides & Setup to translation bypass UI -->
+    <style>
+      iframe.VIpgJd-y666_v-axr, 
+      iframe.VIpgJd-y666_v-axr2, 
+      .VIpgJd-y666_v-axr, 
+      .goog-te-banner-frame, 
+      .goog-te-balloon-frame,
+      #google_translate_element, 
+      .skiptranslate, 
+      .goog-te-gadget {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        height: 0 !important;
+        width: 0 !important;
+      }
+      body {
+        top: 0px !important;
+        position: static !important;
+      }
+    </style>
   </head>
   <body>
+    <!-- Invisible translation anchor -->
+    <div id="google_translate_element" style="display:none; visibility:hidden; width:0; height:0;"></div>
+    <script type="text/javascript">
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+          pageLanguage: 'vi',
+          includedLanguages: 'en,vi',
+          layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+          autoDisplay: false
+        }, 'google_translate_element');
+      }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

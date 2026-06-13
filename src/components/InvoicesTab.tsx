@@ -687,7 +687,7 @@ export default function InvoicesTab({
           </div>
 
           {/* Quick overall statistical cards row */}
-          <div className="flex md:grid md:grid-cols-5 overflow-x-auto md:overflow-x-visible gap-3 px-1 pt-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden notranslate">
+          <div className="flex md:grid md:grid-cols-5 overflow-x-auto md:overflow-x-visible gap-3 px-1 pt-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             
             {/* Metric 1: Tổng nợ phải thu */}
             <div className="p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start border transition bg-slate-50/80 dark:bg-[#101915] border-slate-200 dark:border-[#15261f] shadow-2xs">
@@ -864,7 +864,7 @@ export default function InvoicesTab({
                     </div>
 
                     {/* 3-column Grid balance board matching Image 2 exactly */}
-                    <div className="grid grid-cols-3 text-center border-t text-[11px] border-slate-150 dark:border-[#1a2a24] notranslate">
+                    <div className="grid grid-cols-3 text-center border-t text-[11px] border-slate-150 dark:border-[#1a2a24]">
                       {/* Sub-block TỔNG */}
                       <div className="py-2.5 flex flex-col justify-center border-r border-slate-150 dark:border-[#1a2a24]">
                         <span className="text-[8px] font-black uppercase font-sans tracking-tight text-slate-450 dark:text-[#556b62]">TỔNG</span>
@@ -1160,7 +1160,7 @@ export default function InvoicesTab({
 
           {/* Master CÔNG NỢ TÍCH LUỸ Box Card matching Image 1 perfectly */}
           {currentCustomer && (
-            <div className="p-4 rounded-2xl shadow-lg space-y-4 border transition-all bg-slate-50 dark:bg-[#121c18] border-slate-200 dark:border-[#1c2d27] shadow-sm dark:shadow-xl notranslate">
+            <div className="p-4 rounded-2xl shadow-lg space-y-4 border transition-all bg-slate-50 dark:bg-[#121c18] border-slate-200 dark:border-[#1c2d27] shadow-sm dark:shadow-xl">
               <div className="flex items-center gap-1.5">
                 <Receipt className="w-4 h-4 text-[#10b981]" />
                 <h3 className="text-[9.5px] font-extrabold uppercase tracking-widest font-mono text-slate-450 dark:text-[#657f76]">CÔNG NỢ TÍCH LUỸ</h3>
