@@ -5,7 +5,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -56,16 +56,27 @@ try {
       });
   console.log("[Firebase] Firestore initialized successfully with persistent local cache.");
 } catch (error) {
-  console.warn("[Firebase] Failed to initialize Firestore with persistent local cache, falling back to default/memory cache: ", error);
+  console.warn("[Firebase] Failed to initialize Firestore with persistent local cache, falling back to safe getFirestore API: ", error);
   try {
-    const fallbackConfig = {};
-    dbInstance = finalDbId 
-      ? initializeFirestore(app, fallbackConfig, finalDbId)
-      : initializeFirestore(app, fallbackConfig);
-    console.log("[Firebase] Firestore initialized successfully with default fallback configuration.");
-  } catch (fallbackError) {
-    console.error("[Firebase] Fatal: Failed to initialize Firestore fallback: ", fallbackError);
-    throw fallbackError;
+    // Instead of calling initializeFirestore again (which throws "Firestore has already been initialized"), 
+    // we retrieve the default or currently active instance safely using getFirestore.
+    dbInstance = getFirestore(app);
+    console.log("[Firebase] Firestore fallback recovered successfully via getFirestore.");
+  } catch (fallbackError: any) {
+    console.error("[Firebase] Fatal: Both persistent local cache and getFirestore fallback failed! ", fallbackError);
+    
+    // Create a safe mock db object to prevent early script compilation/module errors,
+    // allowing the clean, descriptive ErrorBoundary to mount and present a clear diagnostic UI to the user.
+    dbInstance = {
+      _isMock: true,
+      type: "firestore",
+      app: app,
+    } as any;
+    
+    // Expose the error globally so the mounting component or developer tools can retrieve exact context
+    if (typeof window !== "undefined") {
+      (window as any).__firebase_init_error = fallbackError;
+    }
   }
 }
 
