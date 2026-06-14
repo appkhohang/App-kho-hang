@@ -166,6 +166,10 @@ export default function ProductionTab({
   const [wkPayNote, setWkPayNote] = useState('');
   const [wkPayDate, setWkPayDate] = useState(getCurrentDateStr());
 
+  // Form states - View, Edit, Delete Production Batch
+  const [selectedBatchForView, setSelectedBatchForView] = useState<ProductionBatch | null>(null);
+  const [selectedBatchForEdit, setSelectedBatchForEdit] = useState<ProductionBatch | null>(null);
+
   // Android Back button wiring for ProductionTab Overlays
   useAndroidBack(showAddBreakdown, () => setShowAddBreakdown(false));
   useAndroidBack(showAddWorker, () => setShowAddWorker(false));
@@ -175,6 +179,8 @@ export default function ProductionTab({
   useAndroidBack(showRunProduction, () => setShowRunProduction(false));
   useAndroidBack(showReplenishMaterial, () => setShowReplenishMaterial(false));
   useAndroidBack(showAddTaskModal, () => setShowAddTaskModal(false));
+  useAndroidBack(!!selectedBatchForView, () => setSelectedBatchForView(null));
+  useAndroidBack(!!selectedBatchForEdit, () => setSelectedBatchForEdit(null));
 
   // Form states - Worker Jobs Matching
   const [selectedWorkerId, setSelectedWorkerId] = useState('');
@@ -212,6 +218,11 @@ export default function ProductionTab({
   const [payInputs, setPayInputs] = useState<Record<string, string>>({});
   const [overallPayAmount, setOverallPayAmount] = useState<string>('');
   const [showOverallPayPanel, setShowOverallPayPanel] = useState<boolean>(false);
+
+  // Form states - View, Edit, Delete Production Batch
+  const [editBatchModel, setEditBatchModel] = useState('');
+  const [editBatchQty, setEditBatchQty] = useState<number>(0);
+  const [editBatchDate, setEditBatchDate] = useState('');
 
   // Quick stats
   const totalWorkers = workers.length;
@@ -1053,6 +1064,90 @@ export default function ProductionTab({
     setProdQty(500);
     setShowRunProduction(false);
     alert('Khởi chạy đợt hàng sản xuất mộc và cập nhật kho nguyên liệu tự động thành công!');
+  };
+
+  const handleViewBatch = (batch: ProductionBatch) => {
+    setSelectedBatchForView(batch);
+  };
+
+  const handleStartEditBatch = (batch: ProductionBatch) => {
+    setSelectedBatchForEdit(batch);
+    setEditBatchModel(batch.modelName);
+    setEditBatchQty(batch.targetQuantity);
+    setEditBatchDate(batch.date);
+  };
+
+  const handleSaveEditBatch = () => {
+    const oldBatch = selectedBatchForEdit;
+    if (!oldBatch) return;
+
+    if (!editBatchModel) {
+      alert('Vui lòng chọn hoặc nhập mã hàng!');
+      return;
+    }
+    if (editBatchQty <= 0) {
+      alert('Số lượng đợt sản xuất phải lớn hơn 0!');
+      return;
+    }
+
+    const newRequirements = calculateRequiredMaterials(editBatchModel, editBatchQty);
+    const isShortage = newRequirements.some(r => {
+      const mat = rawMaterials.find(m => m.id === r.materialId);
+      const oldUsage = oldBatch.materialsUsed.find(om => om.materialId === r.materialId)?.amountUsed || 0;
+      const revertedStock = (mat ? mat.currentStock : 0) + oldUsage;
+      return revertedStock < r.amountUsed;
+    });
+
+    if (isShortage) {
+      const proceed = confirm('CẢNH BÁO TIÊU HAO: Kho nguyên liệu (sau khi hoàn trả đợt cũ) không đủ đáp ứng đợt hàng mới này. Bạn có đồng ý trừ âm kho không?');
+      if (!proceed) return;
+    }
+
+    // Update raw materials stock: add back the old, then subtract the new
+    setRawMaterials(prevMaterials => prevMaterials.map(m => {
+      const oldUsage = oldBatch.materialsUsed.find(om => om.materialId === m.id)?.amountUsed || 0;
+      const newUsage = newRequirements.find(nr => nr.materialId === m.id)?.amountUsed || 0;
+      const newStock = Math.max(0, m.currentStock + oldUsage - newUsage);
+      return { ...m, currentStock: newStock };
+    }));
+
+    // Update production batch list
+    setProductionBatches(prevBatches => prevBatches.map(b => {
+      if (b.id === oldBatch.id) {
+        return {
+          ...b,
+          modelName: editBatchModel,
+          targetQuantity: editBatchQty,
+          date: editBatchDate,
+          materialsUsed: newRequirements.map(r => ({
+            materialId: r.materialId,
+            materialName: r.materialName,
+            materialUnit: r.materialUnit,
+            amountUsed: r.amountUsed,
+            insufficient: r.insufficient
+          }))
+        };
+      }
+      return b;
+    }));
+
+    setSelectedBatchForEdit(null);
+    alert('Cập nhật nhật ký sản xuất và điều chỉnh kho vật tư thành công!');
+  };
+
+  const handleDeleteBatch = (batch: ProductionBatch) => {
+    const proceed = confirm(`XÁC NHẬN XOÁ: Bạn có chắc chắn muốn xoá đợt sản xuất của mẫu "${batch.modelName}" (${batch.targetQuantity.toLocaleString()} cái) lúc ${formatVietnameseDate(batch.date)}?\n\nToàn bộ nguyên liệu tiêu hao của đợt này sẽ được hoàn trả lại vào kho.`);
+    if (!proceed) return;
+
+    // Return materials consumed by this batch back to stock
+    setRawMaterials(prevMaterials => prevMaterials.map(m => {
+      const oldUsage = batch.materialsUsed.find(om => om.materialId === m.id)?.amountUsed || 0;
+      return { ...m, currentStock: m.currentStock + oldUsage };
+    }));
+
+    // Delete the batch
+    setProductionBatches(prevBatches => prevBatches.filter(b => b.id !== batch.id));
+    alert('Đã xoá nhật ký sản xuất và hoàn trả nguyên liệu vào kho thành công!');
   };
 
   // Render the dedicated personal page for each worker
@@ -2859,6 +2954,28 @@ export default function ProductionTab({
                             </div>
                           ))}
                         </div>
+
+                        {/* Actions bar for viewing, editing, and deleting */}
+                        <div className="flex justify-end gap-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800/40">
+                          <button
+                            onClick={() => handleViewBatch(batch)}
+                            className="px-2.5 py-1 bg-indigo-50/55 hover:bg-indigo-100/70 text-indigo-650 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 dark:text-indigo-400 rounded-lg font-bold flex items-center gap-1 transition cursor-pointer text-[10px]"
+                          >
+                            <Eye className="w-3 h-3" /> Xem
+                          </button>
+                          <button
+                            onClick={() => handleStartEditBatch(batch)}
+                            className="px-2.5 py-1 bg-amber-50/55 hover:bg-amber-100/70 text-amber-650 dark:bg-amber-950/40 dark:hover:bg-amber-900/40 dark:text-amber-400 rounded-lg font-bold flex items-center gap-1 transition cursor-pointer text-[10px]"
+                          >
+                            <Edit className="w-3.5 h-3.5" /> Sửa
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBatch(batch)}
+                            className="px-2.5 py-1 bg-rose-50/55 hover:bg-rose-100/70 text-rose-650 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 dark:text-rose-400 rounded-lg font-bold flex items-center gap-1 transition cursor-pointer text-[10px]"
+                          >
+                            <Trash2 className="w-3 h-3" /> Xoá
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2868,6 +2985,213 @@ export default function ProductionTab({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ---------------- MODALS & SLIDERS ---------------- */}
+
+      {/* Modal: View Details of Production Batch */}
+      {selectedBatchForView && (
+        <div className="fixed inset-0 bg-slate-905/30 dark:bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all duration-300">
+          <motion.div 
+            initial={{ scale: 0.94, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl max-w-md w-full border border-slate-100 dark:border-slate-800 space-y-5"
+          >
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-extrabold text-base text-slate-850 dark:text-slate-150 uppercase tracking-tight flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-indigo-650 dark:text-indigo-400" />
+                <span>Chi tiết đợt sản xuất</span>
+              </h3>
+              <button 
+                onClick={() => setSelectedBatchForView(null)} 
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-zinc-850 rounded-full transition text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 dark:bg-zinc-950 p-3 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Mã hàng (Mẫu):</span>
+                  <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100 block mt-1">{selectedBatchForView.modelName}</span>
+                </div>
+                <div className="bg-slate-50 dark:bg-zinc-950 p-3 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Số lượng:</span>
+                  <span className="text-sm font-black text-emerald-650 dark:text-emerald-400 block mt-1">{selectedBatchForView.targetQuantity.toLocaleString()} cái</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 dark:bg-zinc-950 p-3 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Ngày sản xuất:</span>
+                  <span className="text-xs font-extrabold text-slate-700 dark:text-slate-200 block mt-1">{formatVietnameseDate(selectedBatchForView.date)}</span>
+                </div>
+                <div className="bg-slate-50 dark:bg-zinc-950 p-3 rounded-2xl">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Mã Đợt:</span>
+                  <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-350 block mt-1">{selectedBatchForView.id}</span>
+                </div>
+              </div>
+
+              <div className="bg-slate-50/70 dark:bg-zinc-950/45 p-4 rounded-2xl border border-slate-150 dark:border-slate-800 space-y-3">
+                <p className="font-extrabold text-xs text-slate-700 dark:text-slate-300 uppercase tracking-tight flex items-center gap-1">
+                  <Archive className="w-4 h-4 text-emerald-600" />
+                  <span>Nguyên liệu đã khấu trừ:</span>
+                </p>
+                <div className="space-y-2">
+                  {selectedBatchForView.materialsUsed.map((m, idx) => (
+                    <div key={idx} className="flex justify-between text-xs py-1.5 border-b border-slate-200/50 dark:border-slate-800/50 last:border-0">
+                      <span className="font-medium text-slate-650 dark:text-slate-350">{m.materialName}</span>
+                      <div className="flex items-center gap-2">
+                        {m.insufficient && (
+                          <span className="text-[9px] font-bold text-red-500 bg-red-50 dark:bg-red-950/30 px-1.5 py-0.5 rounded-md">
+                            Hụt kho
+                          </span>
+                        )}
+                        <span className="font-mono font-black text-rose-600 dark:text-rose-450">
+                          -{m.amountUsed.toLocaleString()} {m.materialUnit}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setSelectedBatchForView(null)}
+                className="w-full px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-zinc-850 dark:hover:bg-zinc-800 dark:text-slate-300 font-bold rounded-xl transition cursor-pointer text-xs"
+              >
+                Đóng
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Modal: Edit Production Batch */}
+      {selectedBatchForEdit && (
+        <div className="fixed inset-0 bg-slate-905/30 dark:bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-all duration-300">
+          <motion.div 
+            initial={{ scale: 0.94, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl max-w-md w-full border border-slate-100 dark:border-slate-800 space-y-4"
+          >
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-extrabold text-base text-slate-850 dark:text-slate-150 uppercase tracking-tight flex items-center gap-2">
+                <Edit className="w-5 h-5 text-amber-500" />
+                <span>Chỉnh sửa đợt sản xuất</span>
+              </h3>
+              <button 
+                onClick={() => setSelectedBatchForEdit(null)} 
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-zinc-850 rounded-full transition text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* 1. Model / Pattern selection */}
+              <div>
+                <label className="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase mb-1.5 flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Mã hàng cần sản xuất:</span>
+                </label>
+                <select
+                  value={editBatchModel}
+                  onChange={e => setEditBatchModel(e.target.value)}
+                  className="w-full text-xs font-bold bg-slate-50 dark:bg-zinc-950 p-3 border border-slate-200 dark:border-slate-800 rounded-xl outline-none cursor-pointer text-slate-850 dark:text-slate-150"
+                >
+                  <option value="">-- Chọn mã rập cần cắt rã --</option>
+                  {materialRecipes.map(recipe => (
+                    <option key={recipe.id} value={recipe.modelName}>
+                      {recipe.modelName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Target Quantity */}
+              <div>
+                <label className="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase mb-1.5 flex items-center gap-1">
+                  <ListOrdered className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Số lượng cần sản xuất mộc (cái):</span>
+                </label>
+                <input 
+                  type="number" 
+                  min={1}
+                  value={editBatchQty || ''} 
+                  onChange={e => setEditBatchQty(Math.max(0, parseInt(e.target.value) || 0))}
+                  placeholder="Ví dụ: 500"
+                  className="w-full text-xs font-bold bg-slate-50 dark:bg-zinc-950 p-3 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:border-indigo-500 dark:text-white"
+                />
+              </div>
+
+              {/* 3. Production Date */}
+              <div>
+                <label className="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase mb-1.5 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Ngày chạy đợt sản xuất:</span>
+                </label>
+                <input 
+                  type="date" 
+                  value={editBatchDate} 
+                  onChange={e => setEditBatchDate(e.target.value)}
+                  className="w-full text-xs font-bold bg-slate-50 dark:bg-zinc-950 p-3 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:border-indigo-500 dark:text-white"
+                />
+              </div>
+
+              {/* Real-time Material Estimation Preview */}
+              {editBatchModel && editBatchQty > 0 && (
+                <div className="bg-amber-50/40 dark:bg-amber-955/10 p-3 rounded-xl border border-amber-200/50 dark:border-amber-900/30 text-[10.5px]">
+                  <p className="font-black text-amber-850 dark:text-amber-400 uppercase text-[9px] mb-1.5 flex items-center gap-1">
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>Dự báo tiêu hao khấu kho:</span>
+                  </p>
+                  <div className="space-y-1">
+                    {calculateRequiredMaterials(editBatchModel, editBatchQty).map(req => {
+                      const oldBatch = selectedBatchForEdit;
+                      const mat = rawMaterials.find(m => m.id === req.materialId);
+                      const oldUsage = oldBatch.materialsUsed.find(om => om.materialId === req.materialId)?.amountUsed || 0;
+                      const revertedStock = (mat ? mat.currentStock : 0) + oldUsage;
+                      const isInsuf = revertedStock < req.amountUsed;
+
+                      return (
+                        <div key={req.materialId} className="flex justify-between items-center text-slate-650 dark:text-slate-400 border-b border-dashed border-slate-200/50 dark:border-slate-800/50 py-1 last:border-0">
+                          <span>• {req.materialName}:</span>
+                          <span className="font-semibold text-slate-850 dark:text-slate-200 font-mono">
+                            {req.amountUsed.toLocaleString()} / {revertedStock.toLocaleString()} {req.materialUnit}
+                            {isInsuf && (
+                              <span className="ml-1 text-[9px] font-bold text-red-500 bg-red-50 dark:bg-red-950/40 px-1 rounded">
+                                Thiếu âm kho
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex gap-2 justify-end">
+              <button
+                onClick={() => setSelectedBatchForEdit(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-zinc-850 dark:hover:bg-zinc-800 dark:text-slate-400 font-bold rounded-xl transition cursor-pointer text-xs"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveEditBatch}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 font-bold text-white shadow-xs rounded-xl transition cursor-pointer text-xs flex items-center gap-1"
+              >
+                <Check className="w-4 h-4" /> Lưu thay đổi
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* ---------------- MODALS & SLIDERS ---------------- */}
 

@@ -82,6 +82,9 @@ export interface LoginNotification {
   location: string;
   device: string;
   isRead: boolean;
+  targetType?: 'import' | 'invoice' | 'material';
+  targetId?: string;
+  targetExtra?: string;
 }
 
 export interface AuthState {

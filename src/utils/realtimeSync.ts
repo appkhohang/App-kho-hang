@@ -164,6 +164,7 @@ export interface RealtimeSyncProps {
   setLastSyncTime: (time: string) => void;
   setSyncStatus: (status: 'idle' | 'syncing' | 'success' | 'error') => void;
   setSyncError?: (error: string | null) => void;
+  setAuthState?: React.Dispatch<React.SetStateAction<any>>;
 }
 
 export function useRealtimeSync({
@@ -188,7 +189,8 @@ export function useRealtimeSync({
   fbAuthLoading,
   setLastSyncTime,
   setSyncStatus,
-  setSyncError
+  setSyncError,
+  setAuthState
 }: RealtimeSyncProps) {
   
   // Store up-to-date refs of state arrays to solve closure issues in the snapshot listeners
@@ -290,6 +292,62 @@ export function useRealtimeSync({
             } else if (remoteStr !== activeStr) {
               console.log(`[Realtime Sync] Live cloud update received for '${key}' (${remoteList.length} items)`);
               
+              if (!isFirstLoad && setAuthState) {
+                const previousList = lastCloudState.current[key] || [];
+                const previousMap = new Map(previousList.map(item => [item.id, item]));
+                
+                const addedOrModified = remoteList.filter(item => {
+                  const prevItem = previousMap.get(item.id);
+                  if (!prevItem) return true;
+                  return !isItemEqual(item, prevItem);
+                });
+
+                const otherUserUpdates = addedOrModified.filter(item => 
+                  item.updatedBy && item.updatedBy !== userEmail
+                );
+
+                if (otherUserUpdates.length > 0 && ['importItems', 'bills', 'rawMaterials'].includes(key)) {
+                  otherUserUpdates.forEach(item => {
+                    const id = "sync-update-" + Date.now() + "-" + item.id;
+                    const time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + " " + new Date().toLocaleDateString('vi-VN');
+                    
+                    let targetType: 'import' | 'invoice' | 'material' = 'import';
+                    let title = '';
+                    let targetExtra = '';
+
+                    if (key === 'importItems') {
+                      targetType = 'import';
+                      title = `Tài khoản ${item.updatedBy || 'khác'} vừa cập nhật lô hàng mẫu "${item.mẫu || item.mau || ''}" (số lượng: ${item.sốLượng || item.soLuong || 0}) trong tuần ${item.weekKey || ''}.`;
+                      targetExtra = item.weekKey || '';
+                    } else if (key === 'bills') {
+                      targetType = 'invoice';
+                      title = `Tài khoản ${item.updatedBy || 'khác'} vừa viết Hoá đơn "${item.billNumber || 'Mới'}" trị giá ${(item.subtotal || 0).toLocaleString()}đ.`;
+                      targetExtra = item.customerId || '';
+                    } else if (key === 'rawMaterials') {
+                      targetType = 'material';
+                      title = `Tài khoản ${item.updatedBy || 'khác'} vừa cập nhật Định mức kho vật tư "${item.name || ''}" (Tồn kho: ${item.currentStock || 0} ${item.unit || ''}).`;
+                    }
+
+                    const newNotif = {
+                      id,
+                      time,
+                      ip: "Firestore đám mây",
+                      location: "Hệ thống liên kết đồng bộ",
+                      device: title,
+                      isRead: false,
+                      targetType,
+                      targetId: item.id,
+                      targetExtra
+                    };
+
+                    setAuthState(prev => ({
+                      ...prev,
+                      loginNotifications: [newNotif, ...(prev?.loginNotifications || [])].slice(0, 40)
+                    }));
+                  });
+                }
+              }
+
               // Record current synced representation to prevent local triggers from re-uploading
               lastSyncedString.current[key] = remoteStr;
               lastCloudState.current[key] = remoteList;
@@ -413,7 +471,11 @@ export function useRealtimeSync({
           
           if (!cloudItem || !isItemEqual(item, cloudItem)) {
             const docRef = doc(db, getNamespaceCollection(colName), item.id);
-            const cleaned = sanitizeDataForFirestore({ ...item, syncedAt: Date.now() });
+            const cleaned = sanitizeDataForFirestore({ 
+              ...item,
+              updatedBy: userEmail || 'vukuli.123@gmail.com',
+              syncedAt: Date.now() 
+            });
             batch.set(docRef, cleaned);
             operationsCount++;
             console.log(`[Realtime Sync] Queued save in batch: ${colName}/${item.id}`);

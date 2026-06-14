@@ -26,6 +26,8 @@ interface InvoicesTabProps {
   resolvedTheme?: 'light' | 'dark';
   autoOpenCreateBill?: boolean;
   onAutoOpenCreateBillReset?: () => void;
+  selectedCustomerId?: string;
+  setSelectedCustomerId?: (id: string) => void;
 }
 
 export default function InvoicesTab({
@@ -38,11 +40,15 @@ export default function InvoicesTab({
   userRole = 'viewer',
   resolvedTheme = 'light',
   autoOpenCreateBill = false,
-  onAutoOpenCreateBillReset
+  onAutoOpenCreateBillReset,
+  selectedCustomerId: externalSelectedCustomerId,
+  setSelectedCustomerId: externalSetSelectedCustomerId
 }: InvoicesTabProps) {
   const isViewer = false;
   // Selected customer context
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [localSelectedCustomerId, setLocalSelectedCustomerId] = useState<string>('');
+  const selectedCustomerId = externalSelectedCustomerId !== undefined ? externalSelectedCustomerId : localSelectedCustomerId;
+  const setSelectedCustomerId = externalSetSelectedCustomerId !== undefined ? externalSetSelectedCustomerId : setLocalSelectedCustomerId;
   
   // Search query for customers
   const [customerSearch, setCustomerSearch] = useState('');

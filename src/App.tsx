@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, ArrowUpDown } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, ArrowUpDown, Boxes, Receipt, Package, ArrowRight } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Lazy-loaded complex child components/tabs to cut boot time & latency on mobile
@@ -167,6 +167,7 @@ export default function App() {
   const [productionBatches, setProductionBatches] = useState<ProductionBatch[]>(() => getSavedArray("xuongan_production_batches", []));
   const [materialReimports, setMaterialReimports] = useState<MaterialReimport[]>(() => getSavedArray("xuongan_material_reimports", []));
   const [productionSubTab, setProductionSubTab] = useState<'breakdown' | 'materials'>('breakdown');
+  const [invoiceSelectedCustomerId, setInvoiceSelectedCustomerId] = useState<string>('');
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => getSavedArray("xuongan_user_profiles", []));
   const [profileFetchCompleted, setProfileFetchCompleted] = useState<boolean>(false);
 
@@ -497,7 +498,8 @@ export default function App() {
     fbAuthLoading,
     setLastSyncTime,
     setSyncStatus,
-    setSyncError
+    setSyncError,
+    setAuthState
   });
 
   // Route protection and dynamic redirection based on page level permissions
@@ -1085,6 +1087,29 @@ export default function App() {
       ...prev,
       loginNotifications: (prev?.loginNotifications || []).filter(n => n.id !== id)
     }));
+  };
+
+  const handleNotificationClick = (notif: LoginNotification) => {
+    // Mark as read
+    setAuthState(prev => ({
+      ...prev,
+      loginNotifications: (prev?.loginNotifications || []).map(n => n.id === notif.id ? { ...n, isRead: true } : n)
+    }));
+
+    if (notif.targetType === 'import') {
+      setActiveTab('import');
+      if (notif.targetExtra) {
+        setSelectedWeekFilter(notif.targetExtra);
+      }
+    } else if (notif.targetType === 'invoice') {
+      setActiveTab('invoices');
+      if (notif.targetExtra) {
+        setInvoiceSelectedCustomerId(notif.targetExtra);
+      }
+    } else if (notif.targetType === 'material') {
+      setActiveTab('production');
+      setProductionSubTab('materials');
+    }
   };
 
   // Calculations for Notification indicators
@@ -2508,6 +2533,8 @@ export default function App() {
                       resolvedTheme={resolvedTheme}
                       autoOpenCreateBill={autoOpenCreateBill}
                       onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
+                      selectedCustomerId={invoiceSelectedCustomerId}
+                      setSelectedCustomerId={setInvoiceSelectedCustomerId}
                     />
                   </Suspense>
                 </motion.div>
@@ -2627,28 +2654,66 @@ export default function App() {
                     {(!authState?.loginNotifications || authState.loginNotifications.length === 0) ? (
                       <p className="text-center py-12 text-slate-405 italic text-xs">Không có lịch sử đăng nhập hay cấu hình bảo mật mới.</p>
                     ) : (
-                      (authState?.loginNotifications || []).map(notif => (
-                        <div
-                          key={notif.id}
-                          className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl relative group text-xs shadow-2xs"
-                        >
-                          <div className="flex gap-2 text-[10.5px] text-slate-400 font-mono">
-                            {notif.device.includes("Hệ thống tự động") ? (
-                              <RefreshCw className="w-3.5 h-3.5 mt-0.5 text-emerald-500 animate-spin-slow" />
-                            ) : (
-                              <Shield className="w-3.5 h-3.5 mt-0.5 text-indigo-400" />
+                      (authState?.loginNotifications || []).map(notif => {
+                        const isSystem = notif.device.includes("Hệ thống tự động");
+                        const isRealtimeUpdate = !isSystem && !!notif.targetType;
+                        
+                        let displayTitle = "🔐 Đăng nhập thành công";
+                        let titleIcon = <Shield className="w-3.5 h-3.5 mt-0.5 text-indigo-400" />;
+                        
+                        if (isSystem) {
+                          displayTitle = "🔄 Tự động đồng bộ ngày mới & hệ thống";
+                          titleIcon = <RefreshCw className="w-3.5 h-3.5 mt-0.5 text-emerald-500 animate-spin-slow" />;
+                        } else if (notif.targetType === 'import') {
+                          displayTitle = "📅 Lô Nhập Hàng Đã Cập Nhật";
+                          titleIcon = <Boxes className="w-3.5 h-3.5 mt-0.5 text-blue-500" />;
+                        } else if (notif.targetType === 'invoice') {
+                          displayTitle = "🧾 Viết Hoá Đơn Đã Cập Nhật";
+                          titleIcon = <Receipt className="w-3.5 h-3.5 mt-0.5 text-amber-500" />;
+                        } else if (notif.targetType === 'material') {
+                          displayTitle = "📦 Kho Định Mức Đã Cập Nhật";
+                          titleIcon = <Package className="w-3.5 h-3.5 mt-0.5 text-rose-500" />;
+                        }
+
+                        return (
+                          <div
+                            key={notif.id}
+                            onClick={() => {
+                              if (isRealtimeUpdate) {
+                                handleNotificationClick(notif);
+                              }
+                            }}
+                            className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl relative group text-xs shadow-2xs transition-all ${
+                              isRealtimeUpdate 
+                                ? "border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 cursor-pointer hover:shadow-md hover:-translate-y-0.5" 
+                                : "border-slate-200 dark:border-slate-800"
+                            }`}
+                          >
+                            <div className="flex gap-2 text-[10.5px] text-slate-400 font-mono">
+                              {titleIcon}
+                              <span>{notif.time}</span>
+                              {isRealtimeUpdate && (
+                                <span className="text-[9.5px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.2 rounded ml-auto">
+                                  Dữ liệu đồng bộ
+                                </span>
+                              )}
+                            </div>
+                            <p className="font-bold text-slate-800 dark:text-slate-200 mt-2 text-sm leading-none">
+                              {displayTitle}
+                            </p>
+                            <p className="text-slate-500 mt-1">
+                              Địa chỉ: <span className="font-mono text-emerald-650 dark:text-emerald-400 font-bold">{notif.ip}</span> | Vị trí: <span className="font-semibold text-slate-600 dark:text-slate-300">{notif.location}</span>
+                            </p>
+                            <p className="text-[11px] font-medium text-slate-400 mt-2 font-mono bg-slate-50 dark:bg-zinc-950 p-2 rounded-lg border border-slate-100 dark:border-slate-850 whitespace-pre-wrap">{notif.device}</p>
+                            {isRealtimeUpdate && (
+                              <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-850 flex items-center justify-end text-[10px] text-indigo-600 dark:text-indigo-400 font-bold gap-1">
+                                <span>Chuyển đến mục xem ngay</span>
+                                <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                              </div>
                             )}
-                            <span>{notif.time}</span>
                           </div>
-                          <p className="font-bold text-slate-800 dark:text-slate-200 mt-2 text-sm leading-none">
-                            {notif.device.includes("Hệ thống tự động") ? "🔄 Tự động đồng bộ ngày mới & hệ thống" : "🔐 Đăng nhập thành công"}
-                          </p>
-                          <p className="text-slate-500 mt-1">
-                            Địa chỉ IP: <span className="font-mono text-emerald-650 dark:text-emerald-400 font-bold">{notif.ip}</span> | Vị trí: <span className="font-semibold text-slate-600 dark:text-slate-300">{notif.location}</span>
-                          </p>
-                          <p className="text-[11px] font-medium text-slate-400 mt-2 font-mono bg-slate-50 dark:bg-zinc-950 p-2 rounded-lg border border-slate-100 dark:border-slate-850">{notif.device}</p>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </motion.div>
