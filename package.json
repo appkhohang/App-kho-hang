@@ -9,12 +9,14 @@
     "build:mobile": "VITE_BASE_URL=./ vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "capgo-push": "npm run build && npx @capgo/cli bundle upload -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
     "@capacitor/cli": "^8.4.0",
     "@capacitor/core": "^8.4.0",
+    "@capgo/capacitor-updater": "^8.49.1",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
