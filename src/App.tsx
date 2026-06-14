@@ -5,17 +5,17 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, ArrowUpDown } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Lazy-loaded complex child components/tabs to cut boot time & latency on mobile
 const GoodsImportTab = lazy(() => import('./components/GoodsImportTab'));
-const InvoicesTab = lazy(() => import('./components/InvoicesTab'));
 const ProductionTab = lazy(() => import('./components/ProductionTab'));
 
 import ReportTab from './components/ReportTab';
 import SettingsTab from './components/SettingsTab';
 import GalleryTab from './components/GalleryTab';
+import InvoicesTab from './components/InvoicesTab';
 import FloatingStats from './components/FloatingStats';
 import CameraCapture from './components/CameraCapture';
 import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo } from './types';
@@ -25,7 +25,7 @@ import { useRealtimeSync } from './utils/realtimeSync';
 import { auth, db } from './utils/firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { formatVietnameseDate } from './utils/dateUtils';
+import { formatVietnameseDate, getCurrentDateStr, getVietnameseWeekKey } from './utils/dateUtils';
 import { useAndroidBack } from './hooks/useAndroidBack';
 import { checkAppUpdate } from './utils/updateService';
 import AppUpdateModal from './components/AppUpdateModal';
@@ -166,6 +166,7 @@ export default function App() {
   const [materialRecipes, setMaterialRecipes] = useState<ModelMaterialRecipe[]>(() => getSavedArray("xuongan_material_recipes", []));
   const [productionBatches, setProductionBatches] = useState<ProductionBatch[]>(() => getSavedArray("xuongan_production_batches", []));
   const [materialReimports, setMaterialReimports] = useState<MaterialReimport[]>(() => getSavedArray("xuongan_material_reimports", []));
+  const [productionSubTab, setProductionSubTab] = useState<'breakdown' | 'materials'>('breakdown');
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => getSavedArray("xuongan_user_profiles", []));
   const [profileFetchCompleted, setProfileFetchCompleted] = useState<boolean>(false);
 
@@ -264,13 +265,30 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Active settings tab state inside the hamburger drawer
-  const [settingsActiveTab, setSettingsActiveTab] = useState<'backup' | 'theme' | 'guide'>('backup');
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'backup' | 'theme' | 'features' | 'guide'>('backup');
+
+  // Customize which features/cards are shown on the home screen
+  const [enabledHomeFeatures, setEnabledHomeFeatures] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_enabled_home_features');
+      return saved ? JSON.parse(saved) : ['import', 'invoices', 'report', 'production', 'materials', 'gallery'];
+    } catch (e) {
+      return ['import', 'invoices', 'report', 'production', 'materials', 'gallery'];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('xuongan_enabled_home_features', JSON.stringify(enabledHomeFeatures));
+  }, [enabledHomeFeatures]);
 
   // File input reference for database restoration upload
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Selected week filter ('all' or specific weekKey) for import tab filtration
   const [selectedWeekFilter, setSelectedWeekFilter] = useState<string>('all');
+  
+  // Sorting order ('desc' or 'asc') for week filters list
+  const [weekSortOrder, setWeekSortOrder] = useState<'asc' | 'desc'>('desc');
   
   // Real-time Push Notification alert states
   const [activeLoginToast, setActiveLoginToast] = useState<any | null>(null);
@@ -1199,7 +1217,7 @@ export default function App() {
         <div className="grid grid-cols-2 gap-4">
           
           {/* Card 1: Nhập hàng */}
-          {allowedTabs.includes('import') && (
+          {allowedTabs.includes('import') && enabledHomeFeatures.includes('import') && (
             <motion.div 
               id="home_card_nhap_hang"
               onClick={() => setActiveTab('import')}
@@ -1259,7 +1277,7 @@ export default function App() {
           )}
 
           {/* Card 2: Hóa đơn */}
-          {allowedTabs.includes('invoices') && (
+          {allowedTabs.includes('invoices') && enabledHomeFeatures.includes('invoices') && (
             <motion.div 
               id="home_card_hoa_don"
               onClick={() => setActiveTab('invoices')}
@@ -1311,7 +1329,7 @@ export default function App() {
                 </div>
                 
                 {/* View Details Button with Icon */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-500/25 transition-all duration-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-500/20 group-hover:border-blue-250 dark:group-hover:border-blue-500/40 group-hover:shadow-[0_4px_12px_rgba(59,130,246,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-500/25 transition-all duration-300 group-hover:bg-blue-150 dark:group-hover:bg-blue-500/20 group-hover:border-blue-250 dark:group-hover:border-blue-500/40 group-hover:shadow-[0_4px_12px_rgba(59,130,246,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
                   <span className="hidden sm:inline">Xem chi tiết</span>
                   <FileText className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
@@ -1320,7 +1338,7 @@ export default function App() {
           )}
 
           {/* Card 3: Doanh thu */}
-          {allowedTabs.includes('report') && (
+          {allowedTabs.includes('report') && enabledHomeFeatures.includes('report') && (
             <motion.div 
               id="home_card_doanh_thu"
               onClick={() => setActiveTab('report')}
@@ -1372,7 +1390,7 @@ export default function App() {
           )}
 
           {/* Card 4: Quản lý sản xuất */}
-          {allowedTabs.includes('production') && (
+          {allowedTabs.includes('production') && enabledHomeFeatures.includes('production') && (
             <motion.div 
               id="home_card_san_xuat"
               onClick={() => setActiveTab('production')}
@@ -1423,7 +1441,133 @@ export default function App() {
               </div>
             </motion.div>
           )}
+
+          {/* Card 5: Kho nhiên liệu và định mức */}
+          {allowedTabs.includes('production') && enabledHomeFeatures.includes('materials') && (
+            <motion.div 
+              id="home_card_kho_nhien_lieu"
+              onClick={() => {
+                setProductionSubTab('materials');
+                setActiveTab('production');
+              }}
+              whileHover={{ 
+                scale: 1.01,
+                y: -3,
+                boxShadow: "0 20px 25px -5px rgba(20, 184, 166, 0.12), 0 8px 10px -6px rgba(20, 184, 166, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className={`group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-teal-500/50 dark:hover:border-[#14b8a6]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-teal-500/5 ${enabledHomeFeatures.includes('gallery') ? 'col-span-1' : 'col-span-2'}`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="w-11 h-11 rounded-xl bg-teal-550 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Layers className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="truncate min-w-0 pr-1">
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Kho & Định mức</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Định mức các mẫu sản phẩm</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+              </div>
+
+              {/* Mobile/Tablet mini description line */}
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5">
+                Định mức mẫu & phụ kiện tồn kho
+              </p>
+
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
+
+              <div className="flex justify-between items-end">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Vật tư</span>
+                    <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white font-mono leading-none mt-1">
+                      {rawMaterials.length} <span className="text-[10px] font-bold text-slate-400 font-sans">loại</span>
+                    </p>
+                  </div>
+                  <div className="h-6 w-[1px] bg-slate-150 dark:bg-slate-800" />
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Định mức</span>
+                    <p className="text-xl md:text-2xl font-black text-teal-600 dark:text-teal-400 font-mono leading-none mt-1">
+                      {materialRecipes.length} <span className="text-[10px] font-bold text-[#14b8a6]/70 font-sans">mẫu</span>
+                    </p>
+                  </div>
+                </div>
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-teal-50 dark:bg-[#14b8a6]/10 text-teal-600 dark:text-teal-400 rounded-xl border border-teal-100 dark:border-[#14b8a6]/25 transition-all duration-300 group-hover:bg-teal-100 dark:group-hover:bg-[#14b8a6]/20 group-hover:border-teal-250 dark:group-hover:border-[#14b8a6]/40 text-[9px] md:text-[10px] font-black uppercase tracking-wider shrink-0">
+                  <Database className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Card 6: Thư viện ảnh chụp */}
+          {allowedTabs.includes('gallery') && enabledHomeFeatures.includes('gallery') && (
+            <motion.div 
+              id="home_card_thu_vien_anh"
+              onClick={() => setActiveTab('gallery')}
+              whileHover={{ 
+                scale: 1.01,
+                y: -3,
+                boxShadow: "0 20px 25px -5px rgba(139, 92, 246, 0.12), 0 8px 10px -6px rgba(139, 92, 246, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className={`group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-purple-500/50 dark:hover:border-[#8b5cf6]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-purple-500/5 ${enabledHomeFeatures.includes('materials') ? 'col-span-1' : 'col-span-2'}`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="w-11 h-11 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Image className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="truncate min-w-0 pr-1">
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Thư viện ảnh</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Chụp hình trực tiếp & đính kèm</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+              </div>
+
+              {/* Mobile/Tablet mini description line */}
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5">
+                Xem toàn bộ kho hình chụp sản phẩm
+              </p>
+
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
+
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white font-mono leading-none">
+                    {items.filter(i => i.photo).length + bills.filter(b => b.photo).length} <span className="text-[10px] font-bold text-slate-400 font-sans">tấm</span>
+                  </p>
+                  <p className="text-[9.5px]/none font-extrabold text-purple-600 dark:text-purple-400 mt-1 uppercase tracker-wider text-[9px]">Hình đính kèm</p>
+                </div>
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-100 dark:border-purple-500/25 transition-all duration-300 group-hover:bg-purple-100 dark:group-hover:bg-purple-500/20 group-hover:border-purple-250 dark:group-hover:border-purple-500/40 text-[9px] md:text-[10px] font-black uppercase tracking-wider shrink-0">
+                  <Image className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </motion.div>
+          )}
         </div>
+
+        {/* If no feature is enabled, show an instructive alert card */}
+        {enabledHomeFeatures.length === 0 && (
+          <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center space-y-4 shadow-inner">
+            <p className="text-slate-500 dark:text-slate-400 text-xs font-semibold leading-relaxed">
+              Bạn đã ẩn toàn bộ các ô tính năng trên trang chủ. Vui lòng mở menu 3 gạch (ở góc trên) và chọn thẻ <b>"Trang chủ"</b> để cài đặt hiển thị lại các chức năng.
+            </p>
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-md inline-flex items-center gap-1.5"
+            >
+              <Menu className="w-4 h-4 text-white" />
+              <span>Cài đặt bật chức năng</span>
+            </button>
+          </div>
+        )}
 
         {/* Floating Action Button (FAB) with speed dial quick options */}
         {/* Backdrop overlay for speed dial */}
@@ -1986,60 +2130,113 @@ export default function App() {
                     </div>
 
                     {/* Week filter integration specifically requested by user to be placed inside the 3-gạch menu */}
-                    {activeTab === 'import' && weekKeys.length > 0 && (
-                      <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                        <p className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase font-mono">📅 LỌC THEO TUẦN</p>
-                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                    {activeTab === 'import' && weekKeys.length > 0 && (() => {
+                      const currentWeekKeyOfToday = getVietnameseWeekKey(getCurrentDateStr());
+                      const sortedWeekKeysForDrawer = [...weekKeys].sort((a, b) => {
+                        return weekSortOrder === 'desc' ? b.localeCompare(a) : a.localeCompare(b);
+                      });
+                      return (
+                        <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase font-mono">📅 LỌC THEO TUẦN</p>
+                            <div className="flex items-center gap-1.5">
+                              {/* Sort Toggle Button */}
+                              <button
+                                onClick={() => setWeekSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                                className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer flex items-center gap-1 text-[9px] font-bold"
+                                title={weekSortOrder === 'desc' ? 'Xếp cũ nhất trước' : 'Xếp mới nhất trước'}
+                              >
+                                <ArrowUpDown className="w-3 h-3 text-current" />
+                                <span className="font-mono text-[9.5px]">{weekSortOrder === 'desc' ? 'Mới → Cũ' : 'Cũ → Mới'}</span>
+                              </button>
+                              
+                              <span className="text-[9.5px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md">
+                                Tổng: {weekKeys.length} tuần
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Làm mới danh sách button */}
                           <button
                             onClick={() => {
-                              setSelectedWeekFilter('all');
-                              setIsMobileMenuOpen(false);
+                              const latestItems = getSavedArray("xuongan_import_items", []);
+                              setItems(latestItems);
                             }}
-                            className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-between border ${
-                              selectedWeekFilter === 'all'
-                                ? 'bg-indigo-50 border-indigo-250 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-305'
-                                : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-600 dark:text-slate-400'
-                            }`}
+                            className="w-full py-1.5 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 rounded-xl text-[10.5px] font-bold text-slate-600 dark:text-slate-350 hover:text-indigo-600 dark:hover:text-indigo-400 transition flex items-center justify-center gap-1.5 active:scale-95 shadow-2xs"
                           >
-                            <span>🌈 Hiện tất cả tuần</span>
-                            <span className="text-[10px] bg-slate-105 dark:bg-zinc-900 text-slate-500 rounded px-1.5 py-0.5 font-mono">
-                              {items.length} lô
-                            </span>
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Làm mới danh sách</span>
                           </button>
 
-                          {weekKeys.map((weekKey) => {
-                            const list = itemsByWeek[weekKey] || [];
-                            const qty = list.reduce((sum, item) => sum + (item?.sốLượng || 0), 0);
-                            const count = list.length;
-                            const isSelected = selectedWeekFilter === weekKey;
-                            return (
-                              <button
-                                key={weekKey}
-                                onClick={() => {
-                                  setSelectedWeekFilter(weekKey);
-                                  setIsMobileMenuOpen(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-between border ${
-                                  isSelected
-                                    ? 'bg-indigo-50 border-indigo-250 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-305'
-                                    : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                                }`}
-                              >
-                                <span className="truncate max-w-[130px]">{weekKey}</span>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[9px] text-slate-400 font-mono">({count} lô)</span>
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
-                                    isSelected ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-slate-105 text-slate-600 dark:bg-zinc-900'
-                                  }`}>
-                                    {qty.toLocaleString()}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
+                          <div className="space-y-1 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                            <button
+                              onClick={() => {
+                                setSelectedWeekFilter('all');
+                                setIsMobileMenuOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-between border ${
+                                selectedWeekFilter === 'all'
+                                  ? 'bg-indigo-50 border-indigo-250 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-305'
+                                  : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-600 dark:text-slate-400'
+                              }`}
+                            >
+                              <span>🌈 Hiện tất cả tuần</span>
+                              <span className="text-[10px] bg-slate-105 dark:bg-zinc-900 text-slate-500 rounded px-1.5 py-0.5 font-mono">
+                                {items.length} lô
+                              </span>
+                            </button>
+
+                            {sortedWeekKeysForDrawer.map((weekKey) => {
+                              const list = itemsByWeek[weekKey] || [];
+                              const qty = list.reduce((sum, item) => sum + (item?.sốLượng || 0), 0);
+                              const count = list.length;
+                              const isSelected = selectedWeekFilter === weekKey;
+                              const isCurrentWeek = weekKey === currentWeekKeyOfToday;
+                              
+                              return (
+                                <button
+                                  key={weekKey}
+                                  onClick={() => {
+                                    setSelectedWeekFilter(weekKey);
+                                    setIsMobileMenuOpen(false);
+                                  }}
+                                  className={`w-full text-left px-3 py-2 rounded-xl text-xs transition flex items-center justify-between border ${
+                                    isSelected
+                                      ? 'bg-indigo-50 border-indigo-250 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-305 font-bold'
+                                      : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-500 hover:text-slate-700 dark:text-slate-400 font-semibold'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+                                    <span className={`truncate ${
+                                      isCurrentWeek 
+                                        ? 'font-black text-indigo-600 dark:text-indigo-400' 
+                                        : isSelected 
+                                          ? 'font-bold text-slate-900 dark:text-white' 
+                                          : 'font-semibold text-slate-700 dark:text-slate-350'
+                                    }`}>
+                                      {weekKey}
+                                    </span>
+                                    {isCurrentWeek && (
+                                      <span className="px-1 py-0.2 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/25 dark:text-emerald-400 text-[8px] font-black uppercase tracking-wider rounded border border-emerald-500/20 shrink-0">
+                                        Hiện tại
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <span className="text-[9px] text-slate-400 font-mono">({count} lô)</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                                      isSelected ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300' : 'bg-slate-105 text-slate-600 dark:bg-zinc-900'
+                                    }`}>
+                                      {qty.toLocaleString()}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Short metrics preview indicator */}
                     <div className="bg-slate-100/60 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5">
@@ -2059,6 +2256,7 @@ export default function App() {
                       <div className="flex bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800 text-xs font-semibold gap-0.5">
                         {[
                           { id: 'backup', label: 'Sao lưu', icon: Database },
+                          { id: 'features', label: 'Trang chủ', icon: Home },
                           { id: 'theme', label: 'Sáng/Tối', icon: Sun },
                           { id: 'guide', label: 'H.Dẫn', icon: HelpCircle }
                         ].map(tab => {
@@ -2079,6 +2277,54 @@ export default function App() {
 
                       {/* Settings tab container */}
                       <div className="bg-slate-100/60 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-3">
+                        {settingsActiveTab === 'features' && (
+                          <div className="space-y-3" id="settings_panel_features">
+                            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-350 leading-tight">
+                              Bật/Tắt hiển thị ngoài trang chủ:
+                            </p>
+                            
+                            <div className="space-y-1 bg-white dark:bg-slate-950 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-800 select-none">
+                              {[
+                                { id: 'import', label: '1. Nhập hàng', desc: 'Sản lượng thợ & đơn giá bộ', color: 'text-emerald-500' },
+                                { id: 'invoices', label: '2. Hóa đơn', desc: 'Tạo bill, in nhiệt, nợ sỉ', color: 'text-blue-500' },
+                                { id: 'report', label: '3. Doanh thu', desc: 'Báo cáo thống kê lãi gộp', color: 'text-amber-500' },
+                                { id: 'production', label: '4. Sản xuất', desc: 'Cắt gá & phân tổ may ráp', color: 'text-purple-500' },
+                                { id: 'materials', label: '5. Định mức', desc: 'Định mức nhiên liệu vật tư', color: 'text-teal-500' },
+                                { id: 'gallery', label: '6. Thư viện ảnh', desc: 'Hình ảnh đính kèm sản phẩm', color: 'text-indigo-500' }
+                              ].map(feat => {
+                                const isChecked = enabledHomeFeatures.includes(feat.id);
+                                return (
+                                  <label 
+                                    key={feat.id} 
+                                    className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 cursor-pointer transition"
+                                  >
+                                    <input 
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        if (isChecked) {
+                                          setEnabledHomeFeatures(prev => prev.filter(p => p !== feat.id));
+                                        } else {
+                                          setEnabledHomeFeatures(prev => [...prev, feat.id]);
+                                        }
+                                      }}
+                                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                                    />
+                                    <div className="min-w-0 flex-1 ml-1.5">
+                                      <span className={`text-[11px] font-extrabold ${feat.color} block leading-normal`}>
+                                        {feat.label}
+                                      </span>
+                                      <span className="text-[8.5px] text-slate-400 block mt-0.5 leading-none truncate">
+                                        {feat.desc}
+                                      </span>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {settingsActiveTab === 'theme' && (
                           <div className="space-y-2">
                             <p className="text-[11px] text-slate-500 font-medium">Chọn giao diện làm việc tối ưu:</p>
@@ -2295,6 +2541,8 @@ export default function App() {
                       setLaborPayments={setLaborPayments}
                       settings={settings}
                       userRole={userRole}
+                      initialSubTab={productionSubTab}
+                      onSubTabChange={setProductionSubTab}
                     />
                   </Suspense>
                 </motion.div>

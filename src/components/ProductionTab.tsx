@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { 
@@ -40,6 +40,8 @@ interface ProductionTabProps {
   setLaborPayments: React.Dispatch<React.SetStateAction<LaborPayment[]>>;
   settings: AppSettings;
   userRole?: 'admin' | 'staff' | 'viewer';
+  initialSubTab?: 'breakdown' | 'materials';
+  onSubTabChange?: (tab: 'breakdown' | 'materials') => void;
 }
 
 export default function ProductionTab({
@@ -62,7 +64,9 @@ export default function ProductionTab({
   laborPayments,
   setLaborPayments: rawSetLaborPayments,
   settings,
-  userRole = 'viewer'
+  userRole = 'viewer',
+  initialSubTab,
+  onSubTabChange
 }: ProductionTabProps) {
   const isViewer = false;
 
@@ -88,7 +92,20 @@ export default function ProductionTab({
   const setLaborPayments = guard(rawSetLaborPayments);
 
   // Current active sub-tab inside Quality Management
-  const [subTab, setSubTab] = useState<'breakdown' | 'materials'>('breakdown');
+  const [subTab, setSubTab] = useState<'breakdown' | 'materials'>(initialSubTab || 'breakdown');
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
+  const handleSetSubTab = (tab: 'breakdown' | 'materials') => {
+    setSubTab(tab);
+    if (onSubTabChange) {
+      onSubTabChange(tab);
+    }
+  };
 
   // Bento selection tiles
   const [activeBdId, setActiveBdId] = useState<string | null>(null);
@@ -1727,7 +1744,7 @@ export default function ProductionTab({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/40 dark:bg-slate-900/40 p-1.5 rounded-2xl border border-slate-200/50 dark:border-slate-800 backdrop-blur-xs select-none">
         <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl w-full">
           <button
-            onClick={() => setSubTab('breakdown')}
+            onClick={() => handleSetSubTab('breakdown')}
             className={`flex-grow py-2.5 px-5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
               subTab === 'breakdown'
                 ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-sm font-black'
@@ -1738,7 +1755,7 @@ export default function ProductionTab({
             <span>Phân Bổ Công Đoạn & Giao Việc</span>
           </button>
           <button
-            onClick={() => setSubTab('materials')}
+            onClick={() => handleSetSubTab('materials')}
             className={`flex-grow py-2.5 px-5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
               subTab === 'materials'
                 ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-sm font-black'
