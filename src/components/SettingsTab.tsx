@@ -5,9 +5,10 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle } from 'lucide-react';
+import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, ShieldCheck, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle } from 'lucide-react';
 import { AppSettings, ImportItem, Customer, UserProfile, Bill, CURRENT_VERSION, AppUpdateInfo } from '../types';
 import { isNewerVersion } from '../utils/updateService';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 
 import { auth, db } from '../utils/firebase';
 import { updatePassword, getAuth, createUserWithEmailAndPassword, signOut as logoutTemp, setPersistence, inMemoryPersistence } from 'firebase/auth';
@@ -171,6 +172,37 @@ export default function SettingsTab({
   // States for storage statistics panel toggle and details card
   const [isStorageStatsOpen, setIsStorageStatsOpen] = useState(false);
   const [showDetailedInfo, setShowDetailedInfo] = useState(false);
+
+  const [autoBackups, setAutoBackups] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem("xuongan_database_auto_backups");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  React.useEffect(() => {
+    const handleUpdate = () => {
+      try {
+        const saved = localStorage.getItem("xuongan_database_auto_backups");
+        setAutoBackups(saved ? JSON.parse(saved) : []);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    window.addEventListener('xuongan_autobackup_updated', handleUpdate);
+    return () => window.removeEventListener('xuongan_autobackup_updated', handleUpdate);
+  }, []);
+
+  const handleRestoreAutoBackup = (backup: any) => {
+    if (window.confirm(`Bạn có chắc chắn muốn khôi phục dữ liệu xưởng về phiên bản tự động sao lưu lúc [${backup.timeStr}]?\n(Chú ý: Toàn bộ dữ liệu hiện tại trên trình duyệt sẽ được thay thế)`)) {
+      onImportBackup(JSON.stringify(backup.data));
+    }
+  };
+
+  useAndroidBack(showCloudInfo, () => setShowCloudInfo(false));
+  useAndroidBack(showDetailedInfo, () => setShowDetailedInfo(false));
 
   // Storage size calculation logic
   const storageStats = React.useMemo(() => {
@@ -868,6 +900,59 @@ export default function SettingsTab({
                     </span>
                   </button>
 
+                </div>
+
+                {/* 8. Danh sách tự động sao lưu an toàn */}
+                <div className="mt-4 pt-3 border-t border-slate-150 dark:border-slate-800 space-y-2 text-left">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <span className="text-[10px] font-black tracking-wider uppercase text-slate-450 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Nhật ký tự động sao lưu an toàn</span>
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-650 dark:bg-indigo-950/30 dark:text-indigo-400 self-start">
+                      Auto-save: 5 phút / Thay đổi dữ liệu
+                    </span>
+                  </div>
+
+                  {autoBackups.length === 0 ? (
+                    <div className="text-center py-5 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 dark:text-slate-500 text-[10.5px]">
+                      Chưa có bản tự động sao lưu nào. Hệ thống sẽ lưu sau mỗi 5 phút hoặc khi sửa đổi dữ liệu quan trọng.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                      {autoBackups.map((bak) => {
+                        const isCrucial = bak.trigger === 'crucial_change';
+                        return (
+                          <div 
+                            key={bak.id} 
+                            className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 hover:bg-slate-50 dark:hover:bg-slate-950/40 transition flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="space-y-0.5">
+                              <div className="font-mono text-[11px] font-extrabold text-slate-700 dark:text-slate-350 flex items-center gap-1.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${isCrucial ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                                <span>{bak.timeStr}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                                <span>Hình thức:</span>
+                                <strong className={`font-black ${isCrucial ? 'text-amber-650 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                  {isCrucial ? 'Thay đổi dữ liệu' : 'Định kỳ 5 phút'}
+                                </strong>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRestoreAutoBackup(bak)}
+                              className="px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:border-indigo-300 bg-indigo-50 hover:bg-indigo-105 text-indigo-700 font-bold text-[10px] uppercase transition cursor-pointer flex items-center gap-1 shrink-0 dark:border-indigo-900/40 dark:bg-indigo-950/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+                            >
+                              <RefreshCw className="w-2.5 h-2.5" />
+                              <span>Khôi phục</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Info Drawer inline */}

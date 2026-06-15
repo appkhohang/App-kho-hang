@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, ArrowUpDown, Boxes, Receipt, Package, ArrowRight } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Lazy-loaded complex child components/tabs to cut boot time & latency on mobile
@@ -14,12 +14,14 @@ const ProductionTab = lazy(() => import('./components/ProductionTab'));
 
 import ReportTab from './components/ReportTab';
 import SettingsTab from './components/SettingsTab';
+import ProfitEstimatorTab from './components/ProfitEstimatorTab';
 import GalleryTab from './components/GalleryTab';
 import InvoicesTab from './components/InvoicesTab';
+import ReportInventoryDetail from './components/ReportInventoryDetail';
 import FloatingStats from './components/FloatingStats';
 import CameraCapture from './components/CameraCapture';
 import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo } from './types';
-import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage } from './utils/storage';
+import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage, DatabasePackage } from './utils/storage';
 import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncService';
 import { useRealtimeSync } from './utils/realtimeSync';
 import { auth, db } from './utils/firebase';
@@ -28,6 +30,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { formatVietnameseDate, getCurrentDateStr, getVietnameseWeekKey } from './utils/dateUtils';
 import { useAndroidBack } from './hooks/useAndroidBack';
 import { checkAppUpdate } from './utils/updateService';
+import { App as CapApp } from '@capacitor/app';
 import AppUpdateModal from './components/AppUpdateModal';
 import AnBrandLogo from './components/AnBrandLogo';
 
@@ -255,7 +258,12 @@ export default function App() {
 
 
   // Active Tab state
-  const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery' | 'inventory' | 'profit_estimator'>('home');
+  
+  // States for Notifications multi-select and account filtering
+  const [notifAccountFilter, setNotifAccountFilter] = useState<string>('all');
+  const [selectedNotifIds, setSelectedNotifIds] = useState<string[]>([]);
+  const [isMultiSelectNotifActive, setIsMultiSelectNotifActive] = useState<boolean>(false);
   
   // Quick transition states from Home FAB
   const [autoExpandImportForm, setAutoExpandImportForm] = useState(false);
@@ -272,9 +280,9 @@ export default function App() {
   const [enabledHomeFeatures, setEnabledHomeFeatures] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('xuongan_enabled_home_features');
-      return saved ? JSON.parse(saved) : ['import', 'invoices', 'report', 'production', 'materials', 'gallery'];
+      return saved ? JSON.parse(saved) : ['import', 'invoices', 'report', 'production', 'materials', 'gallery', 'inventory', 'profit_estimator'];
     } catch (e) {
-      return ['import', 'invoices', 'report', 'production', 'materials', 'gallery'];
+      return ['import', 'invoices', 'report', 'production', 'materials', 'gallery', 'inventory', 'profit_estimator'];
     }
   });
 
@@ -284,6 +292,11 @@ export default function App() {
 
   // File input reference for database restoration upload
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // References for automated database auto-backup to LocalStorage
+  const isBackupMountedRef = useRef<boolean>(false);
+  const backupTimeoutRef = useRef<any>(null);
+  const backupDataRef = useRef<any>(null);
 
   // Selected week filter ('all' or specific weekKey) for import tab filtration
   const [selectedWeekFilter, setSelectedWeekFilter] = useState<string>('all');
@@ -300,6 +313,11 @@ export default function App() {
   useAndroidBack(isMobileMenuOpen, () => setIsMobileMenuOpen(false));
   useAndroidBack(showNotificationsDropdown, () => setShowNotificationsDropdown(false));
   useAndroidBack(showColorDropdown, () => setShowColorDropdown(false));
+  useAndroidBack(isMultiSelectNotifActive, () => {
+    setIsMultiSelectNotifActive(false);
+    setSelectedNotifIds([]);
+  });
+  useAndroidBack(notifAccountFilter !== 'all', () => setNotifAccountFilter('all'));
   
   // Real-time auto updated dates and clock
   const [currentLiveTime, setCurrentLiveTime] = useState<string>(() => {
@@ -394,7 +412,7 @@ export default function App() {
 
   const getUserAllowedTabs = (): string[] => {
     const email = authState.email?.toLowerCase().trim();
-    const allTabs = ['home', 'import', 'invoices', 'production', 'report', 'settings', 'gallery'];
+    const allTabs = ['home', 'import', 'invoices', 'production', 'inventory', 'report', 'settings', 'gallery', 'profit_estimator'];
     if (!email) {
       console.log("[getUserAllowedTabs] No email found in current auth state. Returning fallback ['home']");
       return ['home'];
@@ -403,6 +421,20 @@ export default function App() {
     return allTabs;
   };
   const allowedTabs = getUserAllowedTabs();
+
+  // Tổng số lượng thành phẩm trong kho = tổng nhập - tổng xuất
+  const totalStockQuantity = useMemo(() => {
+    const totalImported = items.reduce((sum, curr) => sum + (curr.sốLượng || 0), 0);
+    let totalSold = 0;
+    bills.forEach(bill => {
+      if (bill.items && Array.isArray(bill.items)) {
+        bill.items.forEach(bitem => {
+          totalSold += (bitem.sốLượng || 0);
+        });
+      }
+    });
+    return totalImported - totalSold;
+  }, [items, bills]);
 
   // Automatically fetch current user profile from Firestore on mount/login
   useEffect(() => {
@@ -746,27 +778,43 @@ export default function App() {
     };
 
     // 3. Native Android Wrapper hardware button event handler (Cordova/Capacitor/WebView)
-    const handleAndroidHardwareButton = (e: Event) => {
+    const handleAndroidHardwareButton = (e?: Event) => {
       const w = window as any;
       const handlers = w.androidBackHandlers || [];
       if (handlers.length > 0) {
         const lastHandler = handlers[handlers.length - 1];
         const handled = lastHandler();
         if (handled) {
-          e.preventDefault();
-          return;
+          if (e) e.preventDefault();
+          return true;
         }
       }
 
-      // If no open overlays, back button navigates back to 'home' tab first
+      // If no open overlays, back button navigates back in browser history (like on the web)
       if (activeTab !== 'home') {
-        e.preventDefault();
-        setActiveTab('home');
+        if (e) e.preventDefault();
+        window.history.back();
+        return true;
       }
+      return false;
     };
 
     window.addEventListener('popstate', handlePopState);
     document.addEventListener('backbutton', handleAndroidHardwareButton);
+    
+    // 4. Register Capacitor App Plugin backButton Listener to capture swipe back gestures and back clicks
+    let capAppListenerPromise: Promise<any> | null = null;
+    try {
+      capAppListenerPromise = CapApp.addListener('backButton', () => {
+        const handled = handleAndroidHardwareButton();
+        if (!handled && activeTab === 'home') {
+          // If we are already at the home tab and there are no modals/drawers open, exit the app cleanly
+          CapApp.exitApp();
+        }
+      });
+    } catch (err) {
+      console.log('CapApp backButton is not supported on this platform:', err);
+    }
     
     // Set initial state
     if (!window.history.state) {
@@ -776,6 +824,13 @@ export default function App() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
       document.removeEventListener('backbutton', handleAndroidHardwareButton);
+      if (capAppListenerPromise) {
+        capAppListenerPromise.then(sub => {
+          if (sub && typeof sub.remove === 'function') {
+            sub.remove();
+          }
+        }).catch(err => console.error("Error removing CapApp backbutton listener", err));
+      }
     };
   }, [activeTab]);
 
@@ -787,6 +842,125 @@ export default function App() {
       }
     }
   }, [activeTab]);
+
+  // Synchronize state values inside the reference dynamically on every render
+  backupDataRef.current = {
+    importItems: items,
+    laborPayments: laborPayments,
+    tpDtShippings: tpDtShippings,
+    customers: customers,
+    bills: bills,
+    payments: payments,
+    operationBreakdowns: operationBreakdowns,
+    workers: workers,
+    workerJobs: workerJobs,
+    rawMaterials: rawMaterials,
+    materialRecipes: materialRecipes,
+    productionBatches: productionBatches,
+    materialReimports: materialReimports,
+    settings: settings
+  };
+
+  const saveAutoBackup = (trigger: 'interval' | 'crucial_change') => {
+    try {
+      const source = backupDataRef.current || {
+        importItems: items,
+        laborPayments: laborPayments,
+        tpDtShippings: tpDtShippings,
+        customers: customers,
+        bills: bills,
+        payments: payments,
+        operationBreakdowns: operationBreakdowns,
+        workers: workers,
+        workerJobs: workerJobs,
+        rawMaterials: rawMaterials,
+        materialRecipes: materialRecipes,
+        productionBatches: productionBatches,
+        materialReimports: materialReimports,
+        settings: settings
+      };
+
+      const dataPackage: DatabasePackage = {
+        importItems: source.importItems,
+        laborPayments: source.laborPayments,
+        tpDtShippings: source.tpDtShippings,
+        customers: source.customers,
+        bills: source.bills,
+        payments: source.payments,
+        operationBreakdowns: source.operationBreakdowns,
+        workers: source.workers,
+        workerJobs: source.workerJobs,
+        rawMaterials: source.rawMaterials,
+        materialRecipes: source.materialRecipes,
+        productionBatches: source.productionBatches,
+        materialReimports: source.materialReimports,
+        settings: source.settings,
+        version: "1.2",
+        exportedAt: new Date().toISOString()
+      };
+
+      const existingBackupsRaw = localStorage.getItem("xuongan_database_auto_backups");
+      let backups = [];
+      if (existingBackupsRaw) {
+        try {
+          backups = JSON.parse(existingBackupsRaw);
+        } catch (e) {
+          backups = [];
+        }
+      }
+      if (!Array.isArray(backups)) {
+        backups = [];
+      }
+
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')} - ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
+      const newBackup = {
+        id: "backup_" + Date.now(),
+        timestamp: now.toISOString(),
+        timeStr,
+        trigger,
+        data: dataPackage
+      };
+
+      backups.unshift(newBackup);
+      if (backups.length > 5) {
+        backups = backups.slice(0, 5);
+      }
+
+      localStorage.setItem("xuongan_database_auto_backups", JSON.stringify(backups));
+      window.dispatchEvent(new Event('xuongan_autobackup_updated'));
+      console.log(`[Auto-Backup] Tự động sao lưu (${trigger}) thành công lúc ${timeStr}`);
+    } catch (err) {
+      console.error("[Auto-Backup] Lỗi sao lưu:", err);
+    }
+  };
+
+  const triggerCrucialChangeBackup = () => {
+    if (backupTimeoutRef.current) {
+      clearTimeout(backupTimeoutRef.current);
+    }
+    backupTimeoutRef.current = setTimeout(() => {
+      saveAutoBackup('crucial_change');
+    }, 5000); // 5 seconds debounce
+  };
+
+  // Crucial data change tracker useEffect
+  useEffect(() => {
+    if (!isBackupMountedRef.current) {
+      isBackupMountedRef.current = true;
+      return;
+    }
+    triggerCrucialChangeBackup();
+  }, [items, bills, payments, laborPayments, workers, productionBatches]);
+
+  // Periodic interval automatic backup useEffect (5 minutes)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      saveAutoBackup('interval');
+    }, 5 * 60 * 1000); // Every 5 minutes in ms
+    return () => clearInterval(interval);
+  }, []);
 
   // Sync state changes to LocalStorage hooks
   useEffect(() => {
@@ -1028,11 +1202,22 @@ export default function App() {
       const alreadyLogged = (authState?.loginNotifications || []).some(n => n.device === "Hệ thống tự động cập nhật dữ liệu & ngày mới" && n.time.includes(todayStr));
       
       if (!alreadyLogged) {
+        let locString = "Vị trí hiện tại (Cục bộ)";
+        const savedGps = localStorage.getItem('precision_gps_data');
+        if (savedGps) {
+          try {
+            const parsed = JSON.parse(savedGps);
+            if (parsed && parsed.latitude && parsed.longitude) {
+              locString = `📍 GPS: ${parsed.latitude.toFixed(4)}, ${parsed.longitude.toFixed(4)}`;
+            }
+          } catch(err) {}
+        }
+
         const sysSyncLog: LoginNotification = {
           id: "sync-" + Date.now(),
           time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + " " + todayStr,
           ip: "Cục bộ máy khách (Client)",
-          location: "Hải Phòng / Việt Nam",
+          location: locString,
           device: "Hệ thống tự động cập nhật dữ liệu & ngày mới",
           isRead: false
         };
@@ -1082,11 +1267,151 @@ export default function App() {
     }));
   };
 
+  const getAccountFromNotif = (notif: LoginNotification): string => {
+    if (!notif.device) return "Hệ thống";
+    if (notif.device.includes("Hệ thống tự động")) return "Hệ thống";
+    const match = notif.device.match(/Tài khoản\s+([^\s]+)/i);
+    if (match && match[1]) {
+      return match[1].replace(/[.,;:!\n\r\t]/g, '').trim();
+    }
+    return "Hệ thống";
+  };
+
   const deleteNotification = (id: string) => {
     setAuthState(prev => ({
       ...prev,
       loginNotifications: (prev?.loginNotifications || []).filter(n => n.id !== id)
     }));
+    setSelectedNotifIds(prev => prev.filter(x => x !== id));
+  };
+
+  // Helper calculations for notifications tab UI
+  const notifLogs = authState?.loginNotifications || [];
+  const accountCounts: { [key: string]: number } = {};
+  notifLogs.forEach(notif => {
+    const acc = getAccountFromNotif(notif);
+    accountCounts[acc] = (accountCounts[acc] || 0) + 1;
+  });
+  const uniqueAccounts = Object.keys(accountCounts).sort();
+  const filteredNotifs = notifLogs.filter(notif => {
+    if (notifAccountFilter === 'all') return true;
+    return getAccountFromNotif(notif) === notifAccountFilter;
+  });
+
+  const getNotifDateObj = (notif: LoginNotification): Date => {
+    if (notif.id && typeof notif.id === 'string' && notif.id.startsWith('sync-')) {
+      const tsStr = notif.id.replace('sync-', '');
+      const ts = parseInt(tsStr, 10);
+      if (!isNaN(ts) && ts > 0) {
+        return new Date(ts);
+      }
+    }
+    if (notif.time && typeof notif.time === 'string') {
+      const dateMatch = notif.time.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (dateMatch) {
+        const day = parseInt(dateMatch[1], 10);
+        const month = parseInt(dateMatch[2], 10) - 1;
+        const year = parseInt(dateMatch[3], 10);
+        
+        const timeMatch = notif.time.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        let hours = 0;
+        let minutes = 0;
+        let seconds = 0;
+        if (timeMatch) {
+          hours = parseInt(timeMatch[1], 10);
+          minutes = parseInt(timeMatch[2], 10);
+          if (timeMatch[3]) {
+            seconds = parseInt(timeMatch[3], 10);
+          }
+        }
+        return new Date(year, month, day, hours, minutes, seconds);
+      }
+    }
+    return new Date();
+  };
+
+  const groupNotificationsByDate = (notifications: LoginNotification[]) => {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+    const dayOfWeek = startOfToday.getDay();
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const startOfWeek = new Date(startOfToday);
+    startOfWeek.setDate(startOfWeek.getDate() - diffToMonday);
+
+    const todayItems: LoginNotification[] = [];
+    const yesterdayItems: LoginNotification[] = [];
+    const thisWeekItems: LoginNotification[] = [];
+    const olderItems: LoginNotification[] = [];
+
+    notifications.forEach(notif => {
+      const d = getNotifDateObj(notif);
+      const timeVal = d.getTime();
+
+      if (timeVal >= startOfToday.getTime()) {
+        todayItems.push(notif);
+      } else if (timeVal >= startOfYesterday.getTime()) {
+        yesterdayItems.push(notif);
+      } else if (timeVal >= startOfWeek.getTime()) {
+        thisWeekItems.push(notif);
+      } else {
+        olderItems.push(notif);
+      }
+    });
+
+    return [
+      { key: 'today', label: 'Hôm nay', items: todayItems },
+      { key: 'yesterday', label: 'Hôm qua', items: yesterdayItems },
+      { key: 'this_week', label: 'Tuần này', items: thisWeekItems },
+      { key: 'older', label: 'Cũ hơn', items: olderItems }
+    ].filter(g => g.items.length > 0);
+  };
+
+  const groupedNotifCategories = groupNotificationsByDate(filteredNotifs);
+
+  const toggleSelectNotif = (id: string) => {
+    setSelectedNotifIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllNotifs = () => {
+    setSelectedNotifIds(filteredNotifs.map(n => n.id));
+  };
+
+  const handleDeselectAllNotifs = () => {
+    setSelectedNotifIds([]);
+  };
+
+  const handleDeleteSelectedNotifs = () => {
+    if (selectedNotifIds.length === 0) return;
+    if (window.confirm(`Bạn có chắc chắn muốn xoá ${selectedNotifIds.length} thông báo đã chọn?`)) {
+      setAuthState(prev => ({
+        ...prev,
+        loginNotifications: (prev?.loginNotifications || []).filter(n => !selectedNotifIds.includes(n.id))
+      }));
+      setSelectedNotifIds([]);
+      setIsMultiSelectNotifActive(false);
+    }
+  };
+
+  const handleDeleteAllForCurrentAccount = () => {
+    const accountLabel = notifAccountFilter === 'all' ? 'tất cả tài khoản' : `tài khoản ${notifAccountFilter}`;
+    if (window.confirm(`Bạn có chắc chắn muốn xoá TOÀN BỘ thông báo của ${accountLabel}?`)) {
+      setAuthState(prev => ({
+        ...prev,
+        loginNotifications: (prev?.loginNotifications || []).filter(n => {
+          if (notifAccountFilter === 'all') return false;
+          return getAccountFromNotif(n) !== notifAccountFilter;
+        })
+      }));
+      setSelectedNotifIds([]);
+      setIsMultiSelectNotifActive(false);
+    }
   };
 
   const handleNotificationClick = (notif: LoginNotification) => {
@@ -1467,6 +1792,56 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* Card 4.5: Kho thành phẩm */}
+          {allowedTabs.includes('inventory') && enabledHomeFeatures.includes('inventory') && (
+            <motion.div 
+              id="home_card_kho_thanh_pham"
+              onClick={() => setActiveTab('inventory')}
+              whileHover={{ 
+                scale: 1.015,
+                y: -5,
+                boxShadow: "0 20px 25px -5px rgba(16, 185, 129, 0.12), 0 8px 10px -6px rgba(16, 185, 129, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-emerald-500/50 dark:hover:border-[#10b981]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-emerald-500/5"
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Boxes className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="truncate min-w-0 pr-1 text-left">
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">4. Kho Thành Phẩm</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Kiểm đếm xưởng tự động</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+              </div>
+
+              {/* Mobile/Tablet mini description line */}
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5 text-left">
+                Kiểm đếm xuất nhập tồn kho xưởng
+              </p>
+
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
+
+              <div className="flex justify-between items-end text-left">
+                <div>
+                  <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">
+                    {totalStockQuantity.toLocaleString()} <span className="text-xs font-bold text-slate-450 dark:text-slate-400 font-sans">bộ đồ</span>
+                  </p>
+                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 mt-1.5 font-sans whitespace-nowrap">Tự động đối soát</p>
+                </div>
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-100 dark:border-emerald-500/25 transition-all duration-300 group-hover:bg-emerald-100 dark:group-hover:bg-[#10b981]/20 group-hover:border-emerald-250 dark:group-hover:border-[#10b981]/40 text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                  <span className="hidden sm:inline">Vào kho</span>
+                  <Boxes className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* Card 5: Kho nhiên liệu và định mức */}
           {allowedTabs.includes('production') && enabledHomeFeatures.includes('materials') && (
             <motion.div 
@@ -1485,11 +1860,11 @@ export default function App() {
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
-                  <div className="w-11 h-11 rounded-xl bg-teal-550 text-white flex items-center justify-center shrink-0 shadow-md">
+                  <div className="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-md">
                     <Layers className="w-5 h-5 text-white" />
                   </div>
                   <div className="truncate min-w-0 pr-1">
-                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Kho & Định mức</h3>
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Nguyên liệu & Định mức</h3>
                     <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Định mức các mẫu sản phẩm</p>
                   </div>
                 </div>
@@ -1523,6 +1898,56 @@ export default function App() {
                 {/* View Details Button with Icon */}
                 <div className="flex items-center gap-1.5 px-2 py-1.5 bg-teal-50 dark:bg-[#14b8a6]/10 text-teal-600 dark:text-teal-400 rounded-xl border border-teal-100 dark:border-[#14b8a6]/25 transition-all duration-300 group-hover:bg-teal-100 dark:group-hover:bg-[#14b8a6]/20 group-hover:border-teal-250 dark:group-hover:border-[#14b8a6]/40 text-[9px] md:text-[10px] font-black uppercase tracking-wider shrink-0">
                   <Database className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Card 5.5: Tính Giá Thành & Lợi Nhuận Bộ Đồ */}
+          {allowedTabs.includes('profit_estimator') && enabledHomeFeatures.includes('profit_estimator') && (
+            <motion.div 
+              id="home_card_gia_thanh_loi_nhuan"
+              onClick={() => setActiveTab('profit_estimator')}
+              whileHover={{ 
+                scale: 1.015,
+                y: -5,
+                boxShadow: "0 20px 25px -5px rgba(99, 102, 241, 0.12), 0 8px 10px -6px rgba(99, 102, 241, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-indigo-500/50 dark:hover:border-[#6366f1]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-indigo-500/5"
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <DollarSign className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="truncate min-w-0 pr-1 text-left">
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Giá Thành & Lợi Nhuận</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Dự phóng chi phí & biên lãi sỉ bộ đồ</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+              </div>
+
+              {/* Mobile/Tablet mini description line */}
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5 text-left">
+                Tính toán biên lợi nhuận thông minh
+              </p>
+
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
+
+              <div className="flex justify-between items-end text-left">
+                <div>
+                  <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">
+                    {materialRecipes.length} <span className="text-xs font-bold text-slate-450 dark:text-slate-400 font-sans">bản định mức</span>
+                  </p>
+                  <p className="text-[9.5px]/none font-extrabold text-[#6366f1] dark:text-indigo-400 mt-1 font-sans whitespace-nowrap">Đầy đủ tham số tính toán</p>
+                </div>
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-100 dark:border-indigo-500/25 transition-all duration-300 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/20 group-hover:border-indigo-250 dark:group-hover:border-indigo-500/40 text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                  <span className="hidden sm:inline">Tính toán</span>
+                  <DollarSign className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                 </div>
               </div>
             </motion.div>
@@ -1636,7 +2061,7 @@ export default function App() {
                       setAutoOpenCreateBill(true);
                       setActiveTab('invoices');
                     }}
-                    className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-black shadow-2xl border border-indigo-500/20 active:scale-95 transition cursor-pointer"
+                    className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-2xl border border-indigo-500/20 active:scale-95 transition cursor-pointer"
                   >
                     <FileText className="w-4 h-4 text-white" />
                     <span>Viết bill hóa đơn</span>
@@ -1799,6 +2224,26 @@ export default function App() {
                     className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'production' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
                   >
                     <span>3. Quản Lý Sản Xuất</span>
+                  </button>
+                )}
+                {allowedTabs.includes('inventory') && (
+                  <button
+                    id="tab_inventory_btn"
+                    onClick={() => setActiveTab('inventory')}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                  >
+                    <Boxes className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>4. Kho Hàng</span>
+                  </button>
+                )}
+                {allowedTabs.includes('profit_estimator') && (
+                  <button
+                    id="tab_profit_estimator_btn"
+                    onClick={() => setActiveTab('profit_estimator')}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'profit_estimator' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                  >
+                    <DollarSign className="w-3.5 h-3.5 text-indigo-505" />
+                    <span>5. Giá Thành & Lợi Nhuận Bộ Đồ</span>
                   </button>
                 )}
                 {allowedTabs.includes('report') && (
@@ -2114,6 +2559,44 @@ export default function App() {
                           </button>
                         )}
 
+                        {/* Tab 4 button link - Kho Hàng */}
+                        {allowedTabs.includes('inventory') && (
+                          <button
+                            onClick={() => {
+                              setActiveTab('inventory');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'inventory' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
+                          >
+                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'inventory' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                              <Boxes className="w-4 h-4 text-emerald-500" />
+                            </div>
+                            <div>
+                              <span className="text-[12.5px] font-bold block leading-tight">{t('4. Kho Hàng & Thành Phẩm', '4. Finished Goods Warehouse')}</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Tự động kiểm đếm, đối soát hàng hoá nhập xuất chi tiết', 'Automatic calculation & verification of finished goods inventory')}</span>
+                            </div>
+                          </button>
+                        )}
+
+                        {/* Tab 5 button link - Giá Thành & Lợi Nhuận Bộ Đồ */}
+                        {allowedTabs.includes('profit_estimator') && (
+                          <button
+                            onClick={() => {
+                              setActiveTab('profit_estimator');
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'profit_estimator' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
+                          >
+                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'profit_estimator' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                              <DollarSign className="w-4 h-4 text-indigo-500" />
+                            </div>
+                            <div>
+                              <span className="text-[12.5px] font-bold block leading-tight">{t('5. Giá Thành & Lợi Nhuận', '5. Pricing & Profit Estimation')}</span>
+                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Dự phóng doanh thu, giá vốn gia công định lượng', 'Automatic cost-profit forecasting using raw material recipes')}</span>
+                            </div>
+                          </button>
+                        )}
+
                         {/* Tab Gallery button link */}
                         {allowedTabs.includes('gallery') && (
                           <button
@@ -2291,7 +2774,7 @@ export default function App() {
                             <button
                               key={tab.id}
                               onClick={() => setSettingsActiveTab(tab.id as any)}
-                              className={`flex-1 py-1.5 px-0.5 rounded-lg flex flex-col items-center justify-center gap-0.5 text-[10px] transition cursor-pointer leading-none min-w-0 ${isActive ? 'bg-white dark:bg-slate-900 text-indigo-650 dark:text-indigo-400 shadow-xs font-bold font-sans' : 'text-slate-505 dark:text-slate-450 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                              className={`flex-1 py-1.5 px-0.5 rounded-lg flex flex-col items-center justify-center gap-0.5 text-[10px] transition cursor-pointer leading-none min-w-0 ${isActive ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold font-sans' : 'text-slate-500 dark:text-slate-450 hover:text-slate-700 dark:hover:text-slate-300'}`}
                             >
                               <Icon className="w-3.5 h-3.5" />
                               <span className="truncate">{tab.label}</span>
@@ -2308,14 +2791,16 @@ export default function App() {
                               Bật/Tắt hiển thị ngoài trang chủ:
                             </p>
                             
-                            <div className="space-y-1 bg-white dark:bg-slate-950 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-800 select-none">
+                            <div className="space-y-1 bg-white dark:bg-slate-950 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-800 select-none max-h-56 overflow-y-auto">
                               {[
                                 { id: 'import', label: '1. Nhập hàng', desc: 'Sản lượng thợ & đơn giá bộ', color: 'text-emerald-500' },
                                 { id: 'invoices', label: '2. Hóa đơn', desc: 'Tạo bill, in nhiệt, nợ sỉ', color: 'text-blue-500' },
                                 { id: 'report', label: '3. Doanh thu', desc: 'Báo cáo thống kê lãi gộp', color: 'text-amber-500' },
                                 { id: 'production', label: '4. Sản xuất', desc: 'Cắt gá & phân tổ may ráp', color: 'text-purple-500' },
-                                { id: 'materials', label: '5. Định mức', desc: 'Định mức nhiên liệu vật tư', color: 'text-teal-500' },
-                                { id: 'gallery', label: '6. Thư viện ảnh', desc: 'Hình ảnh đính kèm sản phẩm', color: 'text-indigo-500' }
+                                { id: 'inventory', label: '5. Kho thành phẩm', desc: 'Kiểm đếm xưởng tự động', color: 'text-emerald-500' },
+                                { id: 'profit_estimator', label: '6. Giá thành & lợi nhuận', desc: 'Dự phóng chi phí & biên lãi sỉ', color: 'text-indigo-500' },
+                                { id: 'materials', label: '7. Định mức', desc: 'Định mức nhiên liệu vật tư', color: 'text-teal-500' },
+                                { id: 'gallery', label: '8. Thư viện ảnh', desc: 'Hình ảnh đính kèm sản phẩm', color: 'text-indigo-500' }
                               ].map(feat => {
                                 const isChecked = enabledHomeFeatures.includes(feat.id);
                                 return (
@@ -2400,7 +2885,7 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => fileInputRef.current?.click()}
-                              className="w-full bg-indigo-650 hover:bg-indigo-700 text-white text-[11px] font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
+                              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
                             >
                               <Upload className="w-3.5 h-3.5" />
                               <span>Phục Hồi Dữ Liệu từ File</span>
@@ -2573,6 +3058,49 @@ export default function App() {
                     />
                   </Suspense>
                 </motion.div>
+              ) : activeTab === 'profit_estimator' ? (
+                <motion.div
+                  key="profit-estimator-tab-view"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <ProfitEstimatorTab
+                    materialRecipes={materialRecipes}
+                    rawMaterials={rawMaterials}
+                    operationBreakdowns={operationBreakdowns}
+                  />
+                </motion.div>
+              ) : activeTab === 'inventory' ? (
+                <motion.div
+                  key="inventory-tab-view"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.18 }}
+                  className="bg-white dark:bg-[#0c101d] rounded-2xl border border-slate-200/50 dark:border-slate-800 p-6 shadow-xs max-w-7xl mx-auto"
+                >
+                  <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800/80 mb-6 text-left">
+                    <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450">
+                      <Boxes className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h1 className="text-lg font-black text-slate-850 dark:text-slate-200 uppercase tracking-wider font-mono">
+                        Kho Hàng & Thành Phẩm
+                      </h1>
+                      <p className="text-[11px] text-slate-455 dark:text-slate-400 mt-0.5 font-sans">
+                        Tự động kiểm đếm, đối soát hàng hoá nhập xuất chi tiết theo thời gian thực.
+                      </p>
+                    </div>
+                  </div>
+                  <ReportInventoryDetail
+                    items={items}
+                    bills={bills}
+                    customers={customers}
+                    setActiveTab={setActiveTab}
+                  />
+                </motion.div>
               ) : activeTab === 'report' ? (
                 <motion.div
                   key="report-tab-view"
@@ -2590,6 +3118,7 @@ export default function App() {
                     setActiveTab={setActiveTab}
                     payments={payments}
                     laborPayments={laborPayments}
+                    customers={customers}
                   />
                 </motion.div>
               ) : activeTab === 'settings' ? (
@@ -2642,78 +3171,297 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
                   transition={{ duration: 0.18 }}
-                  className="space-y-4 max-w-2xl mx-auto font-sans"
+                  className="space-y-4 max-w-2xl mx-auto font-sans pb-12"
                 >
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
-                    <h2 className="text-base font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5 leading-none">
-                      <Bell className="w-5 h-5 text-indigo-505" />
-                      <span>Nhật ký truy cập và thông báo</span>
-                    </h2>
-                  </div>
-                  <div className="space-y-3">
-                    {(!authState?.loginNotifications || authState.loginNotifications.length === 0) ? (
-                      <p className="text-center py-12 text-slate-405 italic text-xs">Không có lịch sử đăng nhập hay cấu hình bảo mật mới.</p>
-                    ) : (
-                      (authState?.loginNotifications || []).map(notif => {
-                        const isSystem = notif.device.includes("Hệ thống tự động");
-                        const isRealtimeUpdate = !isSystem && !!notif.targetType;
-                        
-                        let displayTitle = "🔐 Đăng nhập thành công";
-                        let titleIcon = <Shield className="w-3.5 h-3.5 mt-0.5 text-indigo-400" />;
-                        
-                        if (isSystem) {
-                          displayTitle = "🔄 Tự động đồng bộ ngày mới & hệ thống";
-                          titleIcon = <RefreshCw className="w-3.5 h-3.5 mt-0.5 text-emerald-500 animate-spin-slow" />;
-                        } else if (notif.targetType === 'import') {
-                          displayTitle = "📅 Lô Nhập Hàng Đã Cập Nhật";
-                          titleIcon = <Boxes className="w-3.5 h-3.5 mt-0.5 text-blue-500" />;
-                        } else if (notif.targetType === 'invoice') {
-                          displayTitle = "🧾 Viết Hoá Đơn Đã Cập Nhật";
-                          titleIcon = <Receipt className="w-3.5 h-3.5 mt-0.5 text-amber-500" />;
-                        } else if (notif.targetType === 'material') {
-                          displayTitle = "📦 Kho Định Mức Đã Cập Nhật";
-                          titleIcon = <Package className="w-3.5 h-3.5 mt-0.5 text-rose-500" />;
-                        }
+                  {/* Title & Selection controls in Card */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <h2 className="text-base font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5 leading-none">
+                        <Bell className="w-5 h-5 text-indigo-505" />
+                        <span>Nhật ký truy cập & thông báo</span>
+                      </h2>
+                      
+                      <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                        {/* 2. Mark all as read button */}
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={markAllNotificationsAsRead}
+                            className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-900/50 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Đọc tất cả ({unreadCount})</span>
+                          </button>
+                        )}
 
-                        return (
-                          <div
-                            key={notif.id}
+                        {/* Checkboxes Toggle / Multi-select Trigger */}
+                        <button
+                          onClick={() => {
+                            setIsMultiSelectNotifActive(!isMultiSelectNotifActive);
+                            setSelectedNotifIds([]);
+                          }}
+                          className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isMultiSelectNotifActive 
+                              ? "bg-indigo-50 border-indigo-205 text-indigo-600 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-400"
+                              : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-850 dark:hover:bg-slate-800 dark:border-slate-750 dark:text-slate-300"
+                          }`}
+                        >
+                          {isMultiSelectNotifActive ? (
+                            <>
+                              <X className="w-3.5 h-3.5" />
+                              <span>Hủy chọn nhiều</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckSquare className="w-3.5 h-3.5" />
+                              <span>Chọn nhiều để xoá</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Filter buttons for each unique account */}
+                    {authState?.loginNotifications && authState.loginNotifications.length > 0 && (
+                      <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-850">
+                        <div className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                          <Filter className="w-3 h-3" />
+                          <span>LỌC ĐỘC LẬP THEO TÀI KHOẢN</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {/* All option */}
+                          <button
                             onClick={() => {
-                              if (isRealtimeUpdate) {
-                                handleNotificationClick(notif);
-                              }
+                              setNotifAccountFilter('all');
+                              setSelectedNotifIds([]);
                             }}
-                            className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl relative group text-xs shadow-2xs transition-all ${
-                              isRealtimeUpdate 
-                                ? "border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 cursor-pointer hover:shadow-md hover:-translate-y-0.5" 
-                                : "border-slate-200 dark:border-slate-800"
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all border flex items-center gap-1.5 ${
+                              notifAccountFilter === 'all'
+                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-850 dark:border-slate-800 dark:text-slate-350 dark:hover:bg-slate-800'
                             }`}
                           >
-                            <div className="flex gap-2 text-[10.5px] text-slate-400 font-mono">
-                              {titleIcon}
-                              <span>{notif.time}</span>
-                              {isRealtimeUpdate && (
-                                <span className="text-[9.5px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.2 rounded ml-auto">
-                                  Dữ liệu đồng bộ
-                                </span>
-                              )}
-                            </div>
-                            <p className="font-bold text-slate-800 dark:text-slate-200 mt-2 text-sm leading-none">
-                              {displayTitle}
-                            </p>
-                            <p className="text-slate-500 mt-1">
-                              Địa chỉ: <span className="font-mono text-emerald-650 dark:text-emerald-400 font-bold">{notif.ip}</span> | Vị trí: <span className="font-semibold text-slate-600 dark:text-slate-300">{notif.location}</span>
-                            </p>
-                            <p className="text-[11px] font-medium text-slate-400 mt-2 font-mono bg-slate-50 dark:bg-zinc-950 p-2 rounded-lg border border-slate-100 dark:border-slate-850 whitespace-pre-wrap">{notif.device}</p>
-                            {isRealtimeUpdate && (
-                              <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-850 flex items-center justify-end text-[10px] text-indigo-600 dark:text-indigo-400 font-bold gap-1">
-                                <span>Chuyển đến mục xem ngay</span>
-                                <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                              </div>
-                            )}
+                            <span>Tất cả ({authState.loginNotifications.length})</span>
+                          </button>
+
+                          {/* Dynamic Account filters */}
+                          {uniqueAccounts.map(acc => {
+                            const count = accountCounts[acc] || 0;
+                            const isSystemAcc = acc === "Hệ thống";
+                            const icon = isSystemAcc ? <RefreshCw className="w-3 h-3 text-emerald-500" /> : <User className="w-3 h-3 text-indigo-500" />;
+                            return (
+                              <button
+                                key={acc}
+                                onClick={() => {
+                                  setNotifAccountFilter(acc);
+                                  setSelectedNotifIds([]);
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all border flex items-center gap-1.5 ${
+                                  notifAccountFilter === acc
+                                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-850 dark:border-slate-800 dark:text-slate-350 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                {icon}
+                                <span className="font-mono text-[11px]">{acc} ({count})</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bulk select operations bar */}
+                    {isMultiSelectNotifActive && filteredNotifs.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-indigo-50/50 dark:bg-indigo-950/15 rounded-xl border border-indigo-100 dark:border-indigo-950/40">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSelectAllNotifs}
+                            className="bg-white hover:bg-slate-50 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-750 text-indigo-600 dark:text-indigo-400 font-bold text-xs px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center gap-1 transition-all"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Chọn hết ({filteredNotifs.length})</span>
+                          </button>
+                          
+                          {selectedNotifIds.length > 0 && (
+                            <button
+                              onClick={handleDeselectAllNotifs}
+                              className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 font-bold text-xs px-2 py-1.5 rounded-lg cursor-pointer transition-all"
+                            >
+                              <span>Bỏ chọn</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {notifAccountFilter !== 'all' && (
+                            <button
+                              onClick={handleDeleteAllForCurrentAccount}
+                              className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold text-xs px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center gap-1 transition-all dark:bg-red-950/20 dark:border-red-900/30 dark:text-red-400"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Xoá hết nhóm này</span>
+                            </button>
+                          )}
+
+                          <button
+                            disabled={selectedNotifIds.length === 0}
+                            onClick={handleDeleteSelectedNotifs}
+                            className={`font-black text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all ${
+                              selectedNotifIds.length > 0
+                                ? "bg-red-600 hover:bg-red-700 text-white cursor-pointer shadow-xs"
+                                : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-650 cursor-not-allowed"
+                            }`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Xoá {selectedNotifIds.length} mục đã chọn</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* List of Notification items */}
+                  <div className="space-y-6">
+                    {filteredNotifs.length === 0 ? (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center text-slate-400 dark:text-slate-500">
+                        <Bell className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-2 opacity-50" />
+                        <p className="italic text-xs">Không tồn tại nhật ký hoặc cấu hình bảo mật nào.</p>
+                      </div>
+                    ) : (
+                      groupedNotifCategories.map(category => (
+                        <div key={category.key} className="space-y-3">
+                          {/* Group Header */}
+                          <div className="flex items-center gap-2 px-1 pt-1">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600/90 dark:text-indigo-400/90">
+                              {category.label}
+                            </span>
+                            <div className="flex-grow h-px bg-slate-100 dark:bg-slate-850" />
+                            <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-850/60 px-2 py-0.5 rounded-full border border-slate-100 dark:border-slate-800/80">
+                              {category.items.length} mục
+                            </span>
                           </div>
-                        );
-                      })
+
+                          <div className="space-y-3">
+                            {category.items.map(notif => {
+                              const isSystem = notif.device.includes("Hệ thống tự động");
+                              const isRealtimeUpdate = !isSystem && !!notif.targetType;
+                              const isSelected = selectedNotifIds.includes(notif.id);
+                              
+                              let displayTitle = "🔐 Đăng nhập thành công";
+                              let titleIcon = <Shield className="w-3.5 h-3.5 mt-0.5 text-indigo-400" />;
+                              
+                              if (isSystem) {
+                                displayTitle = "🔄 Tự động đồng bộ ngày mới & hệ thống";
+                                titleIcon = <RefreshCw className="w-3.5 h-3.5 mt-0.5 text-emerald-500 animate-spin-slow" />;
+                              } else if (notif.targetType === 'import') {
+                                displayTitle = "📅 Lô Nhập Hàng Đã Cập Nhật";
+                                titleIcon = <Boxes className="w-3.5 h-3.5 mt-0.5 text-blue-500" />;
+                              } else if (notif.targetType === 'invoice') {
+                                displayTitle = "🧾 Viết Hoá Đơn Đã Cập Nhật";
+                                titleIcon = <Receipt className="w-3.5 h-3.5 mt-0.5 text-amber-500" />;
+                              } else if (notif.targetType === 'material') {
+                                displayTitle = "📦 Kho Định Mức Đã Cập Nhật";
+                                titleIcon = <Package className="w-3.5 h-3.5 mt-0.5 text-rose-500" />;
+                              }
+
+                              return (
+                                <div
+                                  key={notif.id}
+                                  onClick={() => {
+                                    if (isMultiSelectNotifActive) {
+                                      toggleSelectNotif(notif.id);
+                                    } else if (isRealtimeUpdate) {
+                                      handleNotificationClick(notif);
+                                    }
+                                  }}
+                                  className={`p-4 bg-white dark:bg-slate-900 border rounded-2xl relative group text-xs shadow-2xs transition-all flex gap-3.5 ${
+                                    isMultiSelectNotifActive 
+                                      ? "border-slate-250 dark:border-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-950/30 cursor-pointer" 
+                                      : isRealtimeUpdate 
+                                        ? "border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 cursor-pointer hover:shadow-md hover:-translate-y-0.5" 
+                                        : "border-slate-200 dark:border-slate-800"
+                                  } ${isSelected ? "ring-2 ring-indigo-500/80 bg-indigo-500/[0.02] dark:bg-indigo-500/[0.01]" : ""}`}
+                                >
+                                  {/* Checkbox on left when multi-select active */}
+                                  {isMultiSelectNotifActive && (
+                                    <div className="flex items-center flex-shrink-0">
+                                      {isSelected ? (
+                                        <CheckSquare className="w-5 h-5 text-indigo-600 dark:text-indigo-400 transition-transform scale-110" />
+                                      ) : (
+                                        <Square className="w-5 h-5 text-slate-300 dark:text-slate-700 hover:text-slate-400 dark:hover:text-slate-600 transition-colors" />
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Main notification body */}
+                                  <div className="flex-grow min-w-0">
+                                    <div className="flex gap-2 text-[10.5px] text-slate-400 font-mono items-center">
+                                      {titleIcon}
+                                      <span>{notif.time}</span>
+                                      {isRealtimeUpdate && (
+                                        <span className="text-[9.5px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.2 rounded ml-auto flex-shrink-0">
+                                          Dữ liệu đồng bộ
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-2 text-sm leading-none">
+                                      {displayTitle}
+                                    </p>
+                                    <p className="text-slate-500 mt-1">
+                                      Địa chỉ: <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{notif.ip}</span> | Vị trí: <span className="font-semibold text-slate-600 dark:text-slate-300">{notif.location}</span>
+                                    </p>
+                                    <p className="text-[11px] font-medium text-slate-400 mt-2 font-mono bg-slate-50 dark:bg-zinc-950 p-2 rounded-lg border border-slate-100 dark:border-slate-850 whitespace-pre-wrap">{notif.device}</p>
+                                    
+                                    {/* Detailed Connection & Cloud Sync status badge */}
+                                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                                      {notif.ip === 'Thành công' || isSystem ? (
+                                        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 px-2.5 py-0.5 rounded-md font-semibold border border-emerald-100/60 dark:border-emerald-900/40">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                          Đã lưu trữ thành công trên Firestore (Cloud)
+                                        </span>
+                                      ) : syncStatus === 'error' ? (
+                                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 dark:bg-amber-950/35 dark:text-amber-400 px-2.5 py-0.5 rounded-md font-semibold border border-amber-100/50 dark:border-amber-900/30 animate-pulse">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                          Lưu cục bộ (Chờ kết nối internet để đồng bộ)
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 bg-indigo-50/75 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 px-2.5 py-0.5 rounded-md font-semibold border border-indigo-100/50 dark:border-indigo-900/40">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                          Đã đồng bộ an toàn lên Firestore
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Direct sync update click indicators */}
+                                    {isRealtimeUpdate && !isMultiSelectNotifActive && (
+                                      <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-850 flex items-center justify-end text-[10px] text-indigo-600 dark:text-indigo-400 font-bold gap-1">
+                                        <span>Chuyển đến mục xem ngay</span>
+                                        <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Standalone delete button when NOT in multi-select mode */}
+                                  {!isMultiSelectNotifActive && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Avoid triggering card click
+                                        if (window.confirm("Bạn muốn xoá thông báo này?")) {
+                                          deleteNotification(notif.id);
+                                        }
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 hover:text-red-655 dark:hover:bg-red-950/30 dark:hover:text-red-400 text-slate-400 dark:text-slate-600 transition-all self-start flex-shrink-0 cursor-pointer"
+                                      title="Xoá thông báo này"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
                 </motion.div>
@@ -2747,6 +3495,17 @@ export default function App() {
               >
                 <BarChart3 className="w-4.5 h-4.5" />
                 <span className="text-[9.5px]">Báo cáo</span>
+              </button>
+            )}
+
+            {/* 2.5 Kho Hàng */}
+            {allowedTabs.includes('inventory') && (
+              <button
+                onClick={() => setActiveTab('inventory')}
+                className={`flex-1 flex flex-col items-center gap-1 cursor-pointer transition-all ${activeTab === 'inventory' ? 'text-indigo-400 scale-105 font-bold' : 'text-slate-400 hover:text-slate-250'}`}
+              >
+                <Boxes className="w-4.5 h-4.5 text-emerald-405" />
+                <span className="text-[9.5px]">Kho</span>
               </button>
             )}
 

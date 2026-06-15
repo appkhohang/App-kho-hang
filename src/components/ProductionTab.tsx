@@ -224,6 +224,8 @@ export default function ProductionTab({
   const [editBatchQty, setEditBatchQty] = useState<number>(0);
   const [editBatchDate, setEditBatchDate] = useState('');
 
+
+
   // Quick stats
   const totalWorkers = workers.length;
   const totalMaterials = rawMaterials.length;

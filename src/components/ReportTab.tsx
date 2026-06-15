@@ -22,7 +22,9 @@ import {
   Truck,
   Users
 } from 'lucide-react';
-import { ImportItem, Bill, ProductionBatch, Worker, WorkerJob, PaymentRecord, LaborPayment } from '../types';
+import { ImportItem, Bill, ProductionBatch, Worker, WorkerJob, PaymentRecord, LaborPayment, Customer } from '../types';
+import { useAndroidBack } from '../hooks/useAndroidBack';
+import ReportInventoryDetail from './ReportInventoryDetail';
 
 interface ReportTabProps {
   items: ImportItem[];
@@ -33,6 +35,7 @@ interface ReportTabProps {
   setActiveTab?: (tab: 'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery') => void;
   payments?: PaymentRecord[];
   laborPayments?: LaborPayment[];
+  customers?: Customer[];
 }
 
 type PeriodType = 'day' | 'week' | 'month' | 'all';
@@ -46,7 +49,8 @@ export default function ReportTab({
   workerJobs = [],
   setActiveTab,
   payments = [],
-  laborPayments = []
+  laborPayments = [],
+  customers = []
 }: ReportTabProps) {
 
   // 1. Core navigation and active tab states
@@ -54,6 +58,8 @@ export default function ReportTab({
   const [period, setPeriod] = useState<PeriodType>('day');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [chartValueType, setChartValueType] = useState<'value' | 'quantity'>('value');
+
+  useAndroidBack(showPeriodMenu, () => setShowPeriodMenu(false));
 
   // 2. Intelligently pre-calculate the latest active date in database to show meaningful data on initial load
   const latestDateStr = useMemo(() => {
@@ -718,213 +724,223 @@ export default function ReportTab({
           </div>
         </div>
 
-        {/* 5. HOURLY GRID CHART COMPONENT */}
-        <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs">
-          
-          {/* Header selector inside graph */}
-          <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100 dark:border-slate-800/60 mb-4">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-black text-slate-700 dark:text-slate-250 font-sans">
-                Biểu đồ xu hướng theo
-              </span>
-            </div>
-
-            {/* Custom Mini Select Box dropdown for value/quantity */}
-            <select
-              value={chartValueType}
-              onChange={(e) => setChartValueType(e.target.value as 'value' | 'quantity')}
-              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-705 px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-600 dark:text-emerald-450 focus:outline-none transition cursor-pointer"
-            >
-              <option value="value">Doanh thu (đ)</option>
-              <option value="quantity">Sản lượng (chiếc)</option>
-            </select>
-          </div>
-
-          {/* Graph Legend items */}
-          <div className="flex items-center justify-center gap-6 text-[10px] text-slate-400 font-bold uppercase font-mono tracking-wider mb-4">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 block" />
-              <span>Hôm nay ({formatDisplayDate(selectedDate).substring(0, 5)})</span>
-            </div>
-            
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 border-t-2 border-dashed border-amber-500 block" />
-              <span>Hôm qua</span>
-            </div>
-          </div>
-
-          {/* HIGH POLISHED RESPONSIVE SVG VECTOR GRAPH */}
-          <div className="w-full relative overflow-x-auto scrollbar-none py-1">
-            <div className="min-w-[550px] h-[190px] relative">
+        {activeSubTab === 'inventory' ? (
+          <ReportInventoryDetail
+            items={items}
+            bills={bills}
+            customers={customers}
+          />
+        ) : (
+          <>
+            {/* 5. HOURLY GRID CHART COMPONENT */}
+            <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs">
               
-              <svg className="w-full h-full" viewBox="0 0 570 185" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Horizontal grid guide lines */}
-                {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
-                  const y = 15 + ratio * 135;
-                  const stepLabel = Math.round((lineChartPoints.max * (1 - ratio)));
-                  let labelStr = stepLabel >= 1000000 ? `${(stepLabel / 1000000).toFixed(0)}tr` : `${(stepLabel / 1000).toFixed(0)}k`;
-                  if (stepLabel === 0) labelStr = '0tr';
-                  
-                  return (
-                    <g key={idx}>
-                      <line x1="35" y1={y} x2="550" y2={y} stroke="#f1f5f9" className="dark:stroke-slate-800/60" strokeWidth="1" strokeDasharray="4,4" />
-                      <text x="5" y={y + 4} fill="#94a3b8" className="text-[9px] font-mono font-bold">{labelStr}</text>
-                    </g>
-                  );
-                })}
-
-                {/* Draw Areas under Curves for gorgeous visual overlay */}
-                {/* 1. Today filled gradient area */}
-                <path
-                  d={`${getCurvePathString(lineChartPoints.today)} L ${lineChartPoints.today[lineChartPoints.today.length - 1].x} 150 L ${lineChartPoints.today[0].x} 150 Z`}
-                  fill="url(#todayAreaGradient)"
-                  opacity="0.08"
-                />
-
-                {/* 2. Yesterday Curve (Amber Dashed line) */}
-                <path
-                  d={getCurvePathString(lineChartPoints.yesterday)}
-                  fill="none"
-                  stroke="#f59e0b"
-                  strokeWidth="2.5"
-                  strokeDasharray="5,4"
-                  strokeLinecap="round"
-                />
-
-                {/* 1. Today Curve (Solid Blue line) */}
-                <path
-                  d={getCurvePathString(lineChartPoints.today)}
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeWidth="3.2"
-                  strokeLinecap="round"
-                />
-
-                {/* Intersect point dots to give precision UI look */}
-                {lineChartPoints.today.map((pt, idx) => (
-                  <g key={idx}>
-                    {/* Pulsing point border */}
-                    <circle cx={pt.x} cy={pt.y} r="5" fill="#ffffff" stroke="#3b82f6" strokeWidth="2.5" />
-                    {/* Tooltip value bubble on hover */}
-                    <text x={pt.x} y={pt.y - 10} fill="#3b82f6" className="text-[8.5px] font-mono font-black" textAnchor="middle">
-                      {pt.val > 0 ? (pt.val >= 1000000 ? `${(pt.val / 1000000).toFixed(1)}tr` : `${(pt.val / 1000).toFixed(0)}k`) : ''}
-                    </text>
-                  </g>
-                ))}
-
-                {/* X Axis time indicators */}
-                {lineChartPoints.intervals.map((time, idx) => {
-                  const x = 35 + (idx * 85);
-                  return (
-                    <text key={idx} x={x} y="174" fill="#94a3b8" className="text-[10px] font-mono font-bold" textAnchor="middle">
-                      {time}
-                    </text>
-                  );
-                })}
-
-                {/* Define gradient parameters inside SVG tags */}
-                <defs>
-                  <linearGradient id="todayAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3b82f6" />
-                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-              </svg>
-
-            </div>
-          </div>
-        </div>
-
-        {/* 6. PAYMENTS METHODS PROGRESS LIST */}
-        <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs">
-          <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-4">
-            Dòng tiền theo phương thức thanh toán
-          </h3>
-
-          <div className="space-y-4">
-            {paymentMethodDetails.map((method, idx) => (
-              <div key={idx} className="space-y-1.5 text-left">
-                <div className="flex justify-between items-start text-xs">
-                  <div>
-                    <span className="font-semibold text-slate-650 dark:text-slate-300 block">{method.label}</span>
-                    {method.subtext && (
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 normal-case block mt-0.5">
-                        {method.subtext}
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-mono font-extrabold text-slate-800 dark:text-white shrink-0 ml-2 mt-0.5">
-                    {method.amount >= 0 ? '' : '-'}{Math.abs(method.amount).toLocaleString()}đ ({method.percent}%)
+              {/* Header selector inside graph */}
+              <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100 dark:border-slate-800/60 mb-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-black text-slate-705 dark:text-slate-250 font-sans">
+                    Biểu đồ xu hướng theo
                   </span>
                 </div>
 
-                {/* Track progress meter bar */}
-                <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${method.color} rounded-full transition-all duration-500`}
-                    style={{ width: `${Math.max(3, method.percent)}%` }}
-                  />
+                {/* Custom Mini Select Box dropdown for value/quantity */}
+                <select
+                  value={chartValueType}
+                  onChange={(e) => setChartValueType(e.target.value as 'value' | 'quantity')}
+                  className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-705 px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-600 dark:text-emerald-450 focus:outline-none transition cursor-pointer"
+                >
+                  <option value="value">Doanh thu (đ)</option>
+                  <option value="quantity">Sản lượng (chiếc)</option>
+                </select>
+              </div>
+
+              {/* Graph Legend items */}
+              <div className="flex items-center justify-center gap-6 text-[10px] text-slate-400 font-bold uppercase font-mono tracking-wider mb-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 block" />
+                  <span>Hôm nay ({formatDisplayDate(selectedDate).substring(0, 5)})</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 border-t-2 border-dashed border-amber-500 block" />
+                  <span>Hôm qua</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* 7. HIGH ACHIEVING LABOR PRODUCTIVITY REPORT COUPLING */}
-        <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs">
-          <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
-            <div>
-              <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                <Award className="w-5 h-5 text-indigo-500 animate-pulse" />
-                <span>Năng suất tổ thợ may</span>
+              {/* HIGH POLISHED RESPONSIVE SVG VECTOR GRAPH */}
+              <div className="w-full relative overflow-x-auto scrollbar-none py-1">
+                <div className="min-w-[550px] h-[190px] relative">
+                  
+                  <svg className="w-full h-full" viewBox="0 0 570 185" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    {/* Horizontal grid guide lines */}
+                    {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+                      const y = 15 + ratio * 135;
+                      const stepLabel = Math.round((lineChartPoints.max * (1 - ratio)));
+                      let labelStr = stepLabel >= 1000000 ? `${(stepLabel / 1000000).toFixed(0)}tr` : `${(stepLabel / 100).toFixed(0)}k`;
+                      if (stepLabel === 0) labelStr = '0tr';
+                      
+                      return (
+                        <g key={idx}>
+                          <line x1="35" y1={y} x2="550" y2={y} stroke="#f1f5f9" className="dark:stroke-slate-800/60" strokeWidth="1" strokeDasharray="4,4" />
+                          <text x="5" y={y + 4} fill="#94a3b8" className="text-[9px] font-mono font-bold">{labelStr}</text>
+                        </g>
+                      );
+                    })}
+
+                    {/* Draw Areas under Curves for gorgeous visual overlay */}
+                    {/* 1. Today filled gradient area */}
+                    <path
+                      d={`${getCurvePathString(lineChartPoints.today)} L ${lineChartPoints.today[lineChartPoints.today.length - 1].x} 150 L ${lineChartPoints.today[0].x} 150 Z`}
+                      fill="url(#todayAreaGradient)"
+                      opacity="0.08"
+                    />
+
+                    {/* 2. Yesterday Curve (Amber Dashed line) */}
+                    <path
+                      d={getCurvePathString(lineChartPoints.yesterday)}
+                      fill="none"
+                      stroke="#f59e0b"
+                      strokeWidth="2.5"
+                      strokeDasharray="5,4"
+                      strokeLinecap="round"
+                    />
+
+                    {/* 1. Today Curve (Solid Blue line) */}
+                    <path
+                      d={getCurvePathString(lineChartPoints.today)}
+                      fill="none"
+                      stroke="#3b82f6"
+                      strokeWidth="3.2"
+                      strokeLinecap="round"
+                    />
+
+                    {/* Intersect point dots to give precision UI look */}
+                    {lineChartPoints.today.map((pt, idx) => (
+                      <g key={idx}>
+                        {/* Pulsing point border */}
+                        <circle cx={pt.x} cy={pt.y} r="5" fill="#ffffff" stroke="#3b82f6" strokeWidth="2.5" />
+                        {/* Tooltip value bubble on hover */}
+                        <text x={pt.x} y={pt.y - 10} fill="#3b82f6" className="text-[8.5px] font-mono font-black" textAnchor="middle">
+                          {pt.val > 0 ? (pt.val >= 1000000 ? `${(pt.val / 1000000).toFixed(1)}tr` : `${(pt.val / 1000).toFixed(0)}k`) : ''}
+                        </text>
+                      </g>
+                    ))}
+
+                    {/* X Axis time indicators */}
+                    {lineChartPoints.intervals.map((time, idx) => {
+                      const x = 35 + (idx * 85);
+                      return (
+                        <text key={idx} x={x} y="174" fill="#94a3b8" className="text-[10px] font-mono font-bold" textAnchor="middle">
+                          {time}
+                        </text>
+                      );
+                    })}
+
+                    {/* Define gradient parameters inside SVG tags */}
+                    <defs>
+                      <linearGradient id="todayAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+
+                </div>
+              </div>
+            </div>
+
+            {/* 6. PAYMENTS METHODS PROGRESS LIST */}
+            <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs">
+              <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-4">
+                Dòng tiền theo phương thức thanh toán
               </h3>
-              <p className="text-[10px] text-slate-455 mt-0.5">Xếp hạng sản lượng thợ may hoạt động hiệu quả tối ưu.</p>
-            </div>
-          </div>
 
-          {workers.length === 0 ? (
-            <div className="text-center py-6 text-slate-400 dark:text-slate-500 italic text-xs font-bold">
-              Chưa phát sinh nhật ký công đoạn sản xuất để sắp xếp xếp hạng.
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {workers.slice(0, 4).map((worker, position) => {
-                // Calculate productivity and total amounts for this specific worker
-                const workerJobs_ = workerJobs.filter(j => j.workerName === worker.name);
-                const accumulatedQty = workerJobs_.reduce((sum, j) => sum + (j.quantity || 0), 0);
-                const accumulatedSalary = workerJobs_.reduce((sum, j) => sum + (j.totalAmount || 0), 0);
-
-                return (
-                  <div
-                    key={worker.id}
-                    className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 rounded-xl"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-5.5 h-5.5 rounded-lg font-mono font-black text-[10px] flex items-center justify-center ${
-                        position === 0 ? 'bg-amber-100 text-amber-700' :
-                        position === 1 ? 'bg-slate-200 text-slate-700' :
-                        'bg-slate-100 text-slate-500'
-                      }`}>
-                        #{position + 1}
-                      </span>
+              <div className="space-y-4">
+                {paymentMethodDetails.map((method, idx) => (
+                  <div key={idx} className="space-y-1.5 text-left">
+                    <div className="flex justify-between items-start text-xs">
                       <div>
-                        <p className="font-bold text-slate-850 dark:text-slate-205 text-xs">{worker.name}</p>
-                        <p className="text-[9px] text-slate-400 mt-0.5">Sản lượng may: <strong className="text-emerald-600 dark:text-emerald-450 font-black">{accumulatedQty.toLocaleString()} chiếc</strong></p>
+                        <span className="font-semibold text-slate-650 dark:text-slate-300 block">{method.label}</span>
+                        {method.subtext && (
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 normal-case block mt-0.5">
+                            {method.subtext}
+                          </span>
+                        )}
                       </div>
+                      <span className="font-mono font-extrabold text-slate-800 dark:text-white shrink-0 ml-2 mt-0.5">
+                        {method.amount >= 0 ? '' : '-'}{Math.abs(method.amount).toLocaleString()}đ ({method.percent}%)
+                      </span>
                     </div>
 
-                    <div className="text-right font-mono">
-                      <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
-                        {accumulatedSalary.toLocaleString()}đ
-                      </span>
-                      <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-0.5">Tiền công</p>
+                    {/* Track progress meter bar */}
+                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${method.color} rounded-full transition-all duration-500`}
+                        style={{ width: `${Math.max(3, method.percent)}%` }}
+                      />
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* 7. HIGH ACHIEVING LABOR PRODUCTIVITY REPORT COUPLING */}
+            <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs">
+              <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Award className="w-5 h-5 text-indigo-500 animate-pulse" />
+                    <span>Năng suất tổ thợ may</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-455 mt-0.5">Xếp hạng sản lượng thợ may hoạt động hiệu quả tối ưu.</p>
+                </div>
+              </div>
+
+              {workers.length === 0 ? (
+                <div className="text-center py-6 text-slate-400 dark:text-slate-500 italic text-xs font-bold">
+                  Chưa phát sinh nhật ký công đoạn sản xuất để sắp xếp xếp hạng.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {workers.slice(0, 4).map((worker, position) => {
+                    // Calculate productivity and total amounts for this specific worker
+                    const workerJobs_ = workerJobs.filter(j => j.workerName === worker.name);
+                    const accumulatedQty = workerJobs_.reduce((sum, j) => sum + (j.quantity || 0), 0);
+                    const accumulatedSalary = workerJobs_.reduce((sum, j) => sum + (j.totalAmount || 0), 0);
+
+                    return (
+                      <div
+                        key={worker.id}
+                        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 rounded-xl"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`w-5.5 h-5.5 rounded-lg font-mono font-black text-[10px] flex items-center justify-center ${
+                            position === 0 ? 'bg-amber-100 text-amber-700' :
+                            position === 1 ? 'bg-slate-200 text-slate-700' :
+                            'bg-slate-100 text-slate-500'
+                          }`}>
+                            #{position + 1}
+                          </span>
+                          <div>
+                            <p className="font-bold text-slate-850 dark:text-slate-205 text-xs">{worker.name}</p>
+                            <p className="text-[9px] text-slate-400 mt-0.5">Sản lượng may: <strong className="text-emerald-600 dark:text-emerald-450 font-black">{accumulatedQty.toLocaleString()} chiếc</strong></p>
+                          </div>
+                        </div>
+
+                        <div className="text-right font-mono">
+                          <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
+                            {accumulatedSalary.toLocaleString()}đ
+                          </span>
+                          <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-0.5">Tiền công</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
       </div>
 

@@ -12,6 +12,7 @@ import {
 import { ImportItem, Bill, Customer } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { LazyImage } from './LazyImage';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 
 interface GalleryTabProps {
   items: ImportItem[];
@@ -63,6 +64,14 @@ export default function GalleryTab({
   // States for mass multi-selection of photos
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  useAndroidBack(selectedMedia !== null, () => setSelectedMedia(null));
+  useAndroidBack(isZoomed, () => setIsZoomed(false));
+  useAndroidBack(isImmersiveFS, () => setIsImmersiveFS(false));
+  useAndroidBack(isSelectMode, () => {
+    setIsSelectMode(false);
+    setSelectedIds([]);
+  });
 
   const handleSelectAll = () => {
     setSelectedIds(filteredGallery.map(m => m.id));

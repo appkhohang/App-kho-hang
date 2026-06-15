@@ -3,19 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera, ChevronRight, Info, Calendar, CheckSquare } from 'lucide-react';
 import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietnameseMonthKey } from '../utils/dateUtils';
 import { exportDatabasePackage } from '../utils/storage';
-
-const LaborPaymentReceiptModal = lazy(() => import('./LaborPaymentReceiptModal'));
-const CameraCapture = lazy(() => import('./CameraCapture'));
-
 import { useAndroidBack } from '../hooks/useAndroidBack';
 import { LazyImage } from './LazyImage';
 import * as XLSX from 'xlsx';
+
+const LaborPaymentReceiptModal = lazy(() => import('./LaborPaymentReceiptModal'));
+const CameraCapture = lazy(() => import('./CameraCapture'));
 
 interface GoodsImportTabProps {
   items: ImportItem[];
@@ -53,7 +52,7 @@ export default function GoodsImportTab({
   const isViewer = false;
 
   // React effect to auto expand the form if requested via floating action button on home
-  React.useEffect(() => {
+  useEffect(() => {
     if (autoExpandForm) {
       setIsFormExpanded(true);
       if (onAutoExpandFormReset) {
@@ -63,7 +62,7 @@ export default function GoodsImportTab({
   }, [autoExpandForm, onAutoExpandFormReset]);
 
   // Get unique recent import items for Quick Action shortcuts
-  const recentUniqueItems = React.useMemo(() => {
+  const recentUniqueItems = useMemo(() => {
     const uniques: ImportItem[] = [];
     const seen = new Set<string>();
     // Iterate from newest to oldest
@@ -195,6 +194,11 @@ export default function GoodsImportTab({
   useAndroidBack(activeWeekForLaborPay !== null, () => setActiveWeekForLaborPay(null));
   useAndroidBack(selectedLaborPaymentForModal !== null, () => setSelectedLaborPaymentForModal(null));
   useAndroidBack(selectedItemForModal !== null, () => setSelectedItemForModal(null));
+  useAndroidBack(isFormExpanded, () => setIsFormExpanded(false));
+  useAndroidBack(isMultiSelectMode, () => {
+    setIsMultiSelectMode(false);
+    setSelectedItemIds([]);
+  });
 
   const startModalEdit = (item: ImportItem) => {
     setIsDetailEditing(true);
@@ -276,7 +280,7 @@ export default function GoodsImportTab({
   };
 
   // File Upload Ref for Restoration
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Add Item Submit
   const handleAddItem = (e: React.FormEvent) => {
@@ -540,7 +544,7 @@ export default function GoodsImportTab({
   });
 
   // Calculate totals for currently displayed items
-  const displayedTotals = React.useMemo(() => {
+  const displayedTotals = useMemo(() => {
     const isWeekMode = filterMode === 'week';
     const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
     const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
@@ -849,6 +853,22 @@ export default function GoodsImportTab({
                         />
                       </div>
                     </div>
+
+                    {/* Real-time calculated subtotal badge for faster verification */}
+                    {Number(sốLượng) > 0 && Number(đơnGiáMay) > 0 && (
+                      <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 animate-fadeIn">
+                        <div className="flex items-center gap-2">
+                          <span className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-600 dark:text-emerald-400 shrink-0">💵</span>
+                          <div>
+                            <p className="text-[10px] uppercase font-black text-slate-400 dark:text-slate-500">Thành tiền hàng tự động tính</p>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-350 font-medium">Hệ thống nhân nhẩm: {Number(sốLượng).toLocaleString()} chiếc × {Number(đơnGiáMay).toLocaleString()} đ/chiếc</p>
+                          </div>
+                        </div>
+                        <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/15 whitespace-nowrap self-start sm:self-center">
+                          {(Number(sốLượng) * Number(đơnGiáMay)).toLocaleString()} đ
+                        </span>
+                      </div>
+                    )}
 
                     {/* Camera Capture for Goods Item */}
                     <div className="border-t border-slate-100 dark:border-slate-805/40 pt-2 pb-1">
