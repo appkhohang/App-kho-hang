@@ -9,23 +9,24 @@ on:
 jobs:
   deploy-live-update:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Build production app
+      - name: Build App
         run: npm run build
 
-      - name: Upload and deploy to Capgo
+      - name: Upload to Capgo
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_API_KEY }}
-        run: npx @capgo/cli@latest upload --apikey "$CAPGO_TOKEN"
+        run: |
+          npx @capgo/cli bundle upload \
+          -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 \
+          -c production
