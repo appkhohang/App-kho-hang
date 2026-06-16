@@ -38,6 +38,43 @@ interface ReportInventoryDetailProps {
   setActiveTab?: (tab: 'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery' | 'inventory') => void;
 }
 
+function removeVietnameseTones(str: string): string {
+  if (!str) return "";
+  let res = str;
+  res = res.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+  res = res.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+  res = res.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+  res = res.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  res = res.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+  res = res.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+  res = res.replace(/đ/g, "d");
+  res = res.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+  res = res.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+  res = res.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+  res = res.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+  res = res.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+  res = res.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+  res = res.replace(/Đ/g, "D");
+  // Combine accents
+  res = res.replace(/\u0300|\u0301|\u0309|\u0303|\u0323/g, "");
+  res = res.replace(/\u02C6|\u0306|\u031B/g, "");
+  return res;
+}
+
+function cleansAndSortsWords(name: string): string {
+  if (!name) return "";
+  const noTones = removeVietnameseTones(name.trim().toLowerCase());
+  // Replace all non-alphanumeric/spaces with space
+  const basic = noTones.replace(/[^a-z0-9\s]/gi, " ");
+  // Split, sort, join
+  return basic.split(/\s+/).filter(Boolean).sort().join(" ");
+}
+
+function isModelNameMatch(nameA: string, nameB: string): boolean {
+  if (!nameA || !nameB) return false;
+  return cleansAndSortsWords(nameA) === cleansAndSortsWords(nameB);
+}
+
 export default function ReportInventoryDetail({
   items = [],
   bills = [],
@@ -140,6 +177,17 @@ export default function ReportInventoryDetail({
 
   // 2. Compute warehouse stock for each model with estimated cost basis
   const inventoryList = useMemo(() => {
+    // Load saved profit estimates
+    let savedEstimates: any[] = [];
+    try {
+      const saved = localStorage.getItem('xuongan_saved_profit_estimates');
+      if (saved) {
+        savedEstimates = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Error loading saved profit estimates in ReportInventoryDetail', e);
+    }
+
     return allModels.map((modelName, index) => {
       // Find all imports of this model
       const modelImports = items.filter(i => i.mẫu && i.mẫu.trim() === modelName);
@@ -167,9 +215,14 @@ export default function ReportInventoryDetail({
       // Calculate automatic current stock (which auto-updates from imports/sales and is exactly 0 if sold out)
       const currentStock = Math.max(0, totalImported - totalSold);
 
+      // Check if we have a saved estimate in "Giá thành & lợi nhuận"
+      const matchedEstimate = savedEstimates.find(
+        (est: any) => est.modelName && isModelNameMatch(est.modelName, modelName)
+      );
+
       // Find average import cost to calculate estimated total warehouse stock value
       const importPrices = modelImports.map(i => i.đơnGiáMay || 0).filter(p => p > 0);
-      const averageImportPrice = importPrices.length > 0 
+      let averageImportPrice = importPrices.length > 0 
         ? Math.round(importPrices.reduce((s, c) => s + c, 0) / importPrices.length)
         : 120000; // Realistic default price per suit: 120k đ
 
@@ -184,9 +237,19 @@ export default function ReportInventoryDetail({
           });
         }
       });
-      const averageSalePrice = salePrices.length > 0
+      let averageSalePrice = salePrices.length > 0
         ? Math.round(salePrices.reduce((s, c) => s + c, 0) / salePrices.length)
         : Math.round(averageImportPrice * 1.35); // markup standard fallback if never sold yet
+
+      // Overwrite with saved estimate if exists
+      if (matchedEstimate) {
+        if (matchedEstimate.totalProductionCost > 0) {
+          averageImportPrice = Math.round(matchedEstimate.totalProductionCost);
+        }
+        if (matchedEstimate.calcTargetSalePrice > 0) {
+          averageSalePrice = Math.round(matchedEstimate.calcTargetSalePrice);
+        }
+      }
 
       const estimatedStockValue = Math.max(0, currentStock) * averageImportPrice;
 
@@ -205,7 +268,8 @@ export default function ReportInventoryDetail({
         estimatedStockValue,
         importSessions: modelImports.length,
         saleTransactions: salesCount,
-        photo: modelImports.find(img => img.photo)?.photo || null
+        photo: modelImports.find(img => img.photo)?.photo || null,
+        hasSavedProfitEstimate: !!matchedEstimate
       };
     });
   }, [allModels, items, bills, manualAdjustments]);
@@ -286,6 +350,7 @@ export default function ReportInventoryDetail({
   const summaryStats = useMemo(() => {
     let totalStockPcs = 0;
     let totalValue = 0;
+    let totalProfit = 0;
     let modelsInStockCount = 0;
     let modelsOutCount = 0;
     let modelsNegativeCount = 0;
@@ -293,6 +358,12 @@ export default function ReportInventoryDetail({
     inventoryList.forEach(item => {
       totalStockPcs += item.currentStock;
       totalValue += item.estimatedStockValue;
+      
+      // Lợi nhuận dự tính = (giá bán - chi phí gốc) * số lượng trong kho
+      const profitPerUnit = Math.max(0, item.averageSalePrice - item.averageImportPrice);
+      const stockQty = Math.max(0, item.currentStock);
+      totalProfit += stockQty * profitPerUnit;
+
       if (item.currentStock > 0) {
         modelsInStockCount++;
       } else if (item.currentStock === 0) {
@@ -305,6 +376,7 @@ export default function ReportInventoryDetail({
     return {
       totalStockPcs,
       totalValue,
+      totalProfit,
       modelsInStockCount,
       modelsOutCount,
       modelsNegativeCount,
@@ -373,18 +445,40 @@ export default function ReportInventoryDetail({
 
   // 6. Handle exporting the entire warehouse inventory details to CSV format
   const handleExportCSV = () => {
-    const headers = ['Mã SKU', 'Tên mẫu mã', 'Số lượng nhập tích lũy', 'Sản lượng xuất bán', 'Tồn kho khả dụng', 'Ước tính giá trị tồn', 'Trạng thái kho', 'Số lần nhập', 'Số lần xuất hóa đơn'];
-    const rows = filteredAndSortedList.map(item => [
-      item.sku,
-      item.modelName,
-      item.totalImported,
-      item.totalSold,
-      item.currentStock,
-      item.estimatedStockValue,
-      item.currentStock > 0 ? 'Còn hàng' : item.currentStock === 0 ? 'Hết hàng' : 'Thiếu hụt / Nợ kho',
-      item.importSessions,
-      item.saleTransactions
-    ]);
+    const headers = [
+      'Mã SKU', 
+      'Tên mẫu mã', 
+      'Số lượng nhập tích lũy', 
+      'Sản lượng xuất bán', 
+      'Tồn kho khả dụng', 
+      'Chi phí gốc (Giá thành)', 
+      'Ước tính giá trị tồn', 
+      'Giá bán sỉ TB', 
+      'Lợi nhuận/bộ', 
+      'Lợi nhuận tồn kho dự phòng', 
+      'Trạng thái kho', 
+      'Số lần nhập', 
+      'Số lần xuất hóa đơn'
+    ];
+    const rows = filteredAndSortedList.map(item => {
+      const profitPerUnit = Math.max(0, item.averageSalePrice - item.averageImportPrice);
+      const totalProfit = Math.max(0, item.currentStock) * profitPerUnit;
+      return [
+        item.sku,
+        item.modelName,
+        item.totalImported,
+        item.totalSold,
+        item.currentStock,
+        item.averageImportPrice,
+        item.estimatedStockValue,
+        item.averageSalePrice,
+        profitPerUnit,
+        totalProfit,
+        item.currentStock > 0 ? 'Còn hàng' : item.currentStock === 0 ? 'Hết hàng' : 'Thiếu hụt / Nợ kho',
+        item.importSessions,
+        item.saleTransactions
+      ];
+    });
 
     const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(e => e.map(val => `"${val}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -562,14 +656,18 @@ export default function ReportInventoryDetail({
       </div>
 
       {/* 4. GREY METRICS HEADER BANNER */}
-      <div className="bg-slate-100/90 dark:bg-slate-900 rounded-xl px-4 py-2.5 flex items-center justify-between text-[11.5px] font-bold text-slate-500 dark:text-slate-400 mb-3 select-none text-left">
+      <div className="bg-slate-100/90 dark:bg-slate-900 rounded-xl px-4 py-3.5 grid grid-cols-3 gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-3 select-none text-left">
         <div>
-          <span>Số lượng </span>
-          <span className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono text-[12px]">{summaryStats.totalStockPcs.toLocaleString()}</span>
+          <span className="block text-slate-400 text-[10px] uppercase font-bold mb-0.5">Số lượng tồn</span>
+          <span className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono text-[13px]">{summaryStats.totalStockPcs.toLocaleString()} <span className="text-[10px] font-medium text-slate-400">bộ</span></span>
         </div>
-        <div>
-          <span>Giá trị tồn </span>
-          <span className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono text-[12px]">{summaryStats.totalValue.toLocaleString()}đ</span>
+        <div className="border-l border-slate-205 dark:border-slate-805 pl-3">
+          <span className="block text-slate-400 text-[10px] uppercase font-bold mb-0.5">Vốn tồn kho</span>
+          <span className="text-slate-700 dark:text-slate-300 font-extrabold font-mono text-[13px]">{summaryStats.totalValue.toLocaleString()}đ</span>
+        </div>
+        <div className="border-l border-slate-205 dark:border-slate-805 pl-3">
+          <span className="block text-slate-400 text-[10px] uppercase font-bold mb-0.5">Lãi dự phóng</span>
+          <span className="text-indigo-600 dark:text-indigo-400 font-extrabold font-mono text-[13px]">{summaryStats.totalProfit.toLocaleString()}đ</span>
         </div>
       </div>
 
@@ -619,7 +717,11 @@ export default function ReportInventoryDetail({
                   {/* Middle details block */}
                   <div>
                     <h4 className="font-extrabold text-slate-900 dark:text-white text-[13.5px] mb-0.5 leading-tight">{item.modelName}</h4>
-                    <span className="text-[11px] text-slate-400 font-mono font-bold">{item.sku}</span>
+                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-[10.5px] text-zinc-400 font-semibold">
+                      <span className="font-mono">{item.sku}</span>
+                      <span className="text-slate-300 dark:text-slate-700">|</span>
+                      <span>Lãi tồn: <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{((item.averageSalePrice - item.averageImportPrice) * item.currentStock).toLocaleString()}đ</span></span>
+                    </div>
                   </div>
                 </div>
 
@@ -819,12 +921,50 @@ export default function ReportInventoryDetail({
 
                       <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-150 dark:border-slate-800">
                         <div className="space-y-1">
-                          <span className="text-[13px] font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wide block">Giá bán</span>
-                          <span className="font-black text-lg text-emerald-600 dark:text-emerald-400">{traceItem.averageSalePrice.toLocaleString()}đ</span>
+                          <span className="text-[12px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wide block">Chi phí may gốc</span>
+                          <span className="font-extrabold text-[15px] text-slate-800 dark:text-white font-mono">{traceItem.averageImportPrice.toLocaleString()}đ</span>
+                          {traceItem.hasSavedProfitEstimate && (
+                            <span className="text-[9px] text-indigo-500 font-bold block leading-tight">
+                              (Từ Giá thành & Lợi nhuận)
+                            </span>
+                          )}
                         </div>
+                        <div className="space-y-1 border-l border-slate-150 dark:border-slate-800 pl-4">
+                          <span className="text-[12px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wide block">Giá bán đại lý</span>
+                          <span className="font-extrabold text-[15px] text-slate-800 dark:text-white font-mono">{traceItem.averageSalePrice.toLocaleString()}đ</span>
+                          {traceItem.hasSavedProfitEstimate && (
+                            <span className="text-[9px] text-emerald-600 dark:text-emerald-500 font-bold block leading-tight">
+                              (Từ Giá thành & Lợi nhuận)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-2.5 border-t border-slate-150 dark:border-slate-800">
                         <div className="space-y-1">
-                          <span className="text-[13px] font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wide block">Bán ra</span>
-                          <span className="font-black text-lg text-slate-950 dark:text-white">{traceItem.totalSold} bộ</span>
+                          <span className="text-[12px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wide block">Lợi nhuận / bộ</span>
+                          <span className="font-black text-base text-emerald-600 dark:text-emerald-450 font-mono">
+                            {(traceItem.averageSalePrice - traceItem.averageImportPrice).toLocaleString()}đ
+                          </span>
+                        </div>
+                        <div className="space-y-1 border-l border-slate-150 dark:border-slate-800 pl-4">
+                          <span className="text-[12px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-wide block">Lãi tồn dự kiến</span>
+                          <span className="font-black text-base text-indigo-600 dark:text-indigo-455 font-mono">
+                            {((traceItem.averageSalePrice - traceItem.averageImportPrice) * traceItem.currentStock).toLocaleString()}đ
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-2.5 border-t border-slate-155 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 p-2.5 rounded-xl">
+                        <div className="space-y-1">
+                          <span className="text-[12px] font-black text-slate-400 uppercase tracking-wide block">Đã xuất bán</span>
+                          <span className="font-black text-[14.5px] text-slate-800 dark:text-slate-200 font-mono">{traceItem.totalSold} bộ</span>
+                        </div>
+                        <div className="space-y-1 border-l border-slate-150 dark:border-slate-800 pl-4">
+                          <span className="text-[12px] font-black text-[#f59e0b] uppercase tracking-wide block">Lãi đã thu</span>
+                          <span className="font-black text-[14.5px] text-amber-600 font-mono">
+                            {((traceItem.averageSalePrice - traceItem.averageImportPrice) * traceItem.totalSold).toLocaleString()}đ
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -857,14 +997,14 @@ export default function ReportInventoryDetail({
                         <span className="text-slate-800 dark:text-slate-200 text-xl font-bold ml-2 self-end mb-3">bộ</span>
                       </div>
 
-                      <div className="w-full max-w-sm px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl grid grid-cols-2 gap-4 text-xs font-bold mt-2">
-                        <div className="text-left border-r border-slate-250 dark:border-slate-800 pr-2">
-                          <span className="text-slate-600 dark:text-slate-400 block pb-0.5">Đã nhập xưởng</span>
-                          <span className="font-mono text-base text-sky-600 font-black">{traceItem?.totalImported ?? 0} bộ</span>
+                      <div className="w-full max-w-sm px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-805 rounded-xl grid grid-cols-2 gap-4 text-[11px] font-bold mt-2 text-left">
+                        <div className="border-r border-slate-250 dark:border-slate-800 pr-2">
+                          <span className="text-slate-400 block pb-0.5">Vốn hàng tồn</span>
+                          <span className="font-mono text-[13px] text-slate-800 dark:text-slate-200 font-black">{(tempAdjustValue * (traceItem?.averageImportPrice ?? 0)).toLocaleString()}đ</span>
                         </div>
-                        <div className="text-left pl-2">
-                          <span className="text-slate-600 dark:text-slate-400 block pb-0.5">Đã xuất bán</span>
-                          <span className="font-mono text-base text-rose-600 font-black">{traceItem?.totalSold ?? 0} bộ</span>
+                        <div className="pl-2">
+                          <span className="text-emerald-500 block pb-0.5">Lãi gộp tồn kho</span>
+                          <span className="font-mono text-[13px] text-emerald-600 dark:text-emerald-400 font-black">{(tempAdjustValue * Math.max(0, (traceItem?.averageSalePrice ?? 0) - (traceItem?.averageImportPrice ?? 0))).toLocaleString()}đ</span>
                         </div>
                       </div>
                     </div>

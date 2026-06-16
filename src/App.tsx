@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Lazy-loaded complex child components/tabs to cut boot time & latency on mobile
@@ -98,6 +98,16 @@ export default function App() {
 
   // Application States
   const [items, setItems] = useState<ImportItem[]>(() => getSavedArray("xuongan_import_items", []));
+  const [fastEditMode, setFastEditMode] = useState<boolean>(() => {
+    return localStorage.getItem('xuongan_fast_edit_mode') === 'true';
+  });
+  const [isQuickPricingModalOpen, setIsQuickPricingModalOpen] = useState<boolean>(false);
+  const [quickDefaultLabor, setQuickDefaultLabor] = useState<number>(() => {
+    return Number(localStorage.getItem('xuongan_default_labor_cost') || '15000');
+  });
+  const [quickDefaultMargin, setQuickDefaultMargin] = useState<number>(() => {
+    return Number(localStorage.getItem('xuongan_default_profit_margin_percent') || '50');
+  });
   const [laborPayments, setLaborPayments] = useState<LaborPayment[]>(() => getSavedArray("xuongan_labor_payments", []));
   const [tpDtShippings, setTpDtShippings] = useState<TpDtShippingItem[]>(() => getSavedArray("xuongan_tp_dt_shippings", []));
   const [customers, setCustomers] = useState<Customer[]>(() => getSavedArray("xuongan_customers", []));
@@ -1889,14 +1899,13 @@ export default function App() {
                   <div className="h-6 w-[1px] bg-slate-150 dark:bg-slate-800" />
                   <div>
                     <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Định mức</span>
-                    <p className="text-xl md:text-2xl font-black text-teal-600 dark:text-teal-400 font-mono leading-none mt-1">
-                      {materialRecipes.length} <span className="text-[10px] font-bold text-[#14b8a6]/70 font-sans">mẫu</span>
+                    <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white font-mono leading-none mt-1">
+                      {materialRecipes.length} <span className="text-[10px] font-bold text-slate-450 dark:text-slate-400 font-sans">bài</span>
                     </p>
                   </div>
                 </div>
-                
-                {/* View Details Button with Icon */}
-                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-teal-50 dark:bg-[#14b8a6]/10 text-teal-600 dark:text-teal-400 rounded-xl border border-teal-100 dark:border-[#14b8a6]/25 transition-all duration-300 group-hover:bg-teal-100 dark:group-hover:bg-[#14b8a6]/20 group-hover:border-teal-250 dark:group-hover:border-[#14b8a6]/40 text-[9px] md:text-[10px] font-black uppercase tracking-wider shrink-0">
+
+                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-teal-50 dark:bg-[#14b8a6]/10 text-teal-600 dark:text-[#14b8a6] rounded-xl border border-teal-100 dark:border-[#14b8a6]/25 transition-all duration-300 group-hover:bg-teal-100 dark:group-hover:bg-[#14b8a6]/20 group-hover:border-teal-250 dark:group-hover:border-[#14b8a6]/40 text-[9px] md:text-[10px] font-black uppercase tracking-wider shrink-0">
                   <Database className="w-3.5 h-3.5" />
                 </div>
               </div>
@@ -1909,12 +1918,12 @@ export default function App() {
               id="home_card_gia_thanh_loi_nhuan"
               onClick={() => setActiveTab('profit_estimator')}
               whileHover={{ 
-                scale: 1.015,
-                y: -5,
+                scale: 1.012,
+                y: -4,
                 boxShadow: "0 20px 25px -5px rgba(99, 102, 241, 0.12), 0 8px 10px -6px rgba(99, 102, 241, 0.12)"
               }}
               whileTap={{ scale: 0.98 }}
-              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-indigo-500/50 dark:hover:border-[#6366f1]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-indigo-500/5"
+              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-indigo-500/50 dark:hover:border-[#6366f1]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between min-h-[195px] h-auto shadow-xs hover:shadow-lg hover:shadow-indigo-500/5"
             >
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
@@ -1934,7 +1943,42 @@ export default function App() {
                 Tính toán biên lợi nhuận thông minh
               </p>
 
-              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
+              {/* Fast Edit Mode & Quick Pricing controls */}
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-1 sm:mt-2">
+                {/* Fast Edit Mode Toggle */}
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newVal = !fastEditMode;
+                    setFastEditMode(newVal);
+                    localStorage.setItem('xuongan_fast_edit_mode', String(newVal));
+                  }}
+                  className="flex items-center gap-1.5 cursor-pointer select-none bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200/80 dark:border-slate-800"
+                >
+                  <span className={`w-2 h-2 rounded-full ${fastEditMode ? 'bg-[#6366f1] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Sửa Nhanh</span>
+                  <div className={`relative w-6 h-3.5 rounded-full transition-colors ${fastEditMode ? 'bg-[#6366f1]' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                    <div className={`absolute top-0.5 left-0.5 bg-white w-2.5 h-2.5 rounded-full transition-transform ${fastEditMode ? 'translate-x-2.5' : 'translate-x-0'}`} />
+                  </div>
+                </div>
+
+                {/* Edit Pricing Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuickDefaultLabor(Number(localStorage.getItem('xuongan_default_labor_cost') || '15000'));
+                    setQuickDefaultMargin(Number(localStorage.getItem('xuongan_default_profit_margin_percent') || '50'));
+                    setIsQuickPricingModalOpen(true);
+                  }}
+                  className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-650 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 font-bold text-[10px] px-2.5 py-1 rounded-lg cursor-pointer transition-all shrink-0"
+                >
+                  <Edit className="w-3 h-3 text-indigo-500" />
+                  <span>Sửa công/lãi mốc</span>
+                </button>
+              </div>
+
+              <div className="border-t border-slate-150 dark:border-slate-800/40 my-1 w-full" />
 
               <div className="flex justify-between items-end text-left">
                 <div>
@@ -3020,6 +3064,7 @@ export default function App() {
                       onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
                       selectedCustomerId={invoiceSelectedCustomerId}
                       setSelectedCustomerId={setInvoiceSelectedCustomerId}
+                      items={items}
                     />
                   </Suspense>
                 </motion.div>
@@ -3070,6 +3115,9 @@ export default function App() {
                     materialRecipes={materialRecipes}
                     rawMaterials={rawMaterials}
                     operationBreakdowns={operationBreakdowns}
+                    fastEditMode={fastEditMode}
+                    defaultLaborCost={quickDefaultLabor}
+                    defaultProfitMarginPercent={quickDefaultMargin}
                   />
                 </motion.div>
               ) : activeTab === 'inventory' ? (
@@ -3673,6 +3721,105 @@ export default function App() {
                   className="w-1/2 bg-[#6366f1] hover:bg-[#5053e1] text-white py-2.5 rounded-xl font-bold transition active:scale-[0.98] cursor-pointer"
                 >
                   Ghi Nhận Hồ Sơ
+                </button>
+              </div>
+            </motion.form>
+          </div>
+        )}
+
+        {isQuickPricingModalOpen && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fade-in">
+            <div className="absolute inset-0" onClick={() => setIsQuickPricingModalOpen(false)} />
+            <motion.form
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                localStorage.setItem('xuongan_default_labor_cost', String(quickDefaultLabor));
+                localStorage.setItem('xuongan_default_profit_margin_percent', String(quickDefaultMargin));
+                setIsQuickPricingModalOpen(false);
+              }}
+              className={`max-w-md w-full p-6 shadow-2xl rounded-3xl z-20 space-y-5 border ${
+                resolvedTheme === 'dark' 
+                  ? 'bg-[#101424] border-slate-850 text-white shadow-indigo-950/30' 
+                  : 'bg-white border-slate-150 text-slate-800 shadow-slate-200'
+              }`}
+            >
+              <div className={`pb-3.5 flex justify-between items-center border-b ${resolvedTheme === 'dark' ? 'border-slate-850' : 'border-slate-150'}`}>
+                <div className="text-left">
+                  <h3 className="text-sm font-black tracking-wider uppercase font-sans flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                    🛠️ CẤU HÌNH THAM SỐ MỐC
+                  </h3>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-400 mt-1 leading-snug">
+                    Điều chỉnh tham số mặc định được dùng khi khởi tạo dự phóng biên lãi Profit Estimator
+                  </p>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setIsQuickPricingModalOpen(false)} 
+                  className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition p-1 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div className="text-left">
+                  <label className="block text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-450 mb-1.5 tracking-wider flex items-center gap-1">
+                    💸 Công thợ mặc định (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    placeholder="VD: 15000"
+                    value={quickDefaultLabor === 0 ? '' : quickDefaultLabor}
+                    onChange={e => setQuickDefaultLabor(e.target.value === '' ? 0 : Number(e.target.value))}
+                    className={`w-full border rounded-2xl py-3 px-4 outline-none focus:border-indigo-505 transition font-mono font-bold text-sm ${
+                      resolvedTheme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                  <p className="text-[9.5px] text-slate-400 dark:text-slate-500 mt-1">
+                    Giá sàn công may rắp, thợ chính được gán làm giá mốc nếu mẫu may chưa có bảng rạp rã công chi tiết.
+                  </p>
+                </div>
+
+                <div className="text-left">
+                  <label className="block text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-450 mb-1.5 tracking-wider flex items-center gap-1">
+                    📈 Biên lợi nhuận mục tiêu (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    required
+                    placeholder="VD: 50"
+                    value={quickDefaultMargin === 0 ? '' : quickDefaultMargin}
+                    onChange={e => setQuickDefaultMargin(e.target.value === '' ? 0 : Number(e.target.value))}
+                    className={`w-full border rounded-2xl py-3 px-4 outline-none focus:border-indigo-505 transition font-mono font-bold text-sm ${
+                      resolvedTheme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-slate-50 border-slate-200'
+                    }`}
+                  />
+                  <p className="text-[9.5px] text-slate-400 dark:text-slate-500 mt-1">
+                    Hệ số nâng giá sỉ dự kiến từ chi phí sản xuất: <code>Giá sỉ = Chi phí * (1 + biên lãi %)</code>. Ví dụ: biên lãi 50% ứng với nhân hệ số 1.5.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickPricingModalOpen(false)}
+                  className="w-1/2 py-3 border border-slate-200 text-slate-500 dark:text-slate-400 dark:border-slate-850 rounded-2xl font-bold cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 bg-indigo-650 hover:bg-indigo-700 text-white py-3 rounded-2xl font-bold transition active:scale-[0.98] cursor-pointer shadow-md shadow-indigo-550/20"
+                >
+                  Cập Nhật Mốc
                 </button>
               </div>
             </motion.form>

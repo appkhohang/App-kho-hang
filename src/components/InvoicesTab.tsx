@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, UserPlus, Receipt, DollarSign, Image, Save, Plus, 
   Trash2, Calendar, ChevronRight, Search, X, ArrowLeft, 
   TrendingUp, Activity, Download, Camera, Edit
 } from 'lucide-react';
-import { Customer, Bill, BillItem, PaymentRecord } from '../types';
+import { Customer, Bill, BillItem, PaymentRecord, ImportItem } from '../types';
 import { getCurrentDateStr } from '../utils/dateUtils';
 
 const InvoiceDetailModal = lazy(() => import('./InvoiceDetailModal'));
@@ -28,6 +28,41 @@ interface InvoicesTabProps {
   onAutoOpenCreateBillReset?: () => void;
   selectedCustomerId?: string;
   setSelectedCustomerId?: (id: string) => void;
+  items?: ImportItem[];
+}
+
+function removeVietnameseTones(str: string): string {
+  if (!str) return "";
+  let res = str;
+  res = res.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+  res = res.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+  res = res.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+  res = res.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  res = res.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+  res = res.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+  res = res.replace(/đ/g, "d");
+  res = res.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+  res = res.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+  res = res.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+  res = res.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+  res = res.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+  res = res.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+  res = res.replace(/Đ/g, "D");
+  res = res.replace(/\u0300|\u0301|\u0309|\u0303|\u0323/g, "");
+  res = res.replace(/\u02C6|\u0306|\u031B/g, "");
+  return res;
+}
+
+function cleansAndSortsWords(name: string): string {
+  if (!name) return "";
+  const noTones = removeVietnameseTones(name.trim().toLowerCase());
+  const basic = noTones.replace(/[^a-z0-9\s]/gi, " ");
+  return basic.split(/\s+/).filter(Boolean).sort().join(" ");
+}
+
+function isModelNameMatch(nameA: string, nameB: string): boolean {
+  if (!nameA || !nameB) return false;
+  return cleansAndSortsWords(nameA) === cleansAndSortsWords(nameB);
 }
 
 export default function InvoicesTab({
@@ -42,7 +77,8 @@ export default function InvoicesTab({
   autoOpenCreateBill = false,
   onAutoOpenCreateBillReset,
   selectedCustomerId: externalSelectedCustomerId,
-  setSelectedCustomerId: externalSetSelectedCustomerId
+  setSelectedCustomerId: externalSetSelectedCustomerId,
+  items = []
 }: InvoicesTabProps) {
   const isViewer = false;
   // Selected customer context
@@ -87,6 +123,130 @@ export default function InvoicesTab({
   const [invoicePhoto, setInvoicePhoto] = useState<string | null>(null);
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
+
+  const [focusedItemIdx, setFocusedItemIdx] = useState<number | null>(null);
+
+  // Load saved profit estimates for price mapping
+  const savedEstimates = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_saved_profit_estimates');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Compute warehouse catalog of items with their actual stock and default pricing
+  const warehouseCatalog = useMemo(() => {
+    // 1. Find all models from items (goods imports) & bills
+    const modelsSet = new Set<string>();
+    const safeItems = items || [];
+    
+    safeItems.forEach(it => {
+      if (it.mẫu && it.mẫu.trim()) {
+        modelsSet.add(it.mẫu.trim());
+      }
+    });
+
+    bills.forEach(b => {
+      if (b.items && Array.isArray(b.items)) {
+        b.items.forEach(bi => {
+          if (bi.mẫuMã && bi.mẫuMã.trim()) {
+            modelsSet.add(bi.mẫuMã.trim());
+          }
+        });
+      }
+    });
+
+    const uniqueModels = Array.from(modelsSet);
+
+    // 2. Compute stock and default selling price for each
+    return uniqueModels.map(modelName => {
+      // Total imported
+      const totalImported = safeItems
+        .filter(it => it.mẫu && it.mẫu.trim().toLowerCase() === modelName.toLowerCase())
+        .reduce((sum, curr) => sum + (curr.sốLượng || 0), 0);
+
+      // Total sold
+      const totalSold = bills
+        .reduce((sum, b) => {
+          const itemQty = b.items
+            ?.filter(bi => bi.mẫuMã && bi.mẫuMã.trim().toLowerCase() === modelName.toLowerCase())
+            .reduce((s, curr) => s + (curr.sốLượng || 0), 0) || 0;
+          return sum + itemQty;
+        }, 0);
+
+      // Manual adjustments from localStorage
+      let manualStockAdj = 0;
+      try {
+        const savedAdjs = localStorage.getItem('xuongan_inventory_manual_adjustments');
+        if (savedAdjs) {
+          const parsed = JSON.parse(savedAdjs);
+          if (parsed[modelName] !== undefined) {
+            manualStockAdj = parsed[modelName];
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      const currentStock = Math.max(0, totalImported - totalSold + manualStockAdj);
+
+      // Prices mapping
+      const importPrices = safeItems
+        .filter(it => it.mẫu && it.mẫu.trim().toLowerCase() === modelName.toLowerCase())
+        .map(it => it.đơnGiáMay || 0)
+        .filter(p => p > 0);
+      const avgImportPrice = importPrices.length > 0 
+        ? Math.round(importPrices.reduce((s, c) => s + c, 0) / importPrices.length)
+        : 120000;
+
+      const salePrices = bills
+        .reduce((arr, b) => {
+          b.items
+            ?.filter(bi => bi.mẫuMã && bi.mẫuMã.trim().toLowerCase() === modelName.toLowerCase() && bi.đơnGiá > 0)
+            .forEach(bi => arr.push(bi.đơnGiá));
+          return arr;
+        }, [] as number[]);
+
+      let defaultSalePrice = salePrices.length > 0
+        ? Math.round(salePrices.reduce((s, c) => s + c, 0) / salePrices.length)
+        : Math.round(avgImportPrice * 1.35);
+
+      // Match profit estimates from "Giá thành & lợi nhuận"
+      const matchedEstimate = savedEstimates.find(
+        (est: any) => est.modelName && isModelNameMatch(est.modelName, modelName)
+      );
+      if (matchedEstimate) {
+        if (matchedEstimate.calcTargetSalePrice > 0) {
+          defaultSalePrice = Math.round(matchedEstimate.calcTargetSalePrice);
+        }
+      }
+
+      return {
+        modelName,
+        currentStock,
+        defaultSalePrice
+      };
+    });
+  }, [items, bills, savedEstimates]);
+
+  const handleSelectModel = (idx: number, modelName: string) => {
+    const matched = warehouseCatalog.find(w => w.modelName === modelName);
+    const price = matched ? matched.defaultSalePrice : 125000;
+    
+    setModalDraftItems(prev => {
+      const updated = [...prev];
+      const qty = updated[idx].sốLượng;
+      updated[idx] = {
+        ...updated[idx],
+        mẫuMã: modelName,
+        đơnGiá: price,
+        thànhTiền: price * Number(qty || 0)
+      };
+      return updated;
+    });
+  };
 
   const handleOpenNewInvoice = () => {
     setEditingBillId(null);
@@ -1932,17 +2092,86 @@ export default function InvoicesTab({
                           </div>
 
                           {/* Section 1: MẪU MÃ */}
-                          <div className="space-y-1.5">
+                          <div className="space-y-1.5 relative">
                             <label className="block text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-tight">
                               👗 Tên mẫu mã thiết kế May sỉ *
                             </label>
-                            <input
-                              type="text"
-                              placeholder="Tên mẫu, mã vạch..."
-                              value={item.mẫuMã}
-                              onChange={e => handleUpdateModalDraftItem(idx, 'mẫuMã', e.target.value)}
-                              className="w-full rounded-2xl px-4 py-3 text-sm font-semibold outline-none transition focus:border-indigo-500 border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
-                            />
+                            <div className="relative">
+                              <input
+                                type="text"
+                                placeholder="Nhập tên mẫu hoặc chọn từ kho..."
+                                value={item.mẫuMã}
+                                onChange={e => {
+                                  handleUpdateModalDraftItem(idx, 'mẫuMã', e.target.value);
+                                  setFocusedItemIdx(idx);
+                                }}
+                                onFocus={() => setFocusedItemIdx(idx)}
+                                className="w-full rounded-2xl px-4 py-3 text-sm font-semibold outline-none transition focus:border-indigo-500 border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
+                              />
+                              <div className="absolute right-3 top-3.5 flex items-center gap-1 text-slate-400 pointer-events-none">
+                                <Search className="w-4 h-4" />
+                              </div>
+                            </div>
+
+                            {/* Autocomplete Panel */}
+                            {focusedItemIdx === idx && (
+                              <>
+                                {/* Click outside backdrop container */}
+                                <div 
+                                  className="fixed inset-0 z-30" 
+                                  onClick={() => setFocusedItemIdx(null)} 
+                                />
+                                <div className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-805 bg-white dark:bg-slate-950 shadow-xl z-40 p-1 divide-y divide-slate-100 dark:divide-slate-900/40">
+                                  <div className="px-3 py-1.5 text-[9.5px] font-extrabold uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">
+                                    📦 DANH SÁCH KHO HÀNG ({warehouseCatalog.length})
+                                  </div>
+                                  
+                                  {(() => {
+                                    const searchQuery = (item.mẫuMã || '').trim().toLowerCase();
+                                    const filtered = warehouseCatalog.filter(w => 
+                                      !searchQuery || 
+                                      w.modelName.toLowerCase().includes(searchQuery)
+                                    );
+
+                                    if (filtered.length === 0) {
+                                      return (
+                                        <div className="p-3 text-xs text-slate-400 font-medium text-center">
+                                          Không tìm thấy mẫu nào khớp trong kho.
+                                        </div>
+                                      );
+                                    }
+
+                                    return filtered.map((w, wIdx) => (
+                                      <button
+                                        key={wIdx}
+                                        type="button"
+                                        onClick={() => {
+                                          handleSelectModel(idx, w.modelName);
+                                          setFocusedItemIdx(null);
+                                        }}
+                                        className="w-full text-left px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-lg flex items-center justify-between text-xs transition cursor-pointer"
+                                      >
+                                        <div className="font-semibold text-slate-850 dark:text-slate-100">
+                                          👕 {w.modelName}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                          <span className={`px-1.5 py-0.5 rounded font-bold ${
+                                            w.currentStock > 0 
+                                              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400' 
+                                              : 'bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-450'
+                                          }`}>
+                                            Tồn: {w.currentStock.toLocaleString()}
+                                          </span>
+                                          <span className="font-mono font-bold text-slate-500 dark:text-slate-400">
+                                            {w.defaultSalePrice.toLocaleString()}đ
+                                          </span>
+                                        </div>
+                                      </button>
+                                    ));
+                                  })()}
+                                </div>
+                              </>
+                            )}
                           </div>
 
                           {/* Section 2: SL & ĐƠN GIÁ inside split touch container */}

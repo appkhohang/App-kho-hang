@@ -217,6 +217,79 @@ export default function ReportTab({
     };
   }, [activeBills, yesterdayBills]);
 
+  // Track manual unit cost overrides inside report hạch toán
+  const [manualCosts, setManualCosts] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_manual_report_costs');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  // Load production costs defined in saved scenarios (ProfitEstimatorTab -> xuongan_saved_profit_estimates)
+  const savedCostMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    try {
+      const saved = localStorage.getItem('xuongan_saved_profit_estimates');
+      if (saved) {
+        const list = JSON.parse(saved);
+        // Sort oldest first, newer overrides it.
+        list.slice().reverse().forEach((est: any) => {
+          if (est.modelName && est.totalProductionCost) {
+            const key = est.modelName.trim().toLowerCase();
+            map[key] = est.totalProductionCost;
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Error loading saved profit estimates in ReportTab', e);
+    }
+    return map;
+  }, [selectedDate, activeSubTab]); // Retrigger when shifting dates or tabs to keep in sync
+
+  // Update a single model's unit cost
+  const handleUpdateCost = (model: string, cost: number) => {
+    setManualCosts(prev => {
+      const updated = { ...prev, [model.trim().toLowerCase()]: cost };
+      localStorage.setItem('xuongan_manual_report_costs', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Memoized breakdown of unique items sold on consumer bills in current period
+  const soldProductsList = useMemo(() => {
+    const list: Record<string, { modelName: string; totalQty: number; avgWholesalePrice: number; totalRev: number }> = {};
+    
+    activeBills.forEach(bill => {
+      if (bill.items) {
+        bill.items.forEach(item => {
+          if (!item.mẫuMã) return;
+          const key = item.mẫuMã.trim();
+          const lowerKey = key.toLowerCase();
+          if (!list[lowerKey]) {
+            list[lowerKey] = {
+              modelName: key,
+              totalQty: 0,
+              avgWholesalePrice: 0,
+              totalRev: 0
+            };
+          }
+          list[lowerKey].totalQty += item.sốLượng || 0;
+          list[lowerKey].totalRev += item.thànhTiền || 0;
+        });
+      }
+    });
+
+    return Object.values(list).map(p => {
+      const avgWholesale = p.totalQty > 0 ? Math.round(p.totalRev / p.totalQty) : 0;
+      return {
+        ...p,
+        avgWholesalePrice: avgWholesale
+      };
+    }).sort((a, b) => b.totalQty - a.totalQty);
+  }, [activeBills]);
+
   // B. PROFIT & LOSS METRICS
   // Profit = Wholesale Billing subtotal - Cost of production
   // We approximate Cost of production by linking manufactured import costs,
@@ -230,16 +303,24 @@ export default function ReportTab({
     activeBills.forEach(bill => {
       if (bill.items) {
         bill.items.forEach(item => {
-          // Look up if we have standard price defined or use average 55% manufacture margin
           const qty = item.sốLượng || 0;
           const wholesalePrice = item.đơnGiá || 0;
+          const modelKey = item.mẫuMã ? item.mẫuMã.trim().toLowerCase() : '';
           
-          // Try to find if we've recorded manufacture price of this model
-          const matchedImport = items.find(imp => imp.mẫu === item.mẫuMã);
-          const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(wholesalePrice * 0.45);
-          const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnĐT_TP || 0) + (matchedImport.vậnChuyểnTP_ĐT || 0)) : 0;
+          let unitCost = 0;
+          if (modelKey && manualCosts[modelKey] !== undefined) {
+            unitCost = manualCosts[modelKey];
+          } else if (modelKey && savedCostMap[modelKey] !== undefined) {
+            unitCost = savedCostMap[modelKey];
+          } else {
+            // Try to find if we've recorded manufacture price of this model
+            const matchedImport = items.find(imp => imp.mẫu.trim().toLowerCase() === modelKey);
+            const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(wholesalePrice * 0.45);
+            const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnTP_ĐT || 0) - (matchedImport.vậnChuyểnĐT_TP || 0)) : 0;
+            unitCost = laborCost + (shippingCost * (1 / 100)); // Average shipping averaged cost
+          }
           
-          estimatedCost += (laborCost * qty) + (shippingCost * (qty / 100)); // shipping averaged
+          estimatedCost += unitCost * qty;
         });
       }
     });
@@ -247,7 +328,7 @@ export default function ReportTab({
     // If no direct link computed (mostly empty items), default cost approximation based on active imports
     if (estimatedCost === 0) {
       estimatedCost = activeImports.reduce((acc, curr) => {
-        const cost = (curr.sốLượng || 0) * (curr.đơnGiáMay || 0) + (curr.vậnChuyểnĐT_TP || 0) + (curr.vậnChuyểnTP_ĐT || 0);
+        const cost = (curr.sốLượng || 0) * (curr.đơnGiáMay || 0) + (curr.vậnChuyểnTP_ĐT || 0) - (curr.vậnChuyểnĐT_TP || 0);
         return acc + cost;
       }, 0);
     }
@@ -263,17 +344,28 @@ export default function ReportTab({
         bill.items.forEach(item => {
           const qty = item.sốLượng || 0;
           const wholesalePrice = item.đơnGiá || 0;
-          const matchedImport = items.find(imp => imp.mẫu === item.mẫuMã);
-          const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(wholesalePrice * 0.45);
-          const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnĐT_TP || 0) + (matchedImport.vậnChuyểnTP_ĐT || 0)) : 0;
-          yEstimatedCost += (laborCost * qty) + (shippingCost * (qty / 100));
+          const modelKey = item.mẫuMã ? item.mẫuMã.trim().toLowerCase() : '';
+          
+          let unitCost = 0;
+          if (modelKey && manualCosts[modelKey] !== undefined) {
+            unitCost = manualCosts[modelKey];
+          } else if (modelKey && savedCostMap[modelKey] !== undefined) {
+            unitCost = savedCostMap[modelKey];
+          } else {
+            const matchedImport = items.find(imp => imp.mẫu.trim().toLowerCase() === modelKey);
+            const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(wholesalePrice * 0.45);
+            const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnTP_ĐT || 0) - (matchedImport.vậnChuyểnĐT_TP || 0)) : 0;
+            unitCost = laborCost + (shippingCost * (1 / 100));
+          }
+          
+          yEstimatedCost += unitCost * qty;
         });
       }
     });
 
     if (yEstimatedCost === 0) {
       yEstimatedCost = yesterdayImports.reduce((acc, curr) => {
-        const cost = (curr.sốLượng || 0) * (curr.đơnGiáMay || 0) + (curr.vậnChuyểnĐT_TP || 0) + (curr.vậnChuyểnTP_ĐT || 0);
+        const cost = (curr.sốLượng || 0) * (curr.đơnGiáMay || 0) + (curr.vậnChuyểnTP_ĐT || 0) - (curr.vậnChuyểnĐT_TP || 0);
         return acc + cost;
       }, 0);
     }
@@ -290,7 +382,7 @@ export default function ReportTab({
       yCost: yEstimatedCost,
       yRate: yProfitRate
     };
-  }, [activeBills, yesterdayBills, activeImports, yesterdayImports, items]);
+  }, [activeBills, yesterdayBills, activeImports, yesterdayImports, items, manualCosts, savedCostMap]);
 
   // C. INVENTORY INFLOW METRICS
   const inventoryMetrics = useMemo(() => {
@@ -322,7 +414,7 @@ export default function ReportTab({
     // Expenditures (Chi): Actual payments paid to workers (laborPayments) during this period + shipping expenses
     const directLaborPayouts = activeLaborPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
     const shippingExpenditures = activeImports.reduce((acc, curr) => {
-      return acc + (curr.vậnChuyểnĐT_TP || 0) + (curr.vậnChuyểnTP_ĐT || 0);
+      return acc + (curr.vậnChuyểnTP_ĐT || 0) - (curr.vậnChuyểnĐT_TP || 0);
     }, 0);
     const generalExpenditures = directLaborPayouts + shippingExpenditures;
 
@@ -335,7 +427,7 @@ export default function ReportTab({
 
     const yDirectLaborPayouts = yesterdayLaborPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
     const yShippingExpenditures = yesterdayImports.reduce((acc, curr) => {
-      return acc + (curr.vậnChuyểnĐT_TP || 0) + (curr.vậnChuyểnTP_ĐT || 0);
+      return acc + (curr.vậnChuyểnTP_ĐT || 0) - (curr.vậnChuyểnĐT_TP || 0);
     }, 0);
     const yGeneralExpenditures = yDirectLaborPayouts + yShippingExpenditures;
 
@@ -848,6 +940,142 @@ export default function ReportTab({
                 </div>
               </div>
             </div>
+
+            {/* DETAILED PRODUCTION COST BREAKDOWN BY MODEL SALES (x BILL INVOICES) */}
+            {activeSubTab === 'profit' && (
+              <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs flex flex-col space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                      <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
+                      <span>Cơ cấu giá thành &amp; Chi phí ước tính</span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">
+                      Phân tích và tính toán chi phí gốc xưởng dựa vào Giá thành x Tổng sản lượng trên bill hóa đơn sỉ/lẻ của khách tương ứng.
+                    </p>
+                  </div>
+                </div>
+
+                {soldProductsList.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 dark:text-slate-500 italic text-xs">
+                    Chưa phát sinh hóa đơn bán hàng nào trong kỳ hạch toán này để phân tích.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Responsive table-like structure */}
+                    <div className="overflow-x-auto scrollbar-none">
+                      <table className="w-full text-left border-collapse min-w-[420px]">
+                        <thead>
+                          <tr className="border-b border-slate-100 dark:border-slate-800/80 text-[10px] uppercase font-mono tracking-wider text-slate-400 dark:text-slate-500">
+                            <th className="py-2.5 font-bold">Mẫu mã</th>
+                            <th className="py-2.5 text-center font-bold">SL Bán trên Bill</th>
+                            <th className="py-2.5 text-right font-bold w-28">Giá thành thắt (đ)</th>
+                            <th className="py-2.5 text-right font-bold w-32">Chi phí ước tính</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
+                          {soldProductsList.map((p) => {
+                            const lowerKey = p.modelName.toLowerCase();
+                            
+                            // Determine active unit cost
+                            let currentCostVal = 0;
+                            let costSource: 'manual' | 'saved' | 'default' = 'default';
+                            
+                            if (manualCosts[lowerKey] !== undefined) {
+                              currentCostVal = manualCosts[lowerKey];
+                              costSource = 'manual';
+                            } else if (savedCostMap[lowerKey] !== undefined) {
+                              currentCostVal = savedCostMap[lowerKey];
+                              costSource = 'saved';
+                            } else {
+                              const matchedImport = items.find(imp => imp.mẫu.trim().toLowerCase() === lowerKey);
+                              const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(p.avgWholesalePrice * 0.45);
+                              const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnTP_ĐT || 0) - (matchedImport.vậnChuyểnĐT_TP || 0)) : 0;
+                              currentCostVal = Math.round(laborCost + (shippingCost * (1 / 100)));
+                              costSource = 'default';
+                            }
+                            
+                            const totalEstCost = currentCostVal * p.totalQty;
+                            
+                            return (
+                              <tr key={p.modelName} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/10 transition-colors">
+                                <td className="py-3 pr-2">
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                                      {p.modelName}
+                                    </span>
+                                    {costSource === 'saved' && (
+                                      <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
+                                        ✨ Dự toán sẵn ({savedCostMap[lowerKey].toLocaleString()}đ)
+                                      </span>
+                                    )}
+                                    {costSource === 'manual' && (
+                                      <span className="text-[9.5px] text-blue-500 dark:text-blue-400 font-bold mt-0.5 font-sans">
+                                        ✏️ Ghi đè thủ công
+                                      </span>
+                                    )}
+                                    {costSource === 'default' && (
+                                      <span className="text-[9.5px] text-slate-400 dark:text-slate-500 mt-0.5 font-sans">
+                                        ⚙️ Tự tính (May + VC)
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-3 text-center">
+                                  <span className="font-mono font-black text-xs text-slate-700 dark:text-slate-350">
+                                    {p.totalQty.toLocaleString()}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 dark:text-slate-500 block">bộ</span>
+                                </td>
+                                <td className="py-3 text-right">
+                                  <input
+                                    type="number"
+                                    value={currentCostVal || ''}
+                                    onChange={(e) => handleUpdateCost(p.modelName, Number(e.target.value))}
+                                    placeholder="0"
+                                    className="w-24 text-right px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-xs text-slate-850 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                </td>
+                                <td className="py-3 text-right font-mono font-extrabold text-xs text-slate-800 dark:text-slate-100">
+                                  {totalEstCost.toLocaleString()}đ
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Total Aggregated Summary */}
+                    <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="text-slate-400 dark:text-slate-500 text-[9.5px] uppercase font-mono font-bold leading-relaxed">
+                        * Ghi chú: Chỉnh sửa trực tiếp đơn giá thành của từng mẫu mã để cập nhật tổng chi phí giá vốn của sếp live.
+                      </div>
+                      <div className="flex gap-4 justify-end font-mono shrink-0">
+                        <div className="text-right">
+                          <span className="text-slate-400 dark:text-slate-500 block text-[9px] uppercase">Doanh Thu Bill</span>
+                          <span className="font-extrabold text-blue-600 dark:text-blue-400 block text-xs">
+                            {soldProductsList.reduce((sum, p) => sum + p.totalRev, 0).toLocaleString()}đ
+                          </span>
+                        </div>
+                        <div className="text-right border-l border-slate-150 dark:border-slate-850 pl-4">
+                          <span className="text-slate-400 dark:text-slate-500 block text-[9px] uppercase">Vốn ước tính (định mức)</span>
+                          <span className="font-extrabold text-amber-600 dark:text-amber-500 block text-xs">
+                            {profitLossMetrics.cost.toLocaleString()}đ
+                          </span>
+                        </div>
+                        <div className="text-right border-l border-slate-150 dark:border-slate-850 pl-4">
+                          <span className="text-slate-400 dark:text-slate-500 block text-[9px] uppercase">Lợi nhuận gộp</span>
+                          <span className="font-black text-emerald-600 dark:text-emerald-500 block text-xs">
+                            {profitLossMetrics.profit.toLocaleString()}đ
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 6. PAYMENTS METHODS PROGRESS LIST */}
             <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs">

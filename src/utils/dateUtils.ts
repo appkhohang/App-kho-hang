@@ -7,7 +7,13 @@
  * Returns the Vietnam week string format, e.g., "Tuần 22 (25/05 - 31/05)"
  */
 export function getVietnameseWeekKey(dateStr: string): string {
-  const d = new Date(dateStr);
+  if (!dateStr) return "Tuần Không Xác Định";
+  // Parse as local year/month/date to avoid UTC timezone shifts
+  let d = new Date(dateStr);
+  if (dateStr.includes('-') && dateStr.length === 10) {
+    const parts = dateStr.split('-');
+    d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
   if (isNaN(d.getTime())) return "Tuần Không Xác Định";
   
   // Set to nearest Thursday: current date + 4 - current day number
@@ -63,7 +69,12 @@ export function getCurrentDateStr(): string {
  * Get current Vietnamese Month Name, e.g., "Tháng 05/2026"
  */
 export function getVietnameseMonthKey(dateStr: string): string {
-  const d = new Date(dateStr);
+  if (!dateStr) return "Tháng Không Xác Định";
+  let d = new Date(dateStr);
+  if (dateStr.includes('-') && dateStr.length === 10) {
+    const parts = dateStr.split('-');
+    d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
   if (isNaN(d.getTime())) return "Tháng Không Xác Định";
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `Tháng ${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
