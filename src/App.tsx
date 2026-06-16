@@ -8,9 +8,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
-// Lazy-loaded complex child components/tabs to cut boot time & latency on mobile
-const GoodsImportTab = lazy(() => import('./components/GoodsImportTab'));
-const ProductionTab = lazy(() => import('./components/ProductionTab'));
+// Statically imported child components/tabs to prevent hook errors and version mismatch bugs
+import GoodsImportTab from './components/GoodsImportTab';
+import ProductionTab from './components/ProductionTab';
 
 import ReportTab from './components/ReportTab';
 import SettingsTab from './components/SettingsTab';

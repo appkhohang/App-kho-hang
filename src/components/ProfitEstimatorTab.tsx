@@ -18,6 +18,7 @@ export interface SavedEstimate {
   modelName: string;
   calcMaterials: Record<string, { mode: 'direct' | 'batch'; unitPrice: number; batchQty: number; batchTotal: number }>;
   calcLaborCost: number;
+  calcAccessoryCost?: number;
   calcTargetSalePrice: number;
   totalMaterialCost: number;
   totalProductionCost: number;
@@ -47,6 +48,7 @@ export default function ProfitEstimatorTab({
   const [selectedCalcRecipeId, setSelectedCalcRecipeId] = useState<string>('');
   const [calcMaterials, setCalcMaterials] = useState<Record<string, { mode: 'direct' | 'batch'; unitPrice: number; batchQty: number; batchTotal: number }>>({});
   const [calcLaborCost, setCalcLaborCost] = useState<number>(0);
+  const [calcAccessoryCost, setCalcAccessoryCost] = useState<number>(0);
   const [calcTargetSalePrice, setCalcTargetSalePrice] = useState<number>(120000);
 
   // Scenario manager states
@@ -68,6 +70,7 @@ export default function ProfitEstimatorTab({
   const [editTitle, setEditTitle] = useState<string>('');
   const [editTargetSalePrice, setEditTargetSalePrice] = useState<number>(0);
   const [editLaborCost, setEditLaborCost] = useState<number>(0);
+  const [editAccessoryCost, setEditAccessoryCost] = useState<number>(0);
 
   // Floating Action Modal control for cost margins calculation
   const [isEstimatorModalOpen, setIsEstimatorModalOpen] = useState<boolean>(false);
@@ -82,6 +85,7 @@ export default function ProfitEstimatorTab({
     if (!recipeId) {
       setCalcMaterials({});
       setCalcLaborCost(0);
+      setCalcAccessoryCost(0);
       return;
     }
     const recipe = materialRecipes.find(r => r.id === recipeId);
@@ -97,6 +101,7 @@ export default function ProfitEstimatorTab({
         };
       });
       setCalcMaterials(initialCalcMaterials);
+      setCalcAccessoryCost(0);
 
       // 2. Prepopulate labor cost from operation breakdowns
       const matchedBreakdown = operationBreakdowns.find(ob => ob.modelName.trim().toLowerCase() === recipe.modelName.trim().toLowerCase());
@@ -134,7 +139,7 @@ export default function ProfitEstimatorTab({
       totalMaterialCostSingle += item.consumptionRate * config.unitPrice;
     });
 
-    const totalProductionCost = totalMaterialCostSingle + calcLaborCost;
+    const totalProductionCost = totalMaterialCostSingle + calcLaborCost + calcAccessoryCost;
     const netProfit = Math.max(0, calcTargetSalePrice - totalProductionCost);
     const profitMarginPercent = calcTargetSalePrice > 0 ? Math.round((netProfit / calcTargetSalePrice) * 100) : 0;
 
@@ -149,6 +154,7 @@ export default function ProfitEstimatorTab({
       modelName: currentRecipe.modelName,
       calcMaterials: JSON.parse(JSON.stringify(calcMaterials)),
       calcLaborCost,
+      calcAccessoryCost,
       calcTargetSalePrice,
       totalMaterialCost: totalMaterialCostSingle,
       totalProductionCost,
@@ -173,6 +179,7 @@ export default function ProfitEstimatorTab({
     setSelectedCalcRecipeId(est.recipeId);
     setCalcMaterials(JSON.parse(JSON.stringify(est.calcMaterials)));
     setCalcLaborCost(est.calcLaborCost);
+    setCalcAccessoryCost(est.calcAccessoryCost || 0);
     setCalcTargetSalePrice(est.calcTargetSalePrice);
     
     // Open floating modal to allow direct editing
@@ -195,6 +202,7 @@ export default function ProfitEstimatorTab({
     setEditTitle(est.title);
     setEditTargetSalePrice(est.calcTargetSalePrice);
     setEditLaborCost(est.calcLaborCost);
+    setEditAccessoryCost(est.calcAccessoryCost || 0);
   };
 
   // Handler to save modifications of inline editing
@@ -203,7 +211,7 @@ export default function ProfitEstimatorTab({
       if (est.id !== id) return est;
 
       // Recalculate based on updated inline inputs
-      const totalProductionCost = est.totalMaterialCost + editLaborCost;
+      const totalProductionCost = est.totalMaterialCost + editLaborCost + editAccessoryCost;
       const netProfit = Math.max(0, editTargetSalePrice - totalProductionCost);
       const profitMarginPercent = editTargetSalePrice > 0 ? Math.round((netProfit / editTargetSalePrice) * 100) : 0;
 
@@ -211,6 +219,7 @@ export default function ProfitEstimatorTab({
         ...est,
         title: editTitle.trim() || est.title,
         calcLaborCost: editLaborCost,
+        calcAccessoryCost: editAccessoryCost,
         calcTargetSalePrice: editTargetSalePrice,
         totalProductionCost,
         netProfit,
@@ -458,7 +467,7 @@ export default function ProfitEstimatorTab({
                                                 />
                                               </div>
                                             </div>
-                                            <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/15 py-0.5 px-2 rounded text-center font-mono">
+                                            <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/15 py-0.5 px-2 rounded text-center font-mono mt-1">
                                               <span className="text-[10px] font-extrabold text-amber-600 dark:text-amber-400">
                                                 👉 {config.unitPrice.toLocaleString()}đ/{matUnit}
                                               </span>
@@ -472,8 +481,8 @@ export default function ProfitEstimatorTab({
                               </div>
                             </div>
 
-                            {/* Labor cost & Target Sale Price Section */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-850 pt-4">
+                            {/* Labor cost, Accessory cost & Target Sale Price Section */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 dark:border-slate-850 pt-4">
                               {/* Labor cost */}
                               <div className="space-y-1.5 text-left">
                                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
@@ -491,6 +500,26 @@ export default function ProfitEstimatorTab({
                                 </div>
                                 <p className="text-[9.5px] text-slate-400 leading-normal italic">
                                   * Gốc thợ may từ sơ đồ công đoạn mẫu
+                                </p>
+                              </div>
+
+                              {/* Accessory Cost */}
+                              <div className="space-y-1.5 text-left">
+                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+                                  Giá Tiền Phụ Kiện Bộ Đồ (đ/Bộ):
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    value={calcAccessoryCost || ''}
+                                    placeholder="5,000"
+                                    onChange={(e) => setCalcAccessoryCost(Math.max(0, Number(e.target.value)))}
+                                    className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-3 pr-14 py-2.5 text-xs font-mono font-bold text-slate-800 dark:text-slate-100"
+                                  />
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">đ/bộ</span>
+                                </div>
+                                <p className="text-[9.5px] text-slate-400 leading-normal italic">
+                                  * Cút, tag mác, bao bì chun chỉ phụ bộ
                                 </p>
                               </div>
 
@@ -545,7 +574,7 @@ export default function ProfitEstimatorTab({
                               });
                             });
 
-                            const totalProductionCost = totalMaterialCostSingle + calcLaborCost;
+                            const totalProductionCost = totalMaterialCostSingle + calcLaborCost + calcAccessoryCost;
                             const netProfit = Math.max(0, calcTargetSalePrice - totalProductionCost);
                             const profitMarginPercent = calcTargetSalePrice > 0 ? Math.round((netProfit / calcTargetSalePrice) * 100) : 0;
 
@@ -585,17 +614,23 @@ export default function ProfitEstimatorTab({
                                   </div>
 
                                   {/* Summary details */}
-                                  <div className="grid grid-cols-2 gap-2 text-left">
+                                  <div className="grid grid-cols-3 gap-2 text-left">
                                     <div className="bg-slate-850 border border-slate-800 p-2.5 rounded-xl">
-                                      <span className="text-[8.5px] uppercase font-bold text-slate-450 block">Tổng vải mộc:</span>
-                                      <span className="text-xs font-mono font-bold text-slate-100 block mt-0.5">
+                                      <span className="text-[8.5px] uppercase font-bold text-slate-400 block">Vải mộc:</span>
+                                      <span className="text-[11px] font-mono font-bold text-slate-100 block mt-0.5 truncate">
                                         {Math.round(totalMaterialCostSingle).toLocaleString()}đ
                                       </span>
                                     </div>
                                     <div className="bg-slate-850 border border-slate-800 p-2.5 rounded-xl">
-                                      <span className="text-[8.5px] uppercase font-bold text-slate-450 block">Công tổ may:</span>
-                                      <span className="text-xs font-mono font-bold text-slate-100 block mt-0.5">
+                                      <span className="text-[8.5px] uppercase font-bold text-slate-400 block">Công may:</span>
+                                      <span className="text-[11px] font-mono font-bold text-slate-100 block mt-0.5 truncate">
                                         {calcLaborCost.toLocaleString()}đ
+                                      </span>
+                                    </div>
+                                    <div className="bg-slate-850 border border-slate-800 p-2.5 rounded-xl">
+                                      <span className="text-[8.5px] uppercase font-bold text-slate-400 block">Phụ kiện:</span>
+                                      <span className="text-[11px] font-mono font-bold text-slate-100 block mt-0.5 truncate">
+                                        {calcAccessoryCost.toLocaleString()}đ
                                       </span>
                                     </div>
                                   </div>
@@ -753,6 +788,7 @@ export default function ProfitEstimatorTab({
                       <th className="p-3">kiểu mẫu định lượng</th>
                       <th className="p-3 text-right">báo sỉ dự kiến</th>
                       <th className="p-3 text-right">thùng công thợ</th>
+                      <th className="p-3 text-right">phụ kiện bộ</th>
                       <th className="p-3 text-right">vải sỉ gốc</th>
                       <th className="p-3 text-right">giá thành</th>
                       <th className="p-3 text-right">lãi dự tính</th>
@@ -871,6 +907,38 @@ export default function ProfitEstimatorTab({
                               ) : (
                                 <div className="inline-flex items-center gap-1">
                                   <span>{est.calcLaborCost.toLocaleString()}đ</span>
+                                  {fastEditMode && (
+                                    <span className="text-[9px] text-[#6366f1] opacity-0 group-hover/cell:opacity-100 font-sans font-semibold ml-0.5 whitespace-nowrap">✍️ Sửa</span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Accessory Cost */}
+                            <td 
+                              className={`p-3 text-right font-medium font-mono text-slate-500 dark:text-slate-400 ${
+                                fastEditMode && !isEditing 
+                                  ? 'cursor-pointer hover:bg-indigo-50/70 dark:hover:bg-indigo-950/30 transition-all rounded-lg select-none group/cell relative' 
+                                  : ''
+                              }`}
+                              onClick={() => {
+                                if (fastEditMode && !isEditing) {
+                                  handleStartEdit(est);
+                                }
+                              }}
+                            >
+                              {isEditing ? (
+                                <div className="relative inline-block w-20">
+                                  <input
+                                    type="number"
+                                    value={editAccessoryCost || 0}
+                                    onChange={(e) => setEditAccessoryCost(Math.max(0, Number(e.target.value)))}
+                                    className="bg-slate-50 dark:bg-zinc-950 border border-slate-350 dark:border-slate-700 px-1 py-1 rounded text-xs font-bold text-right font-mono text-slate-900 w-full"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="inline-flex items-center gap-1">
+                                  <span>{(est.calcAccessoryCost || 0).toLocaleString()}đ</span>
                                   {fastEditMode && (
                                     <span className="text-[9px] text-[#6366f1] opacity-0 group-hover/cell:opacity-100 font-sans font-semibold ml-0.5 whitespace-nowrap">✍️ Sửa</span>
                                   )}

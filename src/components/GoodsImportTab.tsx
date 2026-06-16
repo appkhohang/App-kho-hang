@@ -554,8 +554,9 @@ export default function GoodsImportTab({
       .filter(label => currentFilterValue === 'all' || label === currentFilterValue);
 
     let totalQty = 0;
-    let totalGoodsAmount = 0;
-    let totalShip = 0;
+    let totalBaseGoodsAmount = 0; // "tiền hàng" gốc
+    let totalShipTpDt = 0;       // ship TP ➔ ĐT (bao gồm TP_ĐT trên dòng & ship ngoài)
+    let totalShipDtTp = 0;       // ship ĐT ➔ TP
     let totalLaborPaid = 0;
 
     filteredGroupKeys.forEach(label => {
@@ -568,17 +569,18 @@ export default function GoodsImportTab({
       const q = weekItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
       totalQty += q;
 
-      // Total Goods Amount
+      // Base Goods Amount (tiền hàng)
       const a = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
-      totalGoodsAmount += a;
+      totalBaseGoodsAmount += a;
 
-      // Total Ship on item level
+      // ship ĐT ➔ TP
       const dtTp = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
-      const legacyTpDt = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
-      // Separate shipping
-      const separateTpDt = weekShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+      totalShipDtTp += dtTp;
 
-      totalShip += (dtTp + legacyTpDt + separateTpDt);
+      // ship TP ➔ ĐT (TP_ĐT trên dòng + TP_ĐT ngoài)
+      const legacyTpDt = weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
+      const separateTpDt = weekShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+      totalShipTpDt += (legacyTpDt + separateTpDt);
 
       // Total Labor Paid
       const weekLaborPayments = isWeekMode 
@@ -589,12 +591,18 @@ export default function GoodsImportTab({
       totalLaborPaid += groupLaborPaid;
     });
 
+    // Tổng tiền ship (vận chuyển) = ship TP ➔ ĐT trừ ship ĐT ➔ TP
+    const totalShip = totalShipTpDt - totalShipDtTp;
+
+    // Tổng tiền hàng / thợ = tiền hàng cộng Tổng tiền ship (vận chuyển)
+    const totalGoodsAmount = totalBaseGoodsAmount + totalShip;
+
     return {
       totalQty,
       totalGoodsAmount,
       totalShip,
       totalLaborPaid,
-      totalCost: totalGoodsAmount - totalLaborPaid
+      totalCost: totalBaseGoodsAmount
     };
   }, [items, tpDtShippings, laborPayments, filterMode, selectedWeekFilter, selectedMonthFilter, itemsByWeek, itemsByMonth, shippingsByWeek, shippingsByMonth]);
 
@@ -1142,6 +1150,9 @@ export default function GoodsImportTab({
                 <div className="text-base font-black font-mono text-indigo-650 dark:text-indigo-400 mt-2">
                   {displayedTotals.totalGoodsAmount.toLocaleString()} <span className="text-xs font-normal text-slate-400">đ</span>
                 </div>
+                <div className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans">
+                  (Tiền hàng + Tổng ship)
+                </div>
               </div>
 
               {/* Tiền ship */}
@@ -1151,6 +1162,9 @@ export default function GoodsImportTab({
                 </span>
                 <div className="text-base font-black font-mono text-rose-500 dark:text-rose-400 mt-2">
                   {displayedTotals.totalShip.toLocaleString()} <span className="text-xs font-normal text-slate-400">đ</span>
+                </div>
+                <div className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans">
+                  (Ship TP ➔ ĐT - Ship ĐT ➔ TP)
                 </div>
               </div>
 
@@ -1164,7 +1178,7 @@ export default function GoodsImportTab({
                   <span className="text-xs font-bold text-emerald-550/80">đ</span>
                 </div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-sans">
-                  (Bằng Tiền hàng - Đã thanh toán thợ)
+                  (Tiền hàng)
                 </div>
               </div>
             </div>
@@ -1476,6 +1490,7 @@ export default function GoodsImportTab({
 
               const totalLaborPaid = weekLaborPayments.reduce((acc, p) => acc + p.amount, 0);
               const remainingLaborDebt = cleanTotalAmount - totalLaborPaid;
+              const totalWeekAmount = totalAmount + netBackShipValue;
 
               return (
                 <motion.div
@@ -1485,7 +1500,7 @@ export default function GoodsImportTab({
                   className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden"
                 >
                   {/* Week Header with integrated, compact statistics */}
-                  <div className="bg-slate-50 dark:bg-zinc-950 px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                  <div className="bg-slate-50 dark:zinc-950 px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4 w-full xl:w-auto">
                       <div className="flex items-center gap-3 shrink-0">
                         {isMultiSelectMode && (
@@ -1513,18 +1528,20 @@ export default function GoodsImportTab({
                           <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">cái</span>
                         </div>
 
-                        {/* Stat 2: Tổng tiền hàng */}
-                        <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-1.5 shadow-3xs" title="Tổng tiền hàng">
+                        {/* Stat 2: Tổng tuần */}
+                        <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-1.5 shadow-3xs" title={isWeekMode ? "Tổng tuần (Tổng thành tiền + Ship)" : "Tổng tháng (Tổng thành tiền + Ship)"}>
                           <Database className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Tiền Hàng:</span>
-                          <span className="text-xs font-black text-emerald-650 dark:text-emerald-450 font-mono">{totalAmount.toLocaleString()}đ</span>
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                            {isWeekMode ? "Tổng tuần:" : "Tổng tháng:"}
+                          </span>
+                          <span className="text-xs font-black text-emerald-650 dark:text-emerald-450 font-mono">{totalWeekAmount.toLocaleString()}đ</span>
                         </div>
 
                         {/* Stat 3: Tổng tiền ship */}
-                        <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-1.5 shadow-3xs" title={`ĐT➔TP: ${totalShipĐT_TP.toLocaleString()}đ | TP➔ĐT: ${totalShipTP_ĐT.toLocaleString()}đ`}>
+                        <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-1.5 shadow-3xs" title={`Ship TP➔ĐT: ${totalShipTP_ĐT.toLocaleString()}đ | Ship ĐT➔TP: ${totalShipĐT_TP.toLocaleString()}đ (Chênh lệch: ${netBackShipValue.toLocaleString()}đ)`}>
                           <Truck className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                           <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Ship:</span>
-                          <span className="text-xs font-black text-slate-700 dark:text-slate-300 font-mono">{(totalShipĐT_TP + totalShipTP_ĐT).toLocaleString()}đ</span>
+                          <span className="text-xs font-black text-slate-700 dark:text-slate-300 font-mono">{netBackShipValue.toLocaleString()}đ</span>
                         </div>
 
                         {/* Stat 4: Thanh toán - Nợ thợ */}
