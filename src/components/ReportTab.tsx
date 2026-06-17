@@ -38,7 +38,7 @@ interface ReportTabProps {
   customers?: Customer[];
 }
 
-type PeriodType = 'day' | 'week' | 'month' | 'all';
+type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all';
 type SubTabType = 'sales' | 'profit' | 'inventory' | 'cashflow';
 
 export default function ReportTab({
@@ -55,7 +55,7 @@ export default function ReportTab({
 
   // 1. Core navigation and active tab states
   const [activeSubTab, setActiveSubTab] = useState<SubTabType>('sales');
-  const [period, setPeriod] = useState<PeriodType>('day');
+  const [period, setPeriod] = useState<PeriodType>('month');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [chartValueType, setChartValueType] = useState<'value' | 'quantity'>('value');
 
@@ -96,10 +96,21 @@ export default function ReportTab({
   };
 
   // Switch Selected Date backward/forward dynamically
-  const handleShiftDate = (days: number) => {
+  const handleShiftDate = (direction: number) => {
     const current = new Date(selectedDate);
     if (isNaN(current.getTime())) return;
-    current.setDate(current.getDate() + days);
+    
+    if (period === 'day') {
+      current.setDate(current.getDate() + direction);
+    } else if (period === 'week') {
+      current.setDate(current.getDate() + (direction * 7));
+    } else if (period === 'month') {
+      current.setMonth(current.getMonth() + direction);
+    } else if (period === 'year') {
+      current.setFullYear(current.getFullYear() + direction);
+    } else {
+      current.setDate(current.getDate() + direction);
+    }
     
     // Format back to YYYY-MM-DD safely
     const y = current.getFullYear();
@@ -125,6 +136,7 @@ export default function ReportTab({
       case 'day': return 'Ngày';
       case 'week': return 'Tuần';
       case 'month': return 'Tháng';
+      case 'year': return 'Năm';
       case 'all': return 'Tất cả';
     }
   };
@@ -148,6 +160,9 @@ export default function ReportTab({
       const checkTime = new Date(dateField).getTime();
       const diffDays = (targetTime - checkTime) / (1000 * 60 * 60 * 24);
       return diffDays >= 0 && diffDays < 7;
+    } else if (period === 'year') {
+      // Compare YYYY
+      return dateField.substring(0, 4) === targetDate.substring(0, 4);
     }
     return true; // Cumulative / All
   };
@@ -728,20 +743,20 @@ export default function ReportTab({
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 5 }}
-                  className="absolute left-0 mt-1.5 w-28 bg-white dark:bg-slate-800 border border-slate-150 dark:border-slate-700 rounded-xl shadow-lg z-40 overflow-hidden"
+                  className="absolute left-0 mt-1.5 w-28 bg-white dark:bg-slate-800 border border-slate-150 dark:border-slate-705 rounded-xl shadow-lg z-40 overflow-hidden"
                 >
-                  {(['day', 'week', 'month', 'all'] as PeriodType[]).map(p => (
+                  {(['day', 'week', 'month', 'year', 'all'] as PeriodType[]).map(p => (
                     <button
                       key={p}
                       onClick={() => {
                         setPeriod(p);
                         setShowPeriodMenu(false);
                       }}
-                      className={`w-full text-left px-3.5 py-2 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-750 transition ${
-                        period === p ? 'text-emerald-600 dark:text-emerald-450 font-extrabold' : 'text-slate-600 dark:text-slate-300'
+                      className={`w-full text-left px-3.5 py-2 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-750 transition ${
+                        period === p ? 'text-emerald-600 dark:text-emerald-450 font-extrabold bg-slate-50 dark:bg-slate-750' : 'text-slate-600 dark:text-slate-300'
                       }`}
                     >
-                      {p === 'day' ? 'Hàng Ngày' : p === 'week' ? 'Hàng Tuần' : p === 'month' ? 'Hàng Tháng' : 'Tất cả'}
+                      {p === 'day' ? 'Hàng Ngày' : p === 'week' ? 'Hàng Tuần' : p === 'month' ? 'Hàng Tháng' : p === 'year' ? 'Hàng Năm' : 'Tất cả'}
                     </button>
                   ))}
                 </motion.div>
@@ -761,7 +776,15 @@ export default function ReportTab({
           </button>
 
           <span className="text-xs font-extrabold text-slate-800 dark:text-slate-100 font-mono">
-            {period === 'day' ? formatDisplayDate(selectedDate) : period === 'month' ? `Tháng ${selectedDate.substring(5, 7)}/${selectedDate.substring(0, 4)}` : period === 'week' ? `7 ngày quanh ${formatDisplayDate(selectedDate)}` : 'Toàn thời gian'}
+            {period === 'day' 
+              ? formatDisplayDate(selectedDate) 
+              : period === 'month' 
+                ? `Tháng ${selectedDate.substring(5, 7)}/${selectedDate.substring(0, 4)}` 
+                : period === 'week' 
+                  ? `7 ngày quanh ${formatDisplayDate(selectedDate)}` 
+                  : period === 'year'
+                    ? `Năm ${selectedDate.substring(0, 4)}`
+                    : 'Toàn thời gian'}
           </span>
 
           <button

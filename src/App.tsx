@@ -2603,141 +2603,120 @@ export default function App() {
                     <div className="space-y-3">
                       <p className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase font-mono">{t('DANH MỤC TRỰC QUAN', 'VISUAL CATEGORIES')}</p>
                       
-                      <div className="space-y-2">
-                        {/* Tab 1 button link */}
-                        {allowedTabs.includes('import') && (
-                          <button
-                            onClick={() => {
-                              setActiveTab('import');
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'import' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800'}`}
-                          >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'import' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
-                              <Layers className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">{t('1. Hàng Hoá & Nhập Hàng', '1. Materials & Imports')}</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal">{t('Mẫu mã nhập về, lượng công thợ, đơn giá ship hai vùng', 'Imported models, worker workloads, shipping rates')}</span>
-                            </div>
-                          </button>
-                        )}
+                      <div className="grid grid-cols-2 gap-2">
+                         {/* Tab 1 button link */}
+                         {allowedTabs.includes('import') && (
+                           <button
+                             onClick={() => {
+                               setActiveTab('import');
+                               setIsMobileMenuOpen(false);
+                             }}
+                             className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === 'import' ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
+                           >
+                             <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'import' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                               <Layers className="w-4 h-4" />
+                             </div>
+                             <span>{t('Nhập hàng', 'Imports')}</span>
+                           </button>
+                         )}
 
-                        {/* Tab 2 button link */}
-                        {allowedTabs.includes('invoices') && (
-                          <button
-                            onClick={() => {
-                              setActiveTab('invoices');
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'invoices' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-850'}`}
-                          >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'invoices' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
-                              <Layers className="w-4 h-4 text-emerald-500" />
-                            </div>
-                            <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">{t('2. Viết Hoá Đơn Bán', '2. Create Sales Invoice')}</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal">{t('Hóa đơn công nợ lũy kế, thu chi khách sỉ và in hóa đơn sành điệu', 'Debt tracking, wholesale customer invoices & printing')}</span>
-                            </div>
-                          </button>
-                        )}
+                         {/* Tab 2 button link */}
+                         {allowedTabs.includes('invoices') && (
+                           <button
+                             onClick={() => {
+                               setActiveTab('invoices');
+                               setIsMobileMenuOpen(false);
+                             }}
+                             className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === 'invoices' ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
+                           >
+                             <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'invoices' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                               <Layers className="w-4 h-4 text-emerald-500" />
+                             </div>
+                             <span>{t('Hóa đơn bán', 'Sales')}</span>
+                           </button>
+                         )}
 
-                        {/* Tab 3 button link */}
-                        {allowedTabs.includes('production') && (
-                          <button
-                            onClick={() => {
-                              setActiveTab('production');
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'production' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
-                          >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'production' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
-                              <Scissors className="w-4 h-4 text-indigo-500" />
-                            </div>
-                            <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">{t('3. Quản Lý Sản Xuất', '3. Production Control')}</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Định mức nguyên liệu kho, phân tổ công đoạn thợ may', 'Warehouse raw materials, tailor job allocation')}</span>
-                            </div>
-                          </button>
-                        )}
+                         {/* Tab 3 button link */}
+                         {allowedTabs.includes('production') && (
+                           <button
+                             onClick={() => {
+                               setActiveTab('production');
+                               setIsMobileMenuOpen(false);
+                             }}
+                             className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === 'production' ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
+                           >
+                             <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'production' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                               <Scissors className="w-4 h-4 text-indigo-500" />
+                             </div>
+                             <span>{t('Sản xuất', 'Production')}</span>
+                           </button>
+                         )}
 
-                        {/* Tab 4 button link - Kho Hàng */}
-                        {allowedTabs.includes('inventory') && (
-                          <button
-                            onClick={() => {
-                              setActiveTab('inventory');
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'inventory' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
-                          >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'inventory' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
-                              <Boxes className="w-4 h-4 text-emerald-500" />
-                            </div>
-                            <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">{t('4. Kho Hàng & Thành Phẩm', '4. Finished Goods Warehouse')}</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Tự động kiểm đếm, đối soát hàng hoá nhập xuất chi tiết', 'Automatic calculation & verification of finished goods inventory')}</span>
-                            </div>
-                          </button>
-                        )}
+                         {/* Tab 4 button link - Kho Hàng */}
+                         {allowedTabs.includes('inventory') && (
+                           <button
+                             onClick={() => {
+                               setActiveTab('inventory');
+                               setIsMobileMenuOpen(false);
+                             }}
+                             className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === 'inventory' ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-955/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
+                           >
+                             <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'inventory' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                               <Boxes className="w-4 h-4 text-emerald-500" />
+                             </div>
+                             <span>{t('Kho hàng', 'Warehouse')}</span>
+                           </button>
+                         )}
 
-                        {/* Tab 5 button link - Giá Thành & Lợi Nhuận Bộ Đồ */}
-                        {allowedTabs.includes('profit_estimator') && (
-                          <button
-                            onClick={() => {
-                              setActiveTab('profit_estimator');
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'profit_estimator' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
-                          >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'profit_estimator' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
-                              <DollarSign className="w-4 h-4 text-indigo-500" />
-                            </div>
-                            <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">{t('5. Giá Thành & Lợi Nhuận', '5. Pricing & Profit Estimation')}</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Dự phóng doanh thu, giá vốn gia công định lượng', 'Automatic cost-profit forecasting using raw material recipes')}</span>
-                            </div>
-                          </button>
-                        )}
+                         {/* Tab 5 button link - Giá Thành & Lợi Nhuận Bộ Đồ */}
+                         {allowedTabs.includes('profit_estimator') && (
+                           <button
+                             onClick={() => {
+                               setActiveTab('profit_estimator');
+                               setIsMobileMenuOpen(false);
+                             }}
+                             className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === 'profit_estimator' ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
+                           >
+                             <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'profit_estimator' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                               <DollarSign className="w-4 h-4 text-indigo-500" />
+                             </div>
+                             <span>{t('Giá thành', 'Pricing')}</span>
+                           </button>
+                         )}
 
-                        {/* Tab Gallery button link */}
-                        {allowedTabs.includes('gallery') && (
-                          <button
-                            onClick={() => {
-                              setActiveTab('gallery');
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'gallery' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
-                          >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'gallery' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
-                              <Image className="w-4 h-4 text-purple-505" />
-                            </div>
-                            <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">{t('Thư viện Ảnh chụp', 'Captured Photo Gallery')}</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Tìm kiếm và đối so sánh đồng thời hình ảnh đã chụp với Bill, Nhập hàng', 'Compare captured model photos across Bills & Imports')}</span>
-                            </div>
-                          </button>
-                        )}
+                         {/* Tab Gallery button link */}
+                         {allowedTabs.includes('gallery') && (
+                           <button
+                             onClick={() => {
+                               setActiveTab('gallery');
+                               setIsMobileMenuOpen(false);
+                             }}
+                             className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === 'gallery' ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
+                           >
+                             <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'gallery' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                               <Image className="w-4 h-4 text-purple-500" />
+                             </div>
+                             <span>{t('Thư viện ảnh', 'Gallery')}</span>
+                           </button>
+                         )}
 
-                        {/* Tab Settings button link */}
-                        {allowedTabs.includes('settings') && (
-                          <button
-                            onClick={() => {
-                              setActiveTab('settings');
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className={`w-full text-left p-3.5 rounded-2xl transition flex items-start gap-3 cursor-pointer select-none group border ${activeTab === 'settings' ? 'bg-indigo-50/70 border-indigo-200 text-indigo-750 dark:bg-indigo-950/30 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-805'}`}
-                          >
-                            <div className={`mt-0.5 p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
-                              <Settings className="w-4 h-4 text-blue-500" />
-                            </div>
-                            <div>
-                              <span className="text-[12.5px] font-bold block leading-tight">{t('Cài đặt hệ thống', 'System Settings')}</span>
-                              <span className="text-[9.5px] text-slate-400 mt-0.5 block leading-normal font-sans">{t('Chọn giao diện hiển thị, sao lưu, khôi phục dữ liệu xưởng', 'Display options, secure backups & factory database recovery')}</span>
-                            </div>
-                          </button>
-                        )}
+                         {/* Tab Settings button link */}
+                         {allowedTabs.includes('settings') && (
+                           <button
+                             onClick={() => {
+                               setActiveTab('settings');
+                               setIsMobileMenuOpen(false);
+                             }}
+                             className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === 'settings' ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
+                           >
+                             <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                               <Settings className="w-4 h-4 text-blue-500" />
+                             </div>
+                             <span>{t('Cài đặt', 'Settings')}</span>
+                           </button>
+                         )}
+                       </div>
                       </div>
-                    </div>
 
                     {/* Week filter integration specifically requested by user to be placed inside the 3-gạch menu */}
                     {activeTab === 'import' && weekKeys.length > 0 && (() => {
