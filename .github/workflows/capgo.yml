@@ -26,10 +26,20 @@ jobs:
         run: |
           node -e "
             const fs = require('fs');
+            // Update package.json
             const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            pkg.version = '1.0.${{ github.run_number }}';
+            const newVer = '1.0.${{ github.run_number }}';
+            pkg.version = newVer;
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-            console.log('Updated version to: ' + pkg.version);
+            console.log('Updated package.json version to: ' + newVer);
+            
+            // Update src/types.ts
+            if (fs.existsSync('src/types.ts')) {
+              let types = fs.readFileSync('src/types.ts', 'utf8');
+              types = types.replace(/(export\s+const\s+CURRENT_VERSION\s*=\s*)(['\"])[^'\"]+(['\"])/, '$1$2' + newVer + '$3');
+              fs.writeFileSync('src/types.ts', types, 'utf8');
+              console.log('Updated src/types.ts CURRENT_VERSION to: ' + newVer);
+            }
           "
 
       - name: Build production app

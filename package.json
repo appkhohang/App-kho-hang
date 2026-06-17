@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
-    "build:mobile": "VITE_BASE_URL=./ vite build",
+    "bump-version": "node scripts/bump-version.js",
+    "build:mobile": "node scripts/bump-version.js && VITE_BASE_URL=./ vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "capgo-push": "npm run build && npx @capgo/cli bundle upload -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production"
+    "capgo-push": "node scripts/bump-version.js && npm run build && npx @capgo/cli bundle upload -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
