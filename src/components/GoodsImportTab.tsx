@@ -1500,7 +1500,7 @@ export default function GoodsImportTab({
                   className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden"
                 >
                   {/* Week Header with integrated, compact statistics */}
-                  <div className="bg-slate-50 dark:zinc-950 px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                  <div className="bg-slate-50 dark:bg-zinc-950 px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4 w-full xl:w-auto">
                       <div className="flex items-center gap-3 shrink-0">
                         {isMultiSelectMode && (
@@ -1508,13 +1508,13 @@ export default function GoodsImportTab({
                             type="checkbox"
                             checked={isAllItemsSelected(weekItems)}
                             onChange={() => toggleAllItemsInGroup(weekItems)}
-                            className="w-4.5 h-4.5 rounded border-slate-300 dark:border-slate-700 text-indigo-650 focus:ring-indigo-500 cursor-pointer"
+                            className="w-4.5 h-4.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-505 cursor-pointer"
                             title="Chọn tất cả đơn trong nhóm này"
                           />
                         )}
                         <div>
                           <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 font-sans tracking-tight">{weekLabel}</h3>
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold font-mono">Tổng cộng {weekItems.length} dòng dữ liệu</p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold font-mono">Tổng cộng {weekItems.length} dòng dữ liệu</p>
                         </div>
                       </div>
 
@@ -1523,25 +1523,25 @@ export default function GoodsImportTab({
                         {/* Stat 1: Số lượng may */}
                         <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-1.5 shadow-3xs" title="Số lượng may">
                           <ShoppingBag className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">SL May:</span>
-                          <span className="text-xs font-black text-slate-805 dark:text-slate-200 font-mono">{totalQty.toLocaleString()}</span>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">cái</span>
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">SL May:</span>
+                          <span className="text-xs font-black text-slate-800 dark:text-slate-200 font-mono">{totalQty.toLocaleString()}</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">cái</span>
                         </div>
 
                         {/* Stat 2: Tổng tuần */}
                         <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-1.5 shadow-3xs" title={isWeekMode ? "Tổng tuần (Tổng thành tiền + Ship)" : "Tổng tháng (Tổng thành tiền + Ship)"}>
                           <Database className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                             {isWeekMode ? "Tổng tuần:" : "Tổng tháng:"}
                           </span>
-                          <span className="text-xs font-black text-emerald-650 dark:text-emerald-450 font-mono">{totalWeekAmount.toLocaleString()}đ</span>
+                          <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">{totalWeekAmount.toLocaleString()}đ</span>
                         </div>
 
                         {/* Stat 3: Tổng tiền ship */}
                         <div className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-1.5 shadow-3xs" title={`Ship TP➔ĐT: ${totalShipTP_ĐT.toLocaleString()}đ | Ship ĐT➔TP: ${totalShipĐT_TP.toLocaleString()}đ (Chênh lệch: ${netBackShipValue.toLocaleString()}đ)`}>
                           <Truck className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Ship:</span>
-                          <span className="text-xs font-black text-slate-700 dark:text-slate-300 font-mono">{netBackShipValue.toLocaleString()}đ</span>
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ship:</span>
+                          <span className="text-xs font-black text-slate-700 dark:text-slate-200 font-mono">{netBackShipValue.toLocaleString()}đ</span>
                         </div>
 
                         {/* Stat 4: Thanh toán - Nợ thợ */}
@@ -1550,9 +1550,9 @@ export default function GoodsImportTab({
                             ? 'bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40' 
                             : 'bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800'
                         }`} title={`Tổng thợ: ${totalAmount.toLocaleString()}đ | Đã trả: ${totalLaborPaid.toLocaleString()}đ | Còn nợ: ${remainingLaborDebt.toLocaleString()}đ`}>
-                          <Wallet className="w-3.5 h-3.5 text-amber-550 shrink-0" />
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Nợ thợ:</span>
-                          <span className={`text-xs font-black font-mono ${remainingLaborDebt > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                          <Wallet className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nợ thợ:</span>
+                          <span className={`text-xs font-black font-mono ${remainingLaborDebt > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
                             {remainingLaborDebt.toLocaleString()}đ
                           </span>
                         </div>
@@ -1562,7 +1562,7 @@ export default function GoodsImportTab({
                     <button
                       id={`export_btn_${weekLabel}`}
                       onClick={() => exportWeekToExcel(weekLabel, weekItems)}
-                      className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-xs py-1.5 px-4 rounded-lg font-medium flex items-center gap-1.5 border border-emerald-250 transition cursor-pointer shrink-0 self-stretch sm:self-auto justify-center"
+                      className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-xs py-1.5 px-4 rounded-lg font-medium flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800/60 transition cursor-pointer shrink-0 self-stretch sm:self-auto justify-center"
                     >
                       <FileSpreadsheet className="w-3.5 h-3.5" />
                       <span>Xuất Excel Tuần</span>
