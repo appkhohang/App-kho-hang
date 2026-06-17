@@ -50,4 +50,9 @@ jobs:
       - name: Upload and deploy to Capgo
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_API_KEY }}
-        run: npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production
+        run: |
+          if [ -z "$CAPGO_TOKEN" ]; then
+            echo "::error::CAPGO_API_KEY secret is not configured in your GitHub repository secrets! Please set CAPGO_API_KEY in your GitHub Settings -> Secrets and variables -> Actions to enable automatic deployments."
+            exit 1
+          fi
+          npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production
