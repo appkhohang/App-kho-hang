@@ -416,7 +416,7 @@ export default function App() {
       } catch (err) {
         console.warn('Silent update lookup skipped.', err);
       }
-    }, 2800); // 2.8s debounce delay after app boot
+    }, 0); // 0s/0ms delay after app boot for instant loading
     return () => clearTimeout(timer);
   }, []);
 
@@ -2568,6 +2568,7 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
+                  transition={{ duration: 0 }}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="absolute inset-0 bg-slate-950/40 backdrop-blur-xs cursor-pointer"
                 />
@@ -2577,7 +2578,7 @@ export default function App() {
                   initial={{ x: '-100%' }}
                   animate={{ x: 0 }}
                   exit={{ x: '-100%' }}
-                  transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                  transition={{ duration: 0 }}
                   className="relative w-[82vw] max-w-xs bg-slate-50 dark:bg-[#0f172a] min-h-screen shadow-2xl flex flex-col justify-between border-r border-slate-200 dark:border-slate-800"
                 >
                   <div className="p-5 space-y-5 overflow-y-auto flex-grow scrollbar-none">
@@ -3035,9 +3036,14 @@ export default function App() {
 
                   {/* Drawer Footer controls */}
                   <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-100/40 dark:bg-slate-900/40 flex flex-col gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">{authState.displayName || 'Kế toán viên'} (Admin)</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">{authState.displayName || 'Kế toán viên'} (Admin)</span>
+                      </div>
+                      <span className="text-[10px] font-bold font-mono text-slate-500 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200/20">
+                        v{localStorage.getItem('capgo_active_version') || CURRENT_VERSION}
+                      </span>
                     </div>
                     <button
                       onClick={() => {
@@ -3068,7 +3074,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                 >
                   {renderHomeContent()}
                 </motion.div>
@@ -3078,7 +3084,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                 >
                   <Suspense fallback={<TabLoadingFallback />}>
                     <GoodsImportTab
@@ -3105,7 +3111,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                 >
                   <Suspense fallback={<TabLoadingFallback />}>
                     <InvoicesTab
@@ -3131,7 +3137,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                 >
                   <Suspense fallback={<TabLoadingFallback />}>
                     <ProductionTab
@@ -3166,7 +3172,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                 >
                   <ProfitEstimatorTab
                     materialRecipes={materialRecipes}
@@ -3183,7 +3189,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                   className="bg-white dark:bg-[#0c101d] rounded-2xl border border-slate-200/50 dark:border-slate-800 p-6 shadow-xs max-w-7xl mx-auto"
                 >
                   <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800/80 mb-6 text-left">
@@ -3212,7 +3218,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                 >
                   <ReportTab
                     items={items}
@@ -3232,7 +3238,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                 >
                   <SettingsTab
                     settings={settings}
@@ -3257,7 +3263,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                 >
                   <GalleryTab
                     items={items}
@@ -3275,7 +3281,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0 }}
                   className="space-y-4 max-w-2xl mx-auto font-sans pb-12"
                 >
                   {/* Title & Selection controls in Card */}
