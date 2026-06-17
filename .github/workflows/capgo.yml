@@ -28,4 +28,4 @@ jobs:
       - name: Upload and deploy to Capgo
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_API_KEY }}
-        run: npx @capgo/cli@latest upload --apikey "$CAPGO_TOKEN"
+        run: npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN"
