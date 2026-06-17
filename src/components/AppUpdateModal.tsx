@@ -81,7 +81,7 @@ export default function AppUpdateModal({ updateInfo, onClose }: AppUpdateModalPr
 
           <div className="flex flex-col">
             <span className="text-[10px] text-slate-400">Đang cài đặt:</span>
-            <span className="font-extrabold text-slate-500 text-sm">v{CURRENT_VERSION}</span>
+            <span className="font-extrabold text-slate-500 text-sm">v{localStorage.getItem('capgo_active_version') || CURRENT_VERSION}</span>
           </div>
 
           <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800" />

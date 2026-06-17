@@ -20,7 +20,7 @@ import InvoicesTab from './components/InvoicesTab';
 import ReportInventoryDetail from './components/ReportInventoryDetail';
 import FloatingStats from './components/FloatingStats';
 import CameraCapture from './components/CameraCapture';
-import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo } from './types';
+import { CURRENT_VERSION, ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo } from './types';
 import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage, DatabasePackage } from './utils/storage';
 import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncService';
 import { useRealtimeSync } from './utils/realtimeSync';
@@ -29,8 +29,9 @@ import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { formatVietnameseDate, getCurrentDateStr, getVietnameseWeekKey } from './utils/dateUtils';
 import { useAndroidBack } from './hooks/useAndroidBack';
-import { checkAppUpdate } from './utils/updateService';
+import { checkAppUpdate, isNewerVersion } from './utils/updateService';
 import { App as CapApp } from '@capacitor/app';
+import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import AppUpdateModal from './components/AppUpdateModal';
 import AnBrandLogo from './components/AnBrandLogo';
 
@@ -344,6 +345,59 @@ export default function App() {
 
   // OTA Update states
   const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [capgoPendingUpdate, setCapgoPendingUpdate] = useState<string | null>(null);
+
+  // Capgo Live Update Auto-Updater Listener
+  useEffect(() => {
+    let downloadListener: any = null;
+    let updateFailedListener: any = null;
+
+    const setupCapgoListeners = async () => {
+      const isNative = typeof window !== 'undefined' && (window as any).Capacitor && (window as any).Capacitor.isNativePlatform();
+      if (!isNative) {
+        localStorage.setItem('capgo_active_version', CURRENT_VERSION);
+        return;
+      }
+
+      try {
+        // Retrieve and set the active dynamic version on launch
+        const currentRes = await CapacitorUpdater.current();
+        const activeVer = currentRes?.bundle?.version || currentRes?.native || CURRENT_VERSION;
+        localStorage.setItem('capgo_active_version', activeVer);
+
+        // Notify app ready to finish the loaded bundle verification
+        await CapacitorUpdater.notifyAppReady();
+
+        // Listen for new bundle downloaded successfully in background
+        downloadListener = await CapacitorUpdater.addListener('downloadComplete', (info) => {
+          console.log('[Capgo OTA] Received downloadComplete event:', info);
+          if (info?.bundle?.version) {
+            setCapgoPendingUpdate(info.bundle.version);
+          }
+        });
+
+        updateFailedListener = await CapacitorUpdater.addListener('updateFailed', (err) => {
+          console.error('[Capgo OTA] Received updateFailed event:', err);
+        });
+
+        // Trigger a background update check proactively on startup
+        await CapacitorUpdater.triggerUpdateCheck();
+      } catch (err) {
+        console.warn('[Capgo OTA] Error during live-update init:', err);
+      }
+    };
+
+    setupCapgoListeners();
+
+    return () => {
+      if (downloadListener) {
+        downloadListener.remove().catch((e: any) => console.log('Error removing Capgo downloadListener:', e));
+      }
+      if (updateFailedListener) {
+        updateFailedListener.remove().catch((e: any) => console.log('Error removing Capgo updateFailedListener:', e));
+      }
+    };
+  }, []);
 
   // Auto check for updates on startup (silently, online-first)
   useEffect(() => {
@@ -351,9 +405,12 @@ export default function App() {
       try {
         const update = await checkAppUpdate();
         if (update) {
+          const activeVer = localStorage.getItem('capgo_active_version') || CURRENT_VERSION;
           const dismissedVer = localStorage.getItem('xuongan_dismissed_update_version');
-          if (update.critical || dismissedVer !== update.version) {
-            setUpdateInfo(update);
+          if (isNewerVersion(update.version, activeVer)) {
+            if (update.critical || dismissedVer !== update.version) {
+              setUpdateInfo(update);
+            }
           }
         }
       } catch (err) {
@@ -3831,6 +3888,51 @@ export default function App() {
             updateInfo={updateInfo}
             onClose={handleDismissUpdate}
           />
+        )}
+
+        {capgoPendingUpdate && (
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:max-w-md bg-slate-950 dark:bg-slate-900 border border-slate-800 dark:border-slate-800 text-white rounded-3xl p-4.5 shadow-[0_12px_40px_rgba(0,0,0,0.5)] z-100 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between font-sans"
+          >
+            <div className="space-y-1 text-left flex-1 pr-1">
+              <span className="text-[8.5px] bg-emerald-500 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                Sẵn sàng nâng cấp (OTA)
+              </span>
+              <p className="text-xs text-slate-200 dark:text-slate-100 font-semibold leading-snug">
+                Đã tải xong bản OTA cải tiến mới <strong className="text-emerald-400 font-black font-mono">v{capgoPendingUpdate}</strong>!
+              </p>
+              <p className="text-[10px] text-slate-400 leading-normal">
+                Khởi động lại ngay để áp dụng mà không tốn dung lượng download.
+              </p>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto shrink-0 justify-end self-stretch sm:self-auto items-center pt-2 sm:pt-0 border-t border-slate-800 sm:border-0">
+              <button
+                type="button"
+                onClick={() => setCapgoPendingUpdate(null)}
+                className="px-3 py-2 hover:bg-slate-800 dark:hover:bg-slate-850 text-slate-350 hover:text-white rounded-xl text-xs font-bold transition duration-150 cursor-pointer"
+              >
+                Để sau
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await CapacitorUpdater.reload();
+                  } catch (e: any) {
+                    alert(`Không thể tự khởi động lại: ${e?.message || e}`);
+                  }
+                }}
+                className="bg-indigo-500 hover:bg-indigo-400 active:scale-[0.97] text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition duration-150 cursor-pointer shadow-lg shadow-indigo-500/20 flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Nâng cấp ngay</span>
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
