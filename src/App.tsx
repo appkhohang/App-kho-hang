@@ -3067,223 +3067,161 @@ export default function App() {
             <main className="flex-grow max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-4 sm:py-8 w-full relative">
             
             {/* Display page logs / tab view */}
-            <AnimatePresence mode="wait">
-              {activeTab === 'home' ? (
-                <motion.div
-                  key="home-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                >
-                  {renderHomeContent()}
-                </motion.div>
-              ) : activeTab === 'import' ? (
-                <motion.div
-                  key="import-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                >
-                  <Suspense fallback={<TabLoadingFallback />}>
-                    <GoodsImportTab
-                      items={items}
-                      setItems={setItems}
-                      laborPayments={laborPayments}
-                      setLaborPayments={setLaborPayments}
-                      tpDtShippings={tpDtShippings || []}
-                      setTpDtShippings={setTpDtShippings}
-                      settings={settings}
-                      setSettings={setSettings}
-                      onImportBackup={handleImportBackup}
-                      selectedWeekFilter={selectedWeekFilter}
-                      setSelectedWeekFilter={setSelectedWeekFilter}
-                      userRole={userRole}
-                      autoExpandForm={autoExpandImportForm}
-                      onAutoExpandFormReset={() => setAutoExpandImportForm(false)}
-                    />
-                  </Suspense>
-                </motion.div>
-              ) : activeTab === 'invoices' ? (
-                <motion.div
-                  key="invoices-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                >
-                  <Suspense fallback={<TabLoadingFallback />}>
-                    <InvoicesTab
-                      customers={customers}
-                      setCustomers={setCustomers}
-                      bills={bills}
-                      setBills={setBills}
-                      payments={payments}
-                      setPayments={setPayments}
-                      userRole={userRole}
-                      resolvedTheme={resolvedTheme}
-                      autoOpenCreateBill={autoOpenCreateBill}
-                      onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
-                      selectedCustomerId={invoiceSelectedCustomerId}
-                      setSelectedCustomerId={setInvoiceSelectedCustomerId}
-                      items={items}
-                    />
-                  </Suspense>
-                </motion.div>
-              ) : activeTab === 'production' ? (
-                <motion.div
-                  key="production-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                >
-                  <Suspense fallback={<TabLoadingFallback />}>
-                    <ProductionTab
-                      operationBreakdowns={operationBreakdowns}
-                      setOperationBreakdowns={setOperationBreakdowns}
-                      workers={workers}
-                      setWorkers={setWorkers}
-                      tasks={tasks}
-                      setTasks={setTasks}
-                      workerJobs={workerJobs}
-                      setWorkerJobs={setWorkerJobs}
-                      rawMaterials={rawMaterials}
-                      setRawMaterials={setRawMaterials}
-                      materialRecipes={materialRecipes}
-                      setMaterialRecipes={setMaterialRecipes}
-                      productionBatches={productionBatches}
-                      setProductionBatches={setProductionBatches}
-                      materialReimports={materialReimports}
-                      setMaterialReimports={setMaterialReimports}
-                      laborPayments={laborPayments}
-                      setLaborPayments={setLaborPayments}
-                      settings={settings}
-                      userRole={userRole}
-                      initialSubTab={productionSubTab}
-                      onSubTabChange={setProductionSubTab}
-                    />
-                  </Suspense>
-                </motion.div>
-              ) : activeTab === 'profit_estimator' ? (
-                <motion.div
-                  key="profit-estimator-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                >
-                  <ProfitEstimatorTab
-                    materialRecipes={materialRecipes}
-                    rawMaterials={rawMaterials}
-                    operationBreakdowns={operationBreakdowns}
-                    fastEditMode={fastEditMode}
-                    defaultLaborCost={quickDefaultLabor}
-                    defaultProfitMarginPercent={quickDefaultMargin}
-                  />
-                </motion.div>
-              ) : activeTab === 'inventory' ? (
-                <motion.div
-                  key="inventory-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                  className="bg-white dark:bg-[#0c101d] rounded-2xl border border-slate-200/50 dark:border-slate-800 p-6 shadow-xs max-w-7xl mx-auto"
-                >
-                  <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800/80 mb-6 text-left">
-                    <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450">
-                      <Boxes className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h1 className="text-lg font-black text-slate-850 dark:text-slate-200 uppercase tracking-wider font-mono">
-                        Kho Hàng & Thành Phẩm
-                      </h1>
-                      <p className="text-[11px] text-slate-455 dark:text-slate-400 mt-0.5 font-sans">
-                        Tự động kiểm đếm, đối soát hàng hoá nhập xuất chi tiết theo thời gian thực.
-                      </p>
-                    </div>
+            <div className={activeTab === 'home' ? '' : 'hidden'}>
+              {renderHomeContent()}
+            </div>
+            
+            <div className={activeTab === 'import' ? '' : 'hidden'}>
+              <Suspense fallback={<TabLoadingFallback />}>
+                <GoodsImportTab
+                  items={items}
+                  setItems={setItems}
+                  laborPayments={laborPayments}
+                  setLaborPayments={setLaborPayments}
+                  tpDtShippings={tpDtShippings || []}
+                  setTpDtShippings={setTpDtShippings}
+                  settings={settings}
+                  setSettings={setSettings}
+                  onImportBackup={handleImportBackup}
+                  selectedWeekFilter={selectedWeekFilter}
+                  setSelectedWeekFilter={setSelectedWeekFilter}
+                  userRole={userRole}
+                  autoExpandForm={autoExpandImportForm}
+                  onAutoExpandFormReset={() => setAutoExpandImportForm(false)}
+                />
+              </Suspense>
+            </div>
+
+            <div className={activeTab === 'invoices' ? '' : 'hidden'}>
+              <Suspense fallback={<TabLoadingFallback />}>
+                <InvoicesTab
+                  customers={customers}
+                  setCustomers={setCustomers}
+                  bills={bills}
+                  setBills={setBills}
+                  payments={payments}
+                  setPayments={setPayments}
+                  userRole={userRole}
+                  resolvedTheme={resolvedTheme}
+                  autoOpenCreateBill={autoOpenCreateBill}
+                  onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
+                  selectedCustomerId={invoiceSelectedCustomerId}
+                  setSelectedCustomerId={setInvoiceSelectedCustomerId}
+                  items={items}
+                />
+              </Suspense>
+            </div>
+
+            <div className={activeTab === 'production' ? '' : 'hidden'}>
+              <Suspense fallback={<TabLoadingFallback />}>
+                <ProductionTab
+                  operationBreakdowns={operationBreakdowns}
+                  setOperationBreakdowns={setOperationBreakdowns}
+                  workers={workers}
+                  setWorkers={setWorkers}
+                  tasks={tasks}
+                  setTasks={setTasks}
+                  workerJobs={workerJobs}
+                  setWorkerJobs={setWorkerJobs}
+                  rawMaterials={rawMaterials}
+                  setRawMaterials={setRawMaterials}
+                  materialRecipes={materialRecipes}
+                  setMaterialRecipes={setMaterialRecipes}
+                  productionBatches={productionBatches}
+                  setProductionBatches={setProductionBatches}
+                  materialReimports={materialReimports}
+                  setMaterialReimports={setMaterialReimports}
+                  laborPayments={laborPayments}
+                  setLaborPayments={setLaborPayments}
+                  settings={settings}
+                  userRole={userRole}
+                  initialSubTab={productionSubTab}
+                  onSubTabChange={setProductionSubTab}
+                />
+              </Suspense>
+            </div>
+
+            <div className={activeTab === 'profit_estimator' ? '' : 'hidden'}>
+              <ProfitEstimatorTab
+                materialRecipes={materialRecipes}
+                rawMaterials={rawMaterials}
+                operationBreakdowns={operationBreakdowns}
+                fastEditMode={fastEditMode}
+                defaultLaborCost={quickDefaultLabor}
+                defaultProfitMarginPercent={quickDefaultMargin}
+              />
+            </div>
+
+            <div className={activeTab === 'inventory' ? '' : 'hidden'}>
+              <div className="bg-white dark:bg-[#0c101d] rounded-2xl border border-slate-200/50 dark:border-slate-800 p-6 shadow-xs max-w-7xl mx-auto">
+                <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800/80 mb-6 text-left">
+                  <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450">
+                    <Boxes className="w-5 h-5" />
                   </div>
-                  <ReportInventoryDetail
-                    items={items}
-                    bills={bills}
-                    customers={customers}
-                    setActiveTab={setActiveTab}
-                  />
-                </motion.div>
-              ) : activeTab === 'report' ? (
-                <motion.div
-                  key="report-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                >
-                  <ReportTab
-                    items={items}
-                    bills={bills}
-                    productionBatches={productionBatches}
-                    workers={workers}
-                    workerJobs={workerJobs}
-                    setActiveTab={setActiveTab}
-                    payments={payments}
-                    laborPayments={laborPayments}
-                    customers={customers}
-                  />
-                </motion.div>
-              ) : activeTab === 'settings' ? (
-                <motion.div
-                  key="settings-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                >
-                  <SettingsTab
-                    settings={settings}
-                    setSettings={setSettings}
-                    exportDatabasePackage={exportDatabasePackage}
-                    onImportBackup={handleImportBackup}
-                    items={items}
-                    bills={bills}
-                    customers={customers}
-                    syncStatus={syncStatus}
-                    lastSyncTime={lastSyncTime}
-                    handleCloudPull={handleCloudPull}
-                    handleCloudPush={handleCloudPush}
-                    userRole={userRole}
-                    userProfiles={userProfiles}
-                    setUserProfiles={setUserProfiles}
-                  />
-                </motion.div>
-              ) : activeTab === 'gallery' ? (
-                <motion.div
-                  key="gallery-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                >
-                  <GalleryTab
-                    items={items}
-                    setItems={setItems}
-                    bills={bills}
-                    setBills={setBills}
-                    customers={customers}
-                    setActiveTab={setActiveTab}
-                    resolvedTheme={resolvedTheme}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="notifications-tab-view"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0 }}
-                  className="space-y-4 max-w-2xl mx-auto font-sans pb-12"
-                >
+                  <div>
+                    <h1 className="text-lg font-black text-slate-850 dark:text-slate-200 uppercase tracking-wider font-mono">
+                      Kho Hàng & Thành Phẩm
+                    </h1>
+                    <p className="text-[11px] text-slate-455 dark:text-slate-400 mt-0.5 font-sans">
+                      Tự động kiểm đếm, đối soát hàng hoá nhập xuất chi tiết theo thời gian thực.
+                    </p>
+                  </div>
+                </div>
+                <ReportInventoryDetail
+                  items={items}
+                  bills={bills}
+                  customers={customers}
+                  setActiveTab={setActiveTab}
+                />
+              </div>
+            </div>
+
+            <div className={activeTab === 'report' ? '' : 'hidden'}>
+              <ReportTab
+                items={items}
+                bills={bills}
+                productionBatches={productionBatches}
+                workers={workers}
+                workerJobs={workerJobs}
+                setActiveTab={setActiveTab}
+                payments={payments}
+                laborPayments={laborPayments}
+                customers={customers}
+              />
+            </div>
+
+            <div className={activeTab === 'settings' ? '' : 'hidden'}>
+              <SettingsTab
+                settings={settings}
+                setSettings={setSettings}
+                exportDatabasePackage={exportDatabasePackage}
+                onImportBackup={handleImportBackup}
+                items={items}
+                bills={bills}
+                customers={customers}
+                syncStatus={syncStatus}
+                lastSyncTime={lastSyncTime}
+                handleCloudPull={handleCloudPull}
+                handleCloudPush={handleCloudPush}
+                userRole={userRole}
+                userProfiles={userProfiles}
+                setUserProfiles={setUserProfiles}
+              />
+            </div>
+
+            <div className={activeTab === 'gallery' ? '' : 'hidden'}>
+              <GalleryTab
+                items={items}
+                setItems={setItems}
+                bills={bills}
+                setBills={setBills}
+                customers={customers}
+                setActiveTab={setActiveTab}
+                resolvedTheme={resolvedTheme}
+              />
+            </div>
+
+            <div className={activeTab === 'notifications' ? 'space-y-4 max-w-2xl mx-auto font-sans pb-12' : 'hidden'}>
                   {/* Title & Selection controls in Card */}
                   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -3575,9 +3513,7 @@ export default function App() {
                       ))
                     )}
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
 
             {/* Floating stats is now placed inside ReportTab as a dedicated tab icon button */}
 

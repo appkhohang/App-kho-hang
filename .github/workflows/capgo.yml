@@ -36,7 +36,9 @@ jobs:
             // Update src/types.ts
             if (fs.existsSync('src/types.ts')) {
               let types = fs.readFileSync('src/types.ts', 'utf8');
-              types = types.replace(/export\s+const\s+CURRENT_VERSION\s*=\s*['\"][^'\"]+['\"]/, "export const CURRENT_VERSION = '" + newVer + "'");
+              const searchReg = /export\s+const\s+CURRENT_VERSION\s*=\s*['\"][^'\"]+['\"]/;
+              const replacement = 'export const CURRENT_VERSION = ' + \"'\" + newVer + \"'\";
+              types = types.replace(searchReg, replacement);
               fs.writeFileSync('src/types.ts', types, 'utf8');
               console.log('Updated src/types.ts CURRENT_VERSION to: ' + newVer);
             }
