@@ -206,9 +206,12 @@ export interface UserProfile {
   active: boolean;
   allowedTabs?: string[];
   photo?: string; // Ảnh đại diện người dùng
+  latitude?: number; // Vị trí vĩ độ GPS
+  longitude?: number; // Vị trí kinh độ GPS
+  lastLocationTime?: string; // Thời gian cập nhật vị trí gần nhất
 }
 
-export const CURRENT_VERSION = '1.0.2';
+export const CURRENT_VERSION = '1.0.5';
 
 export interface AppUpdateInfo {
   version: string;

@@ -471,8 +471,14 @@ export default function App() {
   const getUserRole = (): 'admin' | 'staff' | 'viewer' => {
     const email = authState.email?.toLowerCase().trim();
     if (!email) return 'viewer';
-    // To completely disable permission and role constraints ("bỏ chế độ phân quyền"),
-    // all authenticated users are granted the admin role by default.
+    if (email === 'vukuli.123@gmail.com' || email === 'vukuli123@gmail.com') {
+      return 'admin';
+    }
+    const profile = userProfiles.find(p => p.email?.toLowerCase().trim() === email);
+    if (profile) {
+      return profile.role || 'staff';
+    }
+    // Backward compatible default to admin so existing master users aren't locked out immediately
     return 'admin';
   };
   const userRole = getUserRole();
@@ -481,10 +487,25 @@ export default function App() {
     const email = authState.email?.toLowerCase().trim();
     const allTabs = ['home', 'import', 'invoices', 'production', 'inventory', 'report', 'settings', 'gallery', 'profit_estimator'];
     if (!email) {
-      console.log("[getUserAllowedTabs] No email found in current auth state. Returning fallback ['home']");
       return ['home'];
     }
-    // All authenticated users are allowed full tab access.
+    if (email === 'vukuli.123@gmail.com' || email === 'vukuli123@gmail.com') {
+      return allTabs;
+    }
+    const profile = userProfiles.find(p => p.email?.toLowerCase().trim() === email);
+    if (profile) {
+      if (profile.allowedTabs && Array.isArray(profile.allowedTabs) && profile.allowedTabs.length > 0) {
+        const tabs = [...profile.allowedTabs];
+        if (!tabs.includes('home')) {
+          tabs.unshift('home');
+        }
+        return tabs;
+      }
+      if (profile.role === 'admin') {
+        return allTabs;
+      }
+      return ['home']; // fallback for staff/viewers without assigned tabs
+    }
     return allTabs;
   };
   const allowedTabs = getUserAllowedTabs();

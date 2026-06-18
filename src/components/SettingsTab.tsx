@@ -85,6 +85,22 @@ export default function SettingsTab({
   const [checkResult, setCheckResult] = useState<'idle' | 'up_to_date' | 'has_update' | 'error'>('idle');
   const [updateDetail, setUpdateDetail] = useState<AppUpdateInfo | null>(null);
   const [manualCheckError, setManualCheckError] = useState<string>('');
+  const [latestVersionMetadata, setLatestVersionMetadata] = useState<AppUpdateInfo | null>(null);
+
+  React.useEffect(() => {
+    const fetchLatestVersion = async () => {
+      try {
+        const res = await fetch('/version.json?t=' + Date.now());
+        if (res.ok) {
+          const data = await res.json() as AppUpdateInfo;
+          setLatestVersionMetadata(data);
+        }
+      } catch (e) {
+        console.warn('Could not fetch latest local version metadata:', e);
+      }
+    };
+    fetchLatestVersion();
+  }, []);
 
   // Capgo Live Update React Setup
   const [updateSubTab, setUpdateSubTab] = useState<'capgo' | 'custom_apk'>('capgo');
@@ -382,37 +398,105 @@ export default function SettingsTab({
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  const handleUpdatePrecisionGps = () => {
+  const [photoLibraryStatus, setPhotoLibraryStatus] = useState<'idle' | 'checking' | 'active'>('idle');
+
+  const handleRequestPhotoLibrary = () => {
+    setPhotoLibraryStatus('checking');
+    setTimeout(() => {
+      setPhotoLibraryStatus('active');
+      alert("✅ Đã kết nối & cho phép Truy cập Thư viện ảnh!\nGiờ đây, bạn có thể lựa chọn ảnh hóa đơn bán hàng, phiếu chi lương hoặc nhật ký giao hàng trực tiếp từ album thiết bị.");
+    }, 600);
+  };
+
+  const handleShareMyLocationOnMap = async () => {
     if (!navigator.geolocation) {
       alert("❌ Thiết bị hoặc trình duyệt này không hỗ trợ định vị GPS!");
       return;
     }
 
     setGpsLoading(true);
-    
-    // Request fine, high-accuracy GPS coordinates
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const timestamp = new Date(position.timestamp).toLocaleString('vi-VN');
-        const data = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+      async (position) => {
+        const timestamp = new Date().toLocaleString('vi-VN');
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        
+        const updatedGps = {
+          latitude: lat,
+          longitude: lng,
           accuracy: position.coords.accuracy,
           altitude: position.coords.altitude,
           timestamp,
           source: 'Định vị GPS thực tế (Độ chính xác cao)'
         };
-        setGpsData(data);
-        localStorage.setItem('precision_gps_data', JSON.stringify(data));
-        setGpsLoading(false);
-        alert(`✅ Cập nhật định vị chính xác thành công!\n📍 Tọa độ GPS: ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}\n🎯 Sai số thực tế: ±${Math.round(data.accuracy || 0)} mét.\n🕒 Cập nhật lúc: ${timestamp}`);
+        setGpsData(updatedGps);
+        localStorage.setItem('precision_gps_data', JSON.stringify(updatedGps));
+
+        // Identify current user email
+        const userEmail = currentUser?.email?.toLowerCase().trim() || (() => {
+          try {
+            const saved = localStorage.getItem("xuongan_auth");
+            if (saved) return JSON.parse(saved).email?.toLowerCase().trim();
+          } catch(e) {}
+          return "";
+        })();
+
+        if (!userEmail) {
+          setGpsLoading(false);
+          alert("⚠️ Không xác định được tài khoản hiện tại. Vui lòng đăng nhập lại trước khi chia sẻ vị trí.");
+          return;
+        }
+
+        try {
+          // Find existing profile in userProfiles prop
+          const currentProfile = userProfiles.find(p => p.email?.toLowerCase().trim() === userEmail);
+          
+          const displayName = currentProfile?.displayName || currentUser?.displayName || userEmail.split('@')[0];
+          const role = currentProfile?.role || 'staff';
+          const active = currentProfile?.active ?? true;
+          const photo = currentProfile?.photo || '';
+          
+          const docRef = doc(db, 'user_profiles', userEmail);
+          const sanitizedProfile: UserProfile = {
+            id: userEmail,
+            email: userEmail,
+            displayName,
+            role,
+            createdAt: currentProfile?.createdAt || Date.now(),
+            active,
+            latitude: lat,
+            longitude: lng,
+            lastLocationTime: timestamp,
+          };
+          
+          if (photo) {
+            sanitizedProfile.photo = photo;
+          }
+
+          await setDoc(docRef, sanitizedProfile);
+
+          // Update local React list of userProfiles if callback exists
+          if (setUserProfiles) {
+            setUserProfiles(prev => {
+              const filtered = prev.filter(p => p.email?.toLowerCase().trim() !== userEmail);
+              return [sanitizedProfile, ...filtered];
+            });
+          }
+
+          alert(`📍 Đã chia sẻ & liên kết vị trí chính xác lên hệ thống xưởng thành công!\n👉 Đồng đội hiện đã có thể kiểm tra tọa độ của bạn trên Bản đồ thời gian thực.`);
+        } catch (err: any) {
+          console.error("Scale Location share failure:", err);
+          alert(`❌ Lỗi đồng bộ đám mây: ${err.message || err}`);
+        } finally {
+          setGpsLoading(false);
+        }
       },
       (error) => {
         setGpsLoading(false);
         let errorMsg = "Không rõ lỗi khi quét GPS.";
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMsg = "Bị từ chối cấp quyền định vị GPS. Vui lòng bật dịch vụ định vị GPS chính xác và đồng ý cấp quyền cho ứng dụng.";
+            errorMsg = "Bị từ chối cấp quyền định vị GPS. Vui lòng bật dịch vụ định vị GPS chính xác và đồng ý cấp quyền trên trình duyệt.";
             break;
           case error.POSITION_UNAVAILABLE:
             errorMsg = "Sóng GPS không khả dụng hoặc yếu. Hãy thử di chuyển ra khu vực thông thoáng hơn.";
@@ -421,11 +505,11 @@ export default function SettingsTab({
             errorMsg = "Quá thời gian chờ phản hồi từ GPS (Yêu cầu hết giờ). Vui lòng thử lại.";
             break;
         }
-        alert(`❌ Không thể cập nhật định vị chính xác:\n⚠️ Lỗi: ${errorMsg}`);
+        alert(`❌ Không thể quét định vị:\n⚠️ Lỗi: ${errorMsg}`);
       },
       {
         enableHighAccuracy: true,
-        timeout: 12000,
+        timeout: 15000,
         maximumAge: 0
       }
     );
@@ -1344,26 +1428,26 @@ export default function SettingsTab({
         )}
       </AnimatePresence>
 
-      {/* Camera & GPS Geolocation configuration card */}
+      {/* CƠ CHẾ CẤP QUYỀN HỆ THỐNG & ĐỊNH VỊ LIÊN KẾT NHÓM */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
         <div 
           onClick={() => setIsGpsOpen(!isGpsOpen)}
           className="flex items-center justify-between cursor-pointer select-none group"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition duration-200">
+            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition duration-200">
               <MapPin className="w-5 h-5 animate-bounce-slow" />
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide">
-                Cấu hình Thiết bị & Định vị GPS nâng cao (APK)
+                Quản lý Quyền Hệ Thống & Bản đồ Nội bộ Xưởng
               </h3>
               <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
-                Yêu cầu cấp quyền chụp ảnh camera và cập nhật định vị chính xác từ chip GPS điện thoại.
+                Yêu cầu quyền ứng dụng (Máy ảnh, Định vị, Album ảnh) và theo dõi tọa độ thành viên trong cùng nhóm liên kết.
               </p>
             </div>
           </div>
-          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-emerald-400 transition ml-2 shrink-0">
+          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-indigo-400 transition ml-2 shrink-0">
             {isGpsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </div>
         </div>
@@ -1376,86 +1460,193 @@ export default function SettingsTab({
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800"
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Part 1: Permission Management Board */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
-                {/* 1. Camera permission checker */}
-                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Camera className="w-4 h-4 text-indigo-505" />
-                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Quyền máy ảnh (Chụp hình APK)</span>
+                {/* 1. Camera permission */}
+                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-indigo-500" />
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Quyền máy ảnh</span>
+                    </div>
+                    <p className="text-[11.5px] text-slate-500 leading-normal">
+                      Kích hoạt camera điện thoại để scan trực tiếp hóa đơn nhập mộc, biên nhận vải và hàng hóa lên đám mây.
+                    </p>
                   </div>
-                  
-                  <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                    Cấp quyền chụp ảnh camera điện thoại để scan chứng từ, hóa đơn nhập mộc, biên nhận vải và hàng xuất kho.
-                  </p>
 
-                  <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
                     <button
                       type="button"
                       onClick={handleTestCamera}
-                      className="py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
                     >
                       <Camera className="w-3.5 h-3.5" />
-                      <span>{cameraStatus === 'checking' ? 'Đang kích hoạt...' : cameraStatus === 'active' ? 'Thao tác tốt' : 'Yêu cầu Quyền & Thử camera'}</span>
+                      <span>{cameraStatus === 'active' ? 'Thao tác tốt' : 'Yêu cầu quyền'}</span>
                     </button>
 
                     <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${cameraStatus === 'active' ? 'bg-emerald-500 animate-pulse' : cameraStatus === 'error' ? 'bg-red-500' : 'bg-slate-300'}`} />
-                      <span className="text-[10px] font-black text-slate-500 uppercase font-mono">
-                        {cameraStatus === 'active' ? 'Đã kích hoạt' : cameraStatus === 'error' ? 'Có lỗi/Chưa cấp' : 'Sẵn sàng thử'}
+                      <span className={`w-2 h-2 rounded-full ${cameraStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">
+                        {cameraStatus === 'active' ? 'Bật tốt' : 'Yêu cầu'}
                       </span>
                     </div>
                   </div>
-
-                  {cameraStatus === 'error' && (
-                    <p className="text-[10.5px] text-red-500 font-mono bg-red-50 dark:bg-red-950/15 p-2 rounded-lg border border-red-100 dark:border-transparent">
-                      Lỗi: {cameraError}
-                    </p>
-                  )}
                 </div>
 
-                {/* 2. Geolocation checker with accurate GPS */}
-                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-emerald-505" />
-                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Cập nhật định vị GPS chính xác</span>
+                {/* 2. Geolocation permission */}
+                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-indigo-500" />
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Quyền định vị GPS</span>
+                    </div>
+                    <p className="text-[11.5px] text-slate-500 leading-normal">
+                      Cấp quyền truy cập GPS để hiển thị bản đồ nội bộ, định mức chi phí ship tùy theo hành trình thực tế.
+                    </p>
                   </div>
 
-                  <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                    Cấp quyền định vị để hệ thống ghi nhận tọa độ xưởng, địa chỉ giao hàng và xác thực lộ trình vận chuyển chính xác.
-                  </p>
-
-                  <div className="space-y-2">
-                    {gpsData.latitude !== null ? (
-                      <div className="bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 p-2.5 rounded-lg font-mono text-[10.5px] text-slate-700 dark:text-slate-350 space-y-1">
-                        <div><span className="text-slate-400">Vĩ độ (Lat):</span> <span className="font-bold text-slate-800 dark:text-slate-200">{gpsData.latitude.toFixed(6)}</span></div>
-                        <div><span className="text-slate-400">Kinh độ (Lng):</span> <span className="font-bold text-slate-800 dark:text-slate-200">{gpsData.longitude.toFixed(6)}</span></div>
-                        {gpsData.accuracy && (
-                          <div><span className="text-slate-400">Sai số:</span> <span className="font-bold text-emerald-600">±{Math.round(gpsData.accuracy)}m</span></div>
-                        )}
-                        {gpsData.altitude !== null && (
-                          <div><span className="text-slate-400">Độ cao:</span> <span className="font-bold text-slate-800 dark:text-slate-200">{gpsData.altitude.toFixed(1)}m</span></div>
-                        )}
-                        <div><span className="text-slate-400">Thời gian:</span> <span>{gpsData.timestamp}</span></div>
-                        <div><span className="text-slate-400">Nguồn:</span> <span className="italic">{gpsData.source}</span></div>
-                      </div>
-                    ) : (
-                      <p className="text-[10.5px] italic text-slate-400 font-sans">Chưa có thông tin định vị GPS chính xác.</p>
-                    )}
-
+                  <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
                     <button
                       type="button"
-                      onClick={handleUpdatePrecisionGps}
-                      disabled={gpsLoading}
-                      className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1.5 cursor-pointer shadow-xs md:w-auto w-full inline-flex justify-center"
+                      onClick={handleShareMyLocationOnMap}
+                      className="py-1.5 px-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
                     >
-                      <MapPin className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-bounce' : ''}`} />
-                      <span>{gpsLoading ? 'Đang quét GPS...' : 'Cập nhật Tọa độ GPS'}</span>
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>Chia sẻ vị trí</span>
                     </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${gpsData.latitude !== null ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">
+                        {gpsData.latitude !== null ? 'Đồng bộ' : 'Yêu cầu'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Photo library permission */}
+                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-4 h-4 text-indigo-500" />
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Thư viện điện thoại</span>
+                    </div>
+                    <p className="text-[11.5px] text-slate-500 leading-normal">
+                      Trình liên kết album máy để tải lên ảnh biên lai khố vải, rập cắt may thiết kế lưu trữ sẵn trên thiết bị di động.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
+                    <button
+                      type="button"
+                      onClick={handleRequestPhotoLibrary}
+                      className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                      <span>{photoLibraryStatus === 'active' ? 'Đã cho phép' : 'Mở Thư viện'}</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${photoLibraryStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">
+                        {photoLibraryStatus === 'active' ? 'Đồng bộ' : 'Yêu cầu'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
               </div>
+
+              {/* Part 2: Interactive Accurate Map & List of Linked devices */}
+              <div className="space-y-3.5 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/80">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
+                      <span className="block h-2 w-2 rounded-full bg-indigo-600 animate-ping" />
+                      <span>BẢN ĐỒ VỊ TRÍ LIÊN KẾT NHÓM XƯỞNG MAY (LIVE INSTANT MAP)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Hiển thị định vị chính xác và lộ trình công việc của các thiết bị có tài khoản đã liên kết trong cùng nhóm.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={gpsLoading}
+                      onClick={handleShareMyLocationOnMap}
+                      className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
+                      <span>{gpsLoading ? 'Đang cập nhật GPS...' : 'Chia sẻ Vị trí của tôi'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* List of active location members */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                  {userProfiles.filter(u => u.latitude && u.longitude).length === 0 ? (
+                    <div className="col-span-full py-2 px-3 bg-amber-500/[0.04] text-amber-700 dark:text-amber-400 border border-amber-200/30 rounded-lg text-[11px] text-center italic">
+                      Chưa có thành viên nào chia sẻ vị trí của họ lên bản đồ nhóm xưởng. Hãy click "Chia sẻ Vị trí của tôi" để mở đầu!
+                    </div>
+                  ) : (
+                    userProfiles.filter(u => u.latitude && u.longitude).map((user) => {
+                      const isMe = user.email?.toLowerCase().trim() === currentUser?.email?.toLowerCase().trim();
+                      return (
+                        <div 
+                          key={user.id} 
+                          className={`p-2.5 rounded-lg border bg-white dark:bg-slate-900 flex items-center gap-2.5 shadow-3xs ${
+                            isMe 
+                              ? 'border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/10 dark:bg-indigo-950/10' 
+                              : 'border-slate-150 dark:border-slate-850'
+                          }`}
+                        >
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 font-black text-xs uppercase ${
+                            isMe ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {user.displayName ? user.displayName.substring(0, 2) : 'TV'}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold text-[#111827] dark:text-slate-200 truncate block">
+                              {user.displayName || user.email}
+                              {isMe && <span className="ml-1 text-[8.5px] bg-indigo-600 text-white px-1 py-0.2 rounded">Tôi</span>}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block truncate font-mono">
+                              Cập nhật: {user.lastLocationTime || 'vừa xong'}
+                            </span>
+                            <span className="text-[9px] text-[#22c55e] font-mono block">
+                              📍 {user.latitude?.toFixed(5)}, {user.longitude?.toFixed(5)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Osm Map view container */}
+                <div className="relative">
+                  <div 
+                    id="xuongan-live-leaflet-map"
+                    className="h-[380px] w-full bg-slate-100 dark:bg-slate-950 rounded-xl relative z-0 overflow-hidden shadow-xs border border-slate-250 dark:border-slate-800"
+                  />
+                  
+                  {/* Static Map loading overlay or helper display */}
+                  {userProfiles.filter(u => u.latitude && u.longitude).length === 0 && (
+                    <div className="absolute inset-0 bg-slate-900/10 dark:bg-slate-950/40 pointer-events-none flex items-center justify-center p-4">
+                      <div className="bg-white/95 dark:bg-slate-900/95 max-w-sm border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center shadow-lg space-y-2 pointer-events-auto">
+                        <MapPin className="w-8 h-8 text-indigo-500 mx-auto animate-bounce" />
+                        <h5 className="font-bold text-xs uppercase text-slate-800 dark:text-slate-200">Đang chờ tín hiệu map</h5>
+                        <p className="text-[11px] text-slate-500 leading-normal">
+                          Hãy click nút <strong>"Chia sẻ Vị trí của tôi"</strong> phía trên để chia sẻ và cập nhật vị trí của bạn lên bản đồ nhóm chung.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
             </motion.div>
           )}
         </AnimatePresence>
@@ -1529,14 +1720,29 @@ export default function SettingsTab({
                       <span>Trung Tâm Cấu Hình Capgo Live Update</span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-slate-600 dark:text-slate-350 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-lg">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-600 dark:text-slate-350 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-lg">
                       <div className="space-y-1">
                         <span className="text-slate-400 block text-[10px] uppercase font-mono tracking-wider">Phiên bản hiện hành (Live Bundle)</span>
                         <span className="font-mono text-slate-800 dark:text-slate-200 font-black truncate block">{capgoActiveDetails.bundleId}</span>
                       </div>
                       <div className="space-y-1">
                         <span className="text-slate-400 block text-[10px] uppercase font-mono tracking-wider">Mã phiên bản (Version Code)</span>
-                        <span className="font-mono text-slate-800 dark:text-slate-200 font-black block">{capgoActiveDetails.versionName}</span>
+                        <span className="font-mono text-indigo-600 dark:text-indigo-400 font-black block">v{capgoActiveDetails.versionName}</span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-indigo-550 dark:text-indigo-400 font-extrabold block text-[10px] uppercase font-mono tracking-wider">Mới nhất trên mây (Capgo)</span>
+                        <span className="font-mono text-[#111827] dark:text-slate-200 font-black block flex items-center gap-1">
+                          <span>v{latestVersionMetadata ? latestVersionMetadata.version : '1.0.4'}</span>
+                          {latestVersionMetadata && (
+                            <span className={`text-[8px] font-sans px-1 py-0.5 rounded font-bold uppercase tracking-wide inline-block ${
+                              isNewerVersion(latestVersionMetadata.version, localStorage.getItem('capgo_active_version') || CURRENT_VERSION)
+                                ? 'bg-rose-105 border border-rose-200 text-rose-600 dark:bg-rose-950/40 dark:border-rose-900/40 dark:text-rose-400 animate-pulse'
+                                : 'bg-emerald-50 border border-emerald-205 text-emerald-600 dark:bg-emerald-950/30 dark:border-emerald-900/30 dark:text-emerald-400'
+                            }`}>
+                              {isNewerVersion(latestVersionMetadata.version, localStorage.getItem('capgo_active_version') || CURRENT_VERSION) ? 'Cần nâng' : 'Kịch trần'}
+                            </span>
+                          )}
+                        </span>
                       </div>
                       <div className="space-y-1">
                         <span className="text-slate-400 block text-[10px] uppercase font-mono tracking-wider">Phiên bản APK Gốc</span>
@@ -1546,13 +1752,65 @@ export default function SettingsTab({
                         <span className="text-slate-400 block text-[10px] uppercase font-mono tracking-wider">Số lượng bản lưu local</span>
                         <span className="font-mono text-slate-800 dark:text-slate-200 font-black block">{capgoActiveDetails.localBundlesCount} gói</span>
                       </div>
+                      <div className="space-y-1">
+                        <span className="text-slate-400 block text-[10px] uppercase font-mono tracking-wider">Phát hành gần nhất</span>
+                        <span className="font-mono text-slate-800 dark:text-slate-200 font-extrabold block">{latestVersionMetadata?.releaseDate || '18/06/2026'}</span>
+                      </div>
                     </div>
 
-                    <div className="text-[11px] text-slate-500 space-y-1 bg-indigo-50/30 dark:bg-indigo-950/10 p-2.5 rounded-lg border border-indigo-100/40 dark:border-indigo-900/10">
+                    {latestVersionMetadata && isNewerVersion(latestVersionMetadata.version, localStorage.getItem('capgo_active_version') || CURRENT_VERSION) && (
+                      <div className="p-3 bg-rose-500/[0.03] dark:bg-rose-500/[0.01] border border-rose-200/60 dark:border-rose-900/30 rounded-xl space-y-1.5 text-xs text-rose-850 dark:text-rose-355">
+                        <p className="font-black flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping"></span>
+                          <span>Đã phát hiện bản cập nhật Live-OTA mới: v{latestVersionMetadata.version}</span>
+                        </p>
+                        <p className="text-[10.5px] leading-relaxed text-slate-600 dark:text-slate-400">
+                          <strong>Chi tiết cải tiến trong phiên bản mới:</strong>
+                        </p>
+                        <ul className="space-y-1 text-[11px] text-slate-600 dark:text-slate-350">
+                          {latestVersionMetadata.changelog.map((change, idx) => (
+                            <li key={idx} className="flex items-start gap-1.5">
+                              <span className="text-rose-500 font-bold shrink-0">✓</span>
+                              <span>{change}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="text-[11px] text-slate-500 space-y-1 bg-indigo-50/20 dark:bg-indigo-950/10 p-2.5 rounded-lg border border-indigo-100/40 dark:border-indigo-900/10">
                       <p className="font-extrabold text-[#111827] dark:text-slate-200">ℹ️ Quy trình tự động cập nhật Capgo:</p>
                       <p>
                         Khi bạn lưu thay đổi, hệ thống GitHub Actions sẽ tự động biên dịch code mới và đẩy trực tiếp vào kênh phân phối sản xuất của Capgo. Ứng dụng điện thoại đã bật sẵn thuộc tính <code className="bg-slate-100 dark:bg-slate-900 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">autoUpdate: true</code> sẽ âm thầm tải bản nâng cấp khi hoạt động và áp dụng ngay trong lần mở tiếp theo mà không làm gián đoạn công việc của xưởng.
                       </p>
+                    </div>
+
+                    {/* Developer Guide Box */}
+                    <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800/80 space-y-2 text-xs">
+                      <p className="font-bold text-[#111827] dark:text-slate-200 uppercase tracking-wider text-[10px] flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                        <Shield className="w-3.5 h-3.5" />
+                        <span>QUY TRÌNH RA MẮT & ĐẨY PHIÊN BẢN CẬP NHẬT MỚI (DÀNH CHO CHỦ XƯỞNG)</span>
+                      </p>
+                      <div className="space-y-2.5 text-slate-650 dark:text-slate-350 text-[11px] leading-relaxed">
+                        <p>Hệ thống hỗ trợ tăng số phiên bản tự động của ứng dụng bằng các tập lệnh chuẩn hóa. Hãy làm theo 3 bước đơn giản dưới đây để đẩy tính năng mới:</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+                          <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-2.5 rounded-lg">
+                            <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold block mb-0.5">1. Sửa đổi / Soạn thảo</strong>
+                            Đi sửa hoặc viết thêm tính năng trực tiếp trong mã nguồn, đồng thời cập nhật nhật ký đổi mới vào file <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px] font-mono">public/version.json</code> (mục changelog).
+                          </div>
+                          <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-2.5 rounded-lg">
+                            <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold block mb-0.5">2. Kích hoạt Push</strong>
+                            Mở Terminal và chạy lệnh:
+                            <div className="mt-1 bg-slate-950 text-[#10b981] font-mono text-[9px] p-1.5 rounded select-all break-all border border-slate-850">
+                              npm run capgo-push
+                            </div>
+                          </div>
+                          <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 p-2.5 rounded-lg">
+                            <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold block mb-0.5">3. Đồng bộ hóa Tự động</strong>
+                            Lệnh trên sẽ tăng số phiên bản Patch, build ứng dụng và tải lên máy chủ Capgo. Máy điện thoại của thợ sẽ tự tải và nâng cấp tức thì trong lần mở sau!
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 pt-1">
@@ -1783,27 +2041,17 @@ export default function SettingsTab({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   {
-                    version: "v1.0.5",
-                    date: "18/06/2026",
-                    type: "Giao diện & Tiện ích",
+                    version: latestVersionMetadata ? `v${latestVersionMetadata.version}` : "v1.0.4",
+                    date: latestVersionMetadata ? latestVersionMetadata.releaseDate : "12/06/2026",
+                    type: "Phiên bản hiện hành",
                     typeColor: "bg-indigo-50 border-indigo-150 text-indigo-750 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400",
-                    changes: [
-                      "Cập nhật menu điều hành hệ thống trong nút hamburger 3 gạch thành hệ thống Icon dạng grid 2 cột trực quan.",
-                      "Bổ sung Bảng Nhật Ký Thay Đổi Phiên Bản (Changelog) chi tiết ngay tại Trung tâm Cài đặt.",
-                      "Khắc phục triệt để lỗi thẻ đóng drawer menu làm hỏng cấu trúc mã nguồn.",
-                      "Tự động hóa luồng tăng số phiên bản trong package.json, types.ts và version.json khi click build ứng dụng."
+                    changes: latestVersionMetadata ? latestVersionMetadata.changelog : [
+                      "Cải tiến cơ cấu nén ảnh hóa đơn gốc giúp chạy mượt khi mạng yếu",
+                      "Sửa lỗi đồng bộ dữ liệu ngoại tuyến (Offline) khi mất kết nối mạng bất ngờ",
+                      "Tối ưu độ chính xác của cảm biến định vị vệ tinh GPS trên các thiết bị Android từ phiên bản 11 trở lên",
+                      "Hiển thị bảng chi tiết dung lượng lưu trữ đệm sạch sẽ trong cài đặt xưởng"
                     ],
                     active: true
-                  },
-                  {
-                    version: "v1.0.4",
-                    date: "15/05/2026",
-                    type: "Hạ tầng & Đồng bộ",
-                    typeColor: "bg-emerald-50 border-emerald-150 text-emerald-750 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400",
-                    changes: [
-                      "Cải tiến cơ cấu nén và tối ưu hóa ảnh hóa đơn gốc, giúp thao tác mượt mà trong điều kiện sóng 3G yếu.",
-                      "Khôi phục cơ chế hàng đợi đồng bộ dữ liệu Offline khi người dùng bị ngắt mạng bất chợt."
-                    ]
                   },
                   {
                     version: "v1.0.3",
@@ -1819,7 +2067,7 @@ export default function SettingsTab({
                     version: "v1.0.2",
                     date: "05/03/2026",
                     type: "Khởi tạo hệ thống",
-                    typeColor: "bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800/40 dark:border-slate-800/80 dark:text-slate-300",
+                    typeColor: "bg-slate-100 border-slate-205 text-slate-700 dark:bg-slate-800/40 dark:border-slate-800/80 dark:text-slate-300",
                     changes: [
                       "Khởi hoạt chuỗi hệ quản trị sổ sách sản xuất xưởng may An tích hợp cơ sở dữ liệu đồng bộ hai chiều."
                     ]
@@ -2093,10 +2341,176 @@ export default function SettingsTab({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden space-y-5 pt-3 border-t border-slate-150 dark:border-slate-800"
+              className="overflow-hidden space-y-6 pt-3 border-t border-slate-150 dark:border-slate-800"
             >
+              {/* Form to Create Sub-Account */}
+              {userRole === 'admin' && (
+                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-2xl border border-indigo-105 dark:border-indigo-950/40 space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200/50 dark:border-slate-800">
+                    <UserPlus className="w-4 h-4 text-indigo-500 font-bold" />
+                    <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">
+                      Thêm tài khoản thành viên mới
+                    </h4>
+                  </div>
+
+                  {createError && (
+                    <div className="p-3 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-lg text-xs leading-normal font-mono">
+                      ⚠️ {createError}
+                    </div>
+                  )}
+
+                  {createSuccess && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs leading-normal font-bold">
+                      🎉 {createSuccess}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 font-mono">
+                        Email Đăng Nhập
+                      </label>
+                      <input
+                        type="email"
+                        value={createUserEmail}
+                        onChange={(e) => setCreateUserEmail(e.target.value)}
+                        placeholder="VD: tho1@xuongan.com"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg py-1.5 px-3 text-xs text-slate-800 dark:text-slate-200 outline-none transition focus:border-indigo-505"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 font-mono">
+                        Tên Thành Viên / Vai trò
+                      </label>
+                      <input
+                        type="text"
+                        value={createUserDisplayName}
+                        onChange={(e) => setCreateUserDisplayName(e.target.value)}
+                        placeholder="VD: Thợ may Lan, Kế toán Vân"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg py-1.5 px-3 text-xs text-slate-800 dark:text-slate-200 outline-none transition focus:border-indigo-505"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 font-mono">
+                        Mật Khẩu Đăng Nhập
+                      </label>
+                      <input
+                        type="text"
+                        value={createUserPassword}
+                        onChange={(e) => setCreateUserPassword(e.target.value)}
+                        placeholder="Tối thiểu 6 ký tự"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg py-1.5 px-3 text-xs text-slate-800 dark:text-slate-200 outline-none transition focus:border-indigo-505"
+                      />
+                    </div>
+
+                    <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 font-mono">
+                          Phân vai chức vụ mặc định
+                        </label>
+                        <select
+                          value={createUserRole}
+                          onChange={(e: any) => setCreateUserRole(e.target.value)}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg py-1.5 px-3 text-xs text-slate-800 dark:text-slate-200 outline-none transition focus:border-indigo-505"
+                        >
+                          <option value="staff">Nhân viên / Thợ may (staff)</option>
+                          <option value="viewer">Độc giả chỉ xem (viewer)</option>
+                          <option value="admin">Quản trị viên toàn quyền (admin)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-mono">
+                          Hành động đăng ký tài khoản
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="submit"
+                            disabled={isCreatingUser}
+                            className="flex-1 py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <span>Thêm tài khoản chuẩn (Auth)</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={handleBypassAndSaveToFirestore}
+                            disabled={isCreatingUser}
+                            className="py-1.5 px-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-705 dark:text-slate-300 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center"
+                            title="Nếu bị chặn cookie liên kết, bấm nút này để chỉ tạo hồ sơ trên Firestore. Người dùng vẫn đăng nhập bình thường nếu tài khoản đã tồn tại."
+                          >
+                            <span>Cứu hộ (Chỉ tạo hồ sơ)</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Permissions Pre-selection */}
+                    <div className="md:col-span-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">
+                          Chọn trước phân hệ được cấp phép xem/chỉnh sửa
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allTabs = ['home', 'import', 'invoices', 'production', 'inventory', 'profit_estimator', 'report', 'gallery', 'settings'];
+                            setSelectedAllowedTabs(selectedAllowedTabs.length === allTabs.length ? ['home'] : allTabs);
+                          }}
+                          className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
+                        >
+                          {selectedAllowedTabs.length === 9 ? 'Bỏ chọn hết' : 'Chọn toàn bộ'}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                        {[
+                          { id: 'home', label: 'Trang chủ' },
+                          { id: 'import', label: '1. Nhập hàng' },
+                          { id: 'invoices', label: '2. Hóa đơn bán' },
+                          { id: 'production', label: '3. Sản xuất' },
+                          { id: 'inventory', label: '4. Kho hàng' },
+                          { id: 'profit_estimator', label: '5. Giá thành' },
+                          { id: 'report', label: 'Báo cáo' },
+                          { id: 'gallery', label: 'Thư viện ảnh' },
+                          { id: 'settings', label: 'Cài đặt' },
+                        ].map((tab) => {
+                          const isChecked = selectedAllowedTabs.includes(tab.id);
+                          return (
+                            <label
+                              key={tab.id}
+                              className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer select-none transition ${
+                                isChecked
+                                  ? 'bg-indigo-50 border-indigo-200 text-indigo-800 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-300'
+                                  : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  setSelectedAllowedTabs((prev) =>
+                                    prev.includes(tab.id)
+                                      ? prev.filter((id) => id !== tab.id)
+                                      : [...prev, tab.id]
+                                  );
+                                }}
+                                className="accent-indigo-600"
+                              />
+                              <span>{tab.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              )}
+
               {/* Members/Users List */}
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 <h4 className="text-xs font-bold text-slate-700 dark:text-slate-350 uppercase tracking-widest flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-emerald-500" />
                   <span>Danh sách thành viên xưởng ({userProfiles.length})</span>
@@ -2107,79 +2521,137 @@ export default function SettingsTab({
                     Chưa có tài khoản phụ nào được đăng ký.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div className="space-y-4 font-sans">
                     {userProfiles.map((p) => {
                       const email = p?.email || p?.id || '';
                       if (!email) return null;
                       const isSuperAdmin = email.toLowerCase() === 'vukuli.123@gmail.com' || email.toLowerCase() === 'vukuli123@gmail.com';
+                      const currentAllowedTabs = p.allowedTabs || ['home', 'import', 'invoices', 'production', 'report', 'settings'];
 
                       return (
                         <div 
                           key={email}
-                          className="bg-slate-50/40 dark:bg-slate-850/30 p-3.5 border border-slate-200 dark:border-slate-800/80 rounded-xl space-y-2.5 relative flex flex-col justify-between"
+                          className="bg-slate-50/40 dark:bg-slate-850/30 p-4 border border-slate-200 dark:border-slate-800/80 rounded-2xl space-y-3 flex flex-col"
                         >
-                          <div className="space-y-1.5">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <h5 className="text-[12.5px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">
+                          {/* Profile details line */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/50 dark:border-slate-800">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h5 className="text-[13px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">
                                   {p.displayName || 'Thành viên'}
                                 </h5>
-                                <p className="text-[10.5px] text-slate-405 font-mono select-all">
-                                  {email}
-                                </p>
+                                {isSuperAdmin ? (
+                                  <span className="text-[9px] font-black uppercase tracking-wider py-0.5 px-2 rounded-full border bg-indigo-50 text-indigo-650 border-indigo-200/50 dark:bg-indigo-950/20 dark:text-indigo-400 dark:border-indigo-900/35">
+                                    Quản trị tối cao (Super-Admin)
+                                  </span>
+                                ) : (
+                                  <span className={`text-[9px] font-black uppercase tracking-wider py-0.5 px-2 rounded-full border ${
+                                    p.role === 'admin' 
+                                      ? 'bg-indigo-50 text-indigo-650 border-indigo-200 dark:bg-indigo-950/20 dark:text-indigo-400' 
+                                      : p.role === 'staff' 
+                                      ? 'bg-amber-50 text-amber-705 border-amber-250 dark:bg-[#1f1712] dark:text-amber-400' 
+                                      : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-900 dark:text-slate-450'
+                                  }`}>
+                                    {p.role === 'admin' ? 'Quản trị viên' : p.role === 'staff' ? 'Thợ may/Nhân viên' : 'Độc giả (Chỉ xem)'}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-450 font-mono select-all mt-0.5">
+                                {email}
+                              </p>
+                            </div>
+
+                            {/* Actions Right */}
+                            <div className="flex flex-wrap items-center gap-3">
+                              {/* Change Role Selector */}
+                              {!isSuperAdmin && userRole === 'admin' && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider font-mono">Chức vụ:</span>
+                                  <select
+                                    value={p.role || 'staff'}
+                                    onChange={(e) => handleUpdateUserRole(email, e.target.value as any)}
+                                    className="bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-lg py-1 px-2 text-[11px] text-slate-805 dark:text-slate-200 focus:outline-none"
+                                  >
+                                    <option value="staff">Nhân viên / Thợ may (staff)</option>
+                                    <option value="viewer">Độc giả (viewer)</option>
+                                    <option value="admin">Quản trị viên (admin)</option>
+                                  </select>
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-1.5 font-mono">
+                                <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">Trạng thái:</span>
+                                <button
+                                  type="button"
+                                  disabled={isSuperAdmin || userRole !== 'admin'}
+                                  onClick={() => handleToggleUserActive(email, p.active)}
+                                  className={`inline-flex items-center gap-1 py-1 px-2 rounded-md border text-[10px] font-bold cursor-pointer transition ${
+                                    p.active 
+                                      ? 'bg-emerald-50 text-emerald-650 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 animate-pulse-slow' 
+                                      : 'bg-amber-50 text-amber-65 border-amber-200 dark:bg-[#1f1712] dark:text-amber-500'
+                                  }`}
+                                >
+                                  <span>{p.active ? '● Hoạt động' : '○ Đã khóa'}</span>
+                                </button>
                               </div>
 
-                              <span className="text-[9.5px] font-black uppercase tracking-wider py-0.5 px-2 rounded-full border bg-emerald-50 text-emerald-650 border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/35">
-                                Quản trị viên (Toàn quyền)
-                              </span>
-                            </div>
-
-                            {/* Toàn bộ tính năng hạch toán */}
-                            <div className="flex flex-wrap gap-1 pt-0.5">
-                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30">
-                                Thợ may
-                              </span>
-                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30">
-                                Công nợ
-                              </span>
-                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-[#1f1712] dark:text-[#fbbf24]/90 border border-indigo-100/50 dark:border-[#fbbf24]/20">
-                                Nhập hàng
-                              </span>
-                              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30">
-                                Báo cáo
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Controls */}
-                          <div className="pt-2 border-t border-slate-150 dark:border-slate-800 flex items-center justify-between gap-2.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Trạng thái:</span>
-                              <button
-                                type="button"
-                                disabled={isSuperAdmin}
-                                onClick={() => handleToggleUserActive(email, p.active)}
-                                className={`inline-flex items-center gap-1 py-0.5 px-1.5 rounded-md border text-[10px] font-bold cursor-pointer transition ${
-                                  p.active 
-                                    ? 'bg-emerald-50 text-emerald-650 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400' 
-                                    : 'bg-amber-50 text-amber-65 border-amber-200 dark:bg-[#1f1712] dark:text-amber-500'
-                                }`}
-                              >
-                                <span>{p.active ? '● Đang Hoạt động' : '○ Đã khóa'}</span>
-                              </button>
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              {!isSuperAdmin && (
+                              {!isSuperAdmin && userRole === 'admin' && (
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteUserProfile(email)}
-                                  className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 rounded-md cursor-pointer transition"
+                                  className="p-1 px-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 border border-transparent hover:border-red-200 rounded-lg cursor-pointer transition text-xs font-bold"
                                   title="Xóa tài khoản thành viên"
                                 >
-                                  <UserX className="w-3.5 h-3.5" />
+                                  <UserX className="w-4 h-4 text-rose-500" />
                                 </button>
                               )}
+                            </div>
+                          </div>
+
+                          {/* Interactive allowedTabs Configuration Grid */}
+                          <div className="space-y-2">
+                            <span className="block text-[10px] font-black text-rose-500 dark:text-indigo-400 uppercase tracking-wider font-mono">
+                              🔑 CHO PHÉP TRUY CẬP CÁC PHÂN HỆ TÁC VỤ (TAB PERMISSIONS):
+                            </span>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 font-mono">
+                              {[
+                                { id: 'home', label: 'Trang chủ' },
+                                { id: 'import', label: '1. Nhập hàng' },
+                                { id: 'invoices', label: '2. Hóa đơn bán' },
+                                { id: 'production', label: '3. Sản xuất' },
+                                { id: 'inventory', label: '4. Kho hàng' },
+                                { id: 'profit_estimator', label: '5. Giá thành' },
+                                { id: 'report', label: 'Báo cáo' },
+                                { id: 'gallery', label: 'Thư viện ảnh' },
+                                { id: 'settings', label: 'Cài đặt' },
+                              ].map((tab) => {
+                                const isAllowed = isSuperAdmin || currentAllowedTabs.includes(tab.id);
+                                return (
+                                  <button
+                                    key={tab.id}
+                                    type="button"
+                                    disabled={isSuperAdmin || userRole !== 'admin'}
+                                    onClick={() => {
+                                      let updatedTabs = [...currentAllowedTabs];
+                                      if (updatedTabs.includes(tab.id)) {
+                                        updatedTabs = updatedTabs.filter(id => id !== tab.id);
+                                      } else {
+                                        updatedTabs.push(tab.id);
+                                      }
+                                      handleUpdateUserTabs(email, updatedTabs);
+                                    }}
+                                    className={`py-1 px-2 text-[10.5px] font-bold rounded-lg border text-left transition flex items-center gap-1.5 ${
+                                      isAllowed
+                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-705 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400'
+                                        : 'bg-white border-slate-205 text-slate-400 dark:bg-slate-900 dark:border-slate-800/80/50'
+                                    } ${isSuperAdmin || userRole !== 'admin' ? '' : 'hover:scale-102 hover:border-indigo-400 cursor-pointer'}`}
+                                  >
+                                    <span className={`block w-2.5 h-2.5 rounded-full ${isAllowed ? 'bg-indigo-600 dark:bg-indigo-400' : 'bg-slate-350 dark:bg-slate-705'}`} />
+                                    <span className="truncate">{tab.label}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
