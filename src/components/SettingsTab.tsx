@@ -68,6 +68,7 @@ export default function SettingsTab({
 
   // OTA App Update States
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
+  const [isChangelogOpen, setIsChangelogOpen] = useState(true); // Open by default for prominence
   const [inputUpdateUrl, setInputUpdateUrl] = useState(() => {
     return localStorage.getItem("xuongan_update_url") || "https://app-kho-an.web.app/version.json";
   });
@@ -1522,6 +1523,133 @@ export default function SettingsTab({
           )}
         </AnimatePresence>
       </div>
+
+      {/* 📋 NHẬT KÝ THAY ĐỔI PHIÊN BẢN (CHANGELOG HISTORY TABLE) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+        <div 
+          onClick={() => setIsChangelogOpen(!isChangelogOpen)}
+          className="flex items-center justify-between cursor-pointer select-none group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 group-hover:scale-105 transition duration-200">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2 flex-wrap">
+                <span>Nhật ký thay đổi phiên bản (Changelog)</span>
+                <span className="text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest font-mono">Phiên bản hiện tại v{localStorage.getItem('capgo_active_version') || CURRENT_VERSION}</span>
+              </h3>
+              <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+                Theo dõi các tính năng mới cập nhật, tối ưu hóa hiệu năng và sửa lỗi của hệ thống Sổ Sách Xưởng An.
+              </p>
+            </div>
+          </div>
+          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-450 group-hover:text-slate-700 dark:group-hover:text-amber-400 transition ml-2 shrink-0">
+            {isChangelogOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {isChangelogOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800"
+            >
+              {/* Responsive Table of Versions */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/20">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider font-mono">
+                      <th className="py-2.5 px-3 text-center w-24">Phiên bản</th>
+                      <th className="py-2.5 px-3 text-center w-28">Phát hành</th>
+                      <th className="py-2.5 px-3 w-40">Phân loại</th>
+                      <th className="py-2.5 px-4">Chi tiết thay đổi & Tính năng mới</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60 text-xs">
+                    {[
+                      {
+                        version: "v1.0.5",
+                        date: "18/06/2026",
+                        type: "Giao diện & Tiện ích",
+                        typeColor: "bg-indigo-50 border-indigo-150 text-indigo-750 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400",
+                        changes: [
+                          "Cập nhật menu điều hành hệ thống trong nút hamburger 3 gạch thành hệ thống Icon dạng grid 2 cột trực quan.",
+                          "Bổ sung Bảng Nhật Ký Thay Đổi Phiên Bản (Changelog) chi tiết ngay tại Trung tâm Cài đặt.",
+                          "Khắc phục triệt để lỗi thẻ đóng drawer menu làm hỏng cấu trúc mã nguồn.",
+                          "Tự động hóa luồng tăng số phiên bản trong package.json, types.ts và version.json khi click build ứng dụng."
+                        ],
+                        active: true
+                      },
+                      {
+                        version: "v1.0.4",
+                        date: "15/05/2026",
+                        type: "Hạ tầng & Đồng bộ",
+                        typeColor: "bg-emerald-50 border-emerald-150 text-emerald-750 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400",
+                        changes: [
+                          "Cải tiến cơ cấu nén và tối ưu hóa ảnh hóa đơn gốc, giúp thao tác mượt mà trong điều kiện sóng 3G yếu.",
+                          "Khôi phục cơ chế hàng đợi đồng bộ dữ liệu Offline khi người dùng bị ngắt mạng bất chợt."
+                        ]
+                      },
+                      {
+                        version: "v1.0.3",
+                        date: "20/04/2026",
+                        type: "Định vị & Tối ưu",
+                        typeColor: "bg-amber-50 border-amber-150 text-amber-700 dark:bg-amber-950/20 dark:border-amber-900/40 dark:text-amber-400",
+                        changes: [
+                          "Hỗ trợ chế độ thu thập vị trí GPS chính xác cao của vệ tinh trên thiết bị chạy Android 11+.",
+                          "Nhúng bảng xem chi tiết dung lượng bộ nhớ dùng chung, nâng cao khả năng quản trị thiết bị."
+                        ]
+                      },
+                      {
+                        version: "v1.0.2",
+                        date: "05/03/2026",
+                        type: "Khởi tạo hệ thống",
+                        typeColor: "bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800/40 dark:border-slate-800/80 dark:text-slate-300",
+                        changes: [
+                          "Khởi hoạt chuỗi hệ quản trị sổ sách sản xuất xưởng may An tích hợp cơ sở dữ liệu đồng bộ hai chiều."
+                        ]
+                      }
+                    ].map((row, idx) => (
+                      <tr 
+                        key={idx} 
+                        className={`transition hover:bg-slate-50/50 dark:hover:bg-slate-800/10 ${row.active ? 'bg-indigo-500/[0.01] dark:bg-indigo-500/[0.02]' : ''}`}
+                      >
+                        <td className="py-3 px-3 text-center divide-y divide-transparent font-sans">
+                          <span className={`inline-block px-2 py-0.5 rounded-md font-mono text-[11px] font-black tracking-wide ${row.active ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-850 text-slate-750 dark:text-slate-300'}`}>
+                            {row.version}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center text-[10.5px] font-mono font-medium text-slate-500">
+                          {row.date}
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-[11px]">
+                          <span className={`px-2 py-0.5 rounded-full border text-[10px] uppercase font-bold tracking-wide ${row.typeColor}`}>
+                            {row.type}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <ul className="space-y-1">
+                            {row.changes.map((change, cIdx) => (
+                              <li key={cIdx} className="flex gap-1.5 items-start text-[11.5px] text-slate-655 dark:text-slate-350 leading-relaxed font-semibold">
+                                <span className={`text-[10px] select-none font-bold mt-0.5 shrink-0 ${row.active ? 'text-indigo-500' : 'text-slate-400'}`}>•</span>
+                                <span>{change}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       {/* Group Coupling / Collective Coordination Panel (Chức năng Kết hợp Nhóm & Đa liên kết) */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
         <div 

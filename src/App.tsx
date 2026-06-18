@@ -2842,12 +2842,12 @@ export default function App() {
                     <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                       <p className="text-[9px] font-extrabold text-slate-400 tracking-wider uppercase font-mono">⚙️ MENU ĐIỀU HÀNH HỆ THỐNG</p>
                       
-                      <div className="flex bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800 text-xs font-semibold gap-0.5">
+                      <div className="grid grid-cols-2 gap-2">
                         {[
-                          { id: 'backup', label: 'Sao lưu', icon: Database },
-                          { id: 'features', label: 'Trang chủ', icon: Home },
-                          { id: 'theme', label: 'Sáng/Tối', icon: Sun },
-                          { id: 'guide', label: 'H.Dẫn', icon: HelpCircle }
+                          { id: 'backup', label: 'Sao lưu', icon: Database, color: 'text-emerald-500' },
+                          { id: 'features', label: 'Trang chủ', icon: Home, color: 'text-indigo-500' },
+                          { id: 'theme', label: 'Giao diện', icon: Sun, color: 'text-amber-500' },
+                          { id: 'guide', label: 'Hướng dẫn', icon: HelpCircle, color: 'text-blue-500' }
                         ].map(tab => {
                           const Icon = tab.icon;
                           const isActive = settingsActiveTab === tab.id;
@@ -2855,10 +2855,12 @@ export default function App() {
                             <button
                               key={tab.id}
                               onClick={() => setSettingsActiveTab(tab.id as any)}
-                              className={`flex-1 py-1.5 px-0.5 rounded-lg flex flex-col items-center justify-center gap-0.5 text-[10px] transition cursor-pointer leading-none min-w-0 ${isActive ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold font-sans' : 'text-slate-500 dark:text-slate-450 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                              className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${isActive ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
                             >
-                              <Icon className="w-3.5 h-3.5" />
-                              <span className="truncate">{tab.label}</span>
+                              <div className={`p-1.5 rounded-lg flex items-center justify-center ${isActive ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : tab.color}`} />
+                              </div>
+                              <span>{tab.label}</span>
                             </button>
                           );
                         })}
