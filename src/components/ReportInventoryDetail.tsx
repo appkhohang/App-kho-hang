@@ -145,6 +145,152 @@ export default function ReportInventoryDetail({
     }
   });
 
+  // Smart Grouping & Manual Unification Rules State
+  const [smartGroupEnabled, setSmartGroupEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('xuongan_inventory_smart_group');
+    return saved !== 'false'; // Default to true!
+  });
+
+  interface ManualUnificationRule {
+    id: string;
+    target: string;
+    sources: string[];
+  }
+
+  const [manualRules, setManualRules] = useState<ManualUnificationRule[]>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_inventory_unification_rules');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    // Pragmatic default rule to start with:
+    return [
+      { id: '1', target: 'Yếm Dài', sources: ['Dài Yếm', 'Yem dai', 'dai yem'] }
+    ];
+  });
+
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [newRuleTarget, setNewRuleTarget] = useState('');
+  const [newRuleSourcesInput, setNewRuleSourcesInput] = useState('');
+
+  // Build automatic key-based smart mapping for word shuffles (e.g. Yếm Dài vs Dài Yếm)
+  const smartGroupMap = useMemo(() => {
+    const sortedKeyToNames = new Map<string, string[]>();
+    
+    const addName = (n: string) => {
+      if (!n) return;
+      const trimmed = n.trim();
+      if (!trimmed) return;
+      const key = cleansAndSortsWords(trimmed);
+      if (!sortedKeyToNames.has(key)) {
+        sortedKeyToNames.set(key, []);
+      }
+      sortedKeyToNames.get(key)!.push(trimmed);
+    };
+
+    items.forEach(item => {
+      if (item.mẫu) addName(item.mẫu);
+    });
+    bills.forEach(bill => {
+      if (bill.items) {
+        bill.items.forEach(bitem => {
+          if (bitem.mẫuMã) addName(bitem.mẫuMã);
+        });
+      }
+    });
+
+    const map: Record<string, string> = {};
+    sortedKeyToNames.forEach((names, key) => {
+      const frequency: Record<string, number> = {};
+      names.forEach(n => {
+        frequency[n] = (frequency[n] || 0) + 1;
+      });
+      const uniqueNames = Array.from(new Set(names));
+      uniqueNames.sort((a, b) => {
+        const freqA = frequency[a] || 0;
+        const freqB = frequency[b] || 0;
+        if (freqB !== freqA) return freqB - freqA;
+        return b.length - a.length;
+      });
+      map[key] = uniqueNames[0] || '';
+    });
+
+    return map;
+  }, [items, bills]);
+
+  // Unified name mapping function
+  const getUnifiedName = useMemo(() => {
+    return (rawName: string): string => {
+      if (!rawName) return '';
+      const trimmed = rawName.trim();
+      
+      // 1. Manual rules (highest priority)
+      for (const rule of manualRules) {
+        if (!rule.target) continue;
+        const matched = rule.sources.some(src => {
+          const srcClean = src.trim().toLowerCase();
+          const rawClean = trimmed.toLowerCase();
+          return srcClean === rawClean || cleansAndSortsWords(src) === cleansAndSortsWords(trimmed);
+        });
+        if (matched) {
+          return rule.target.trim();
+        }
+      }
+
+      // 2. Smart Grouping word sorted
+      if (smartGroupEnabled) {
+        const sortedKey = cleansAndSortsWords(trimmed);
+        const canon = smartGroupMap[sortedKey];
+        if (canon) return canon;
+      }
+
+      return trimmed;
+    };
+  }, [manualRules, smartGroupEnabled, smartGroupMap]);
+
+  // Helper to save manual rules
+  const saveManualRules = (newRules: ManualUnificationRule[]) => {
+    setManualRules(newRules);
+    localStorage.setItem('xuongan_inventory_unification_rules', JSON.stringify(newRules));
+  };
+
+  // Helper to toggle smart grouping
+  const toggleSmartGroup = () => {
+    const val = !smartGroupEnabled;
+    setSmartGroupEnabled(val);
+    localStorage.setItem('xuongan_inventory_smart_group', String(val));
+  };
+
+  // Calculate sources mapped to unified names for tooltips and tags
+  const mergedSourcesMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    
+    const record = (raw: string) => {
+      if (!raw) return;
+      const trimmed = raw.trim();
+      if (!trimmed) return;
+      const unified = getUnifiedName(trimmed);
+      if (unified && unified !== trimmed) {
+        if (!map.has(unified)) {
+          map.set(unified, new Set());
+        }
+        map.get(unified)!.add(trimmed);
+      }
+    };
+
+    items.forEach(item => {
+      if (item.mẫu) record(item.mẫu);
+    });
+    bills.forEach(bill => {
+      if (bill.items) {
+        bill.items.forEach(bitem => {
+          if (bitem.mẫuMã) record(bitem.mẫuMã);
+        });
+      }
+    });
+
+    return map;
+  }, [items, bills, getUnifiedName]);
+
   // State values for active selected model trace parameters
   const [editingDetailTab, setEditingDetailTab] = useState<'info' | 'inventory'>('inventory');
   const [tempAdjustValue, setTempAdjustValue] = useState(0); // This will hold the direct stock value to adjust
@@ -152,13 +298,16 @@ export default function ReportInventoryDetail({
   const [tempThreshold, setTempThreshold] = useState(0);
   const [showAllHistory, setShowAllHistory] = useState(false);
 
-  // 1. Gather all unique models dynamically from both goods import and sales bills
+  // 1. Gather all unique models dynamically from both goods import and sales bills, mapping them to unified names
   const allModels = useMemo(() => {
     const modelsSet = new Set<string>();
     
     items.forEach(item => {
       if (item.mẫu && item.mẫu.trim()) {
-        modelsSet.add(item.mẫu.trim());
+        const unified = getUnifiedName(item.mẫu);
+        if (unified) {
+          modelsSet.add(unified);
+        }
       }
     });
 
@@ -166,14 +315,17 @@ export default function ReportInventoryDetail({
       if (bill.items && Array.isArray(bill.items)) {
         bill.items.forEach(bitem => {
           if (bitem.mẫuMã && bitem.mẫuMã.trim()) {
-            modelsSet.add(bitem.mẫuMã.trim());
+            const unified = getUnifiedName(bitem.mẫuMã);
+            if (unified) {
+              modelsSet.add(unified);
+            }
           }
         });
       }
     });
 
     return Array.from(modelsSet);
-  }, [items, bills]);
+  }, [items, bills, getUnifiedName]);
 
   // 2. Compute warehouse stock for each model with estimated cost basis
   const inventoryList = useMemo(() => {
@@ -189,8 +341,8 @@ export default function ReportInventoryDetail({
     }
 
     return allModels.map((modelName, index) => {
-      // Find all imports of this model
-      const modelImports = items.filter(i => i.mẫu && i.mẫu.trim() === modelName);
+      // Find all imports of this model matching either standard or unified name
+      const modelImports = items.filter(i => i.mẫu && getUnifiedName(i.mẫu) === modelName);
       const totalImported = modelImports.reduce((sum, curr) => sum + (curr.sốLượng || 0), 0);
       
       // Calculate total sold in bills
@@ -201,7 +353,7 @@ export default function ReportInventoryDetail({
         if (bill.items && Array.isArray(bill.items)) {
           let foundInBill = false;
           bill.items.forEach(bitem => {
-            if (bitem.mẫuMã && bitem.mẫuMã.trim() === modelName) {
+            if (bitem.mẫuMã && getUnifiedName(bitem.mẫuMã) === modelName) {
               totalSold += (bitem.sốLượng || 0);
               foundInBill = true;
             }
@@ -231,7 +383,7 @@ export default function ReportInventoryDetail({
       bills.forEach(bill => {
         if (bill.items && Array.isArray(bill.items)) {
           bill.items.forEach(bitem => {
-            if (bitem.mẫuMã && bitem.mẫuMã.trim() === modelName && (bitem.đơnGiá || 0) > 0) {
+            if (bitem.mẫuMã && getUnifiedName(bitem.mẫuMã) === modelName && (bitem.đơnGiá || 0) > 0) {
               salePrices.push(bitem.đơnGiá);
             }
           });
@@ -272,7 +424,7 @@ export default function ReportInventoryDetail({
         hasSavedProfitEstimate: !!matchedEstimate
       };
     });
-  }, [allModels, items, bills, manualAdjustments]);
+  }, [allModels, items, bills, manualAdjustments, getUnifiedName]);
 
   // Synchronize editing variables whenever selectedModelForTrace opens
   useEffect(() => {
@@ -388,9 +540,9 @@ export default function ReportInventoryDetail({
   const modelTraceHistory = useMemo(() => {
     if (!selectedModelForTrace) return null;
 
-    // Collect imports of this model
+    // Collect imports of this model matching getUnifiedName
     const importLogs = items
-      .filter(i => i.mẫu && i.mẫu.trim() === selectedModelForTrace)
+      .filter(i => i.mẫu && getUnifiedName(i.mẫu) === selectedModelForTrace)
       .map(i => ({
         type: 'import' as const,
         id: i.id,
@@ -405,12 +557,12 @@ export default function ReportInventoryDetail({
         importObj: i
       }));
 
-    // Collect billing sales of this model
+    // Collect billing sales of this model matching getUnifiedName
     const salesLogs: any[] = [];
     bills.forEach(bill => {
       if (bill.items && Array.isArray(bill.items)) {
         bill.items.forEach(bitem => {
-          if (bitem.mẫuMã && bitem.mẫuMã.trim() === selectedModelForTrace) {
+          if (bitem.mẫuMã && getUnifiedName(bitem.mẫuMã) === selectedModelForTrace) {
             const customerObj = customers.find(c => c.id === bill.customerId);
             salesLogs.push({
               type: 'sale' as const,
@@ -441,7 +593,7 @@ export default function ReportInventoryDetail({
     });
 
     return mergedHistory;
-  }, [selectedModelForTrace, items, bills, customers]);
+  }, [selectedModelForTrace, items, bills, customers, getUnifiedName]);
 
   // 6. Handle exporting the entire warehouse inventory details to CSV format
   const handleExportCSV = () => {
@@ -671,6 +823,152 @@ export default function ReportInventoryDetail({
         </div>
       </div>
 
+      {/* 4.5. SMART GROUPING & UNIFICATION CONFIGURATION (Chế độ gộp thông minh & Cấu hình đồng nhất) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 mb-3 select-none text-left shadow-xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="p-1 px-1.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-450 font-extrabold text-[9.5px] uppercase tracking-wide">
+              Trợ lý kho
+            </span>
+            <h3 className="font-extrabold text-[12.5px] text-slate-900 dark:text-white">Kiểm đếm đồng nhất mẫu gộp</h3>
+          </div>
+          
+          <button 
+            onClick={() => setIsConfigOpen(!isConfigOpen)}
+            className="text-xs text-indigo-600 dark:text-indigo-450 hover:underline font-extrabold cursor-pointer bg-transparent border-none py-1 px-2.5 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-lg transition"
+          >
+            {isConfigOpen ? 'Thu gọn' : 'Bản đồ liên kết (Cài cấu hình)'}
+          </button>
+        </div>
+
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-normal font-medium">
+          Tích chọn để tự động cộng dồn các mẫu trùng lập đảo chữ (ví dụ: <strong className="text-slate-700 dark:text-slate-350 font-bold">Yếm Dài, Dài Yếm, yem dai</strong>) về cùng loại nhập.
+        </p>
+
+        {/* Smart Grouping Toggle Switch */}
+        <div className="flex items-center justify-between mt-2.5 p-2 bg-slate-50 dark:bg-zinc-900 border border-slate-150 dark:border-slate-800/60 rounded-xl">
+          <div className="pr-3">
+            <div className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1">
+              <span>Chế độ gộp thông minh tự động</span>
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+            </div>
+            <div className="text-[10px] text-slate-450 dark:text-slate-500 font-semibold mt-0.5">Xếp lại từ ngữ đảo chữ, không dấu, viết hoa thường tự động</div>
+          </div>
+          
+          <button
+            onClick={toggleSmartGroup}
+            type="button"
+            className={`w-10 h-6 rounded-full p-0.5 transition-colors duration-200 focus:outline-none flex shrink-0 ${smartGroupEnabled ? 'bg-indigo-600 justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'}`}
+          >
+            <motion.div 
+              layout 
+              className="w-5 h-5 bg-white rounded-full shadow-xs"
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            />
+          </button>
+        </div>
+
+        {/* Config / Expandable mapping screen */}
+        <AnimatePresence>
+          {isConfigOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-3 pt-3 border-t border-slate-150 dark:border-slate-800 space-y-3 overflow-hidden font-sans"
+            >
+              {/* Form to add a new rule */}
+              <div className="bg-slate-50 dark:bg-zinc-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <h4 className="text-[10px] font-black uppercase text-slate-400">Liên kết gộp thủ công mới</h4>
+                
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-650 dark:text-slate-300 mb-1">TÊN QUY CHUẨN ĐỒNG NHẤT (VD: Yếm Dài)</label>
+                    <input
+                      type="text"
+                      placeholder="Nhập tên đại diện chính (ví dụ: Yếm Dài)"
+                      value={newRuleTarget}
+                      onChange={(e) => setNewRuleTarget(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 focus:border-indigo-500 rounded-lg outline-none font-bold text-slate-800 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-650 dark:text-slate-300 mb-1">CÁC TÊN PHỤ PHÁT SINH CẦN GỘP (Ngăn cách bằng dấu phẩy)</label>
+                    <input
+                      type="text"
+                      placeholder="VD: Dài Yếm, yemdai, yếm dài mỏng"
+                      value={newRuleSourcesInput}
+                      onChange={(e) => setNewRuleSourcesInput(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 focus:border-indigo-500 rounded-lg outline-none font-bold text-slate-800 dark:text-white"
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (!newRuleTarget.trim() || !newRuleSourcesInput.trim()) return;
+                      const sources = newRuleSourcesInput.split(',').map(s => s.trim()).filter(Boolean);
+                      if (sources.length === 0) return;
+                      
+                      const newRule = {
+                        id: String(Date.now()),
+                        target: newRuleTarget.trim(),
+                        sources
+                      };
+                      
+                      const updated = [...manualRules, newRule];
+                      saveManualRules(updated);
+                      setNewRuleTarget('');
+                      setNewRuleSourcesInput('');
+                    }}
+                    className="w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black transition cursor-pointer text-center text-[11px] uppercase tracking-wide"
+                  >
+                    Kích hoạt gộp liên kết
+                  </button>
+                </div>
+              </div>
+
+              {/* Rules list */}
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                <span className="text-[10px] font-black uppercase text-slate-400 block px-1">Quy tắc đang cấu hình ({manualRules.length})</span>
+                {manualRules.length === 0 ? (
+                  <p className="text-[10px] text-slate-400 font-bold italic py-2 text-center bg-slate-50 dark:bg-zinc-900/20 rounded-lg">Chưa cấu hình bản đồ gộp thủ công.</p>
+                ) : (
+                  manualRules.map(rule => (
+                    <div 
+                      key={rule.id} 
+                      className="flex items-center justify-between p-2 bg-slate-100/40 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 rounded-lg text-xs"
+                    >
+                      <div className="flex-1 text-left pr-2">
+                        <span className="font-extrabold text-slate-900 dark:text-white block text-[11.5px]">{rule.target}</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {rule.sources.map((src, i) => (
+                            <span key={i} className="text-[9px] bg-slate-200 dark:bg-slate-800/80 text-slate-650 dark:text-slate-405 px-1.5 py-0.5 rounded-sm font-semibold">
+                              {src}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          const updated = manualRules.filter(r => r.id !== rule.id);
+                          saveManualRules(updated);
+                        }}
+                        className="text-red-500 hover:text-red-650 p-1 rounded-lg transition hover:bg-slate-200/50 dark:hover:bg-slate-800 cursor-pointer"
+                        title="Xóa quy tắc này"
+                      >
+                        <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       {/* Status Warning Alert Panel for context awareness */}
       {statusFilter !== 'all' && (
         <div className="mb-2 px-3 py-1.5 rounded-lg bg-indigo-50/40 dark:bg-indigo-950/10 text-[10px] text-indigo-600 dark:text-indigo-400 text-left flex items-center gap-1.5 font-bold">
@@ -716,7 +1014,19 @@ export default function ReportInventoryDetail({
 
                   {/* Middle details block */}
                   <div>
-                    <h4 className="font-extrabold text-slate-900 dark:text-white text-[13.5px] mb-0.5 leading-tight">{item.modelName}</h4>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <h4 className="font-extrabold text-slate-900 dark:text-white text-[13.5px] leading-tight">{item.modelName}</h4>
+                      {mergedSourcesMap.has(item.modelName) && (
+                        <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wide border border-indigo-200/50 dark:border-indigo-900/30">
+                          Gộp mẫu {mergedSourcesMap.get(item.modelName)!.size}
+                        </span>
+                      )}
+                    </div>
+                    {mergedSourcesMap.has(item.modelName) && (
+                      <p className="text-[9.5px] text-indigo-500/90 dark:text-indigo-400/80 font-bold tracking-tight mb-0.5">
+                        (Gốc: {Array.from(mergedSourcesMap.get(item.modelName)!).join(', ')})
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center text-[10.5px] text-zinc-400 font-semibold">
                       <span className="font-mono">{item.sku}</span>
                       <span className="text-slate-300 dark:text-slate-700">|</span>

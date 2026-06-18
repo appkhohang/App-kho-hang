@@ -5,7 +5,7 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, ShieldCheck, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle } from 'lucide-react';
+import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, ShieldCheck, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle, X, ChevronRight } from 'lucide-react';
 import { AppSettings, ImportItem, Customer, UserProfile, Bill, CURRENT_VERSION, AppUpdateInfo } from '../types';
 import { isNewerVersion } from '../utils/updateService';
 import { useAndroidBack } from '../hooks/useAndroidBack';
@@ -57,6 +57,7 @@ export default function SettingsTab({
 
   // States of collapsible sections (defaulting to false / collapsed for tidiness)
   const [isDbOpen, setIsDbOpen] = useState(false);
+  const [isThemeOpen, setIsThemeOpen] = useState(false);
   const [isPwdOpen, setIsPwdOpen] = useState(false);
   const [isGroupOpen, setIsGroupOpen] = useState(false);
   const [forceDefaultDb, setForceDefaultDb] = useState(() => {
@@ -69,6 +70,14 @@ export default function SettingsTab({
   // OTA App Update States
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
   const [isChangelogOpen, setIsChangelogOpen] = useState(true); // Open by default for prominence
+  const [selectedChangelogVersion, setSelectedChangelogVersion] = useState<{
+    version: string;
+    date: string;
+    type: string;
+    typeColor: string;
+    changes: string[];
+    active?: boolean;
+  } | null>(null);
   const [inputUpdateUrl, setInputUpdateUrl] = useState(() => {
     return localStorage.getItem("xuongan_update_url") || "https://app-kho-an.web.app/version.json";
   });
@@ -804,7 +813,7 @@ export default function SettingsTab({
     <div className="space-y-6 font-sans max-w-4xl mx-auto">
       
       {/* Settings Tab Introduce */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs text-left">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
             <Settings className="w-5 h-5" />
@@ -818,309 +827,522 @@ export default function SettingsTab({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Left Column: Custom Theme Selection */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-2xs space-y-4">
-          <div>
-            <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-1.5 font-mono">
-              <Sun className="w-4 h-4 text-amber-500" />
-              <span>Chế độ giao diện (Theme)</span>
-            </h3>
-            <p className="text-[11px] text-slate-450 mt-1">Điều chỉnh độ sáng màn hình để bảo vệ mắt trong quá trình thao tác.</p>
+      {/* CENTRAL CONTROL CENTER DASHBOARD (MẠNG LƯỚI ICON ĐIỀU KHIỂN HIỆN ĐẠI) */}
+      <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-900/40 dark:to-slate-950/25 border border-slate-205 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200/50 dark:border-slate-850/50">
+          <div className="space-y-0.5 text-left">
+            <span className="text-[9.5px] font-mono font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest block">Core Control Deck</span>
+            <h3 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">Bộ điều khiển & Bảo mật hệ thống</h3>
           </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => setSettings(prev => ({ ...prev, theme: 'light' }))}
-              className={`p-3 border rounded-xl flex flex-col items-center gap-1.5 transition cursor-pointer text-xs ${settings.theme === 'light' ? 'border-indigo-500 bg-indigo-50/10 text-indigo-600 font-bold dark:text-indigo-400' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'}`}
-            >
-              <Sun className="w-5 h-5 text-amber-500" />
-              <span className="text-[11px] font-bold">Chế độ Sáng</span>
-            </button>
-
-            <button
-              onClick={() => setSettings(prev => ({ ...prev, theme: 'dark' }))}
-              className={`p-3 border rounded-xl flex flex-col items-center gap-1.5 transition cursor-pointer text-xs ${settings.theme === 'dark' ? 'border-indigo-400 bg-indigo-950/10 text-indigo-400 font-bold' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'}`}
-            >
-              <Moon className="w-5 h-5 text-indigo-400" />
-              <span className="text-[11px] font-bold">Chế độ Tối</span>
-            </button>
-
-            <button
-              onClick={() => setSettings(prev => ({ ...prev, theme: 'system' }))}
-              className={`p-3 border rounded-xl flex flex-col items-center gap-1.5 transition cursor-pointer text-xs ${settings.theme === 'system' ? 'border-indigo-500 bg-indigo-550/10 text-indigo-650 dark:text-indigo-400 font-bold' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'}`}
-            >
-              <Smartphone className="w-5 h-5 text-emerald-500" />
-              <span className="text-[11px] font-bold">Tự động</span>
-            </button>
-          </div>
-          <p className="text-[10.5px] text-slate-400 leading-normal font-sans italic text-center">
-            Trạng thái tự động đồng bộ theo cấu hình mặc định của thiết bị.
-          </p>
-
-
+          <span className="text-[10px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-200/30 uppercase tracking-wide animate-pulse">
+            Bảo mật tối cao
+          </span>
         </div>
 
-        {/* Right Column: Database backup restore operations */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-2xs space-y-4">
-          <div 
-            onClick={() => setIsDbOpen(!isDbOpen)}
-            className="flex items-center justify-between cursor-pointer select-none group"
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {/* Tile 1: Theme Selection */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsThemeOpen(!isThemeOpen);
+              setIsDbOpen(false);
+              setIsGpsOpen(false);
+              setIsUpdatesOpen(false);
+              setIsGroupOpen(false);
+              setIsUsersOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isThemeOpen
+                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+            }`}
           >
-            <div>
-              <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-1.5 font-mono">
-                <Database className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition animate-pulse" />
-                <span>Quản lý cơ sở dữ liệu & Đồng bộ</span>
-                <span 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsDbOpen(true);
-                    setShowCloudInfo(prev => !prev);
-                  }}
-                  className={`p-1 rounded-md transition ${showCloudInfo ? 'bg-indigo-100 text-indigo-750 dark:bg-indigo-950/40 dark:text-indigo-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650'}`}
-                  title="Thông tin chi tiết cấu hình đám mây"
-                >
-                  <Info className="w-3.5 h-3.5 cursor-pointer" />
-                </span>
-              </h3>
-              <p className="text-[11px] text-slate-450 mt-1">Đồng bộ đám mây, sao lưu dự phòng, và xử lý kết nối máy chủ.</p>
+            <div className={`p-2 rounded-lg shrink-0 ${isThemeOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <Palette className="w-4 h-4" />
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 shrink-0 hidden sm:flex">
-                <span className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-orange-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 font-mono uppercase">
-                  {syncStatus === 'syncing' ? 'Sync...' : syncStatus === 'error' ? 'Lỗi' : 'Sẵn sàng'}
-                </span>
-              </div>
-              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-amber-450 transition ml-1 shrink-0">
-                {isDbOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Giao diện xưởng</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                {settings.theme === 'light' ? 'Chế độ Sáng' : settings.theme === 'dark' ? 'Chế độ Tối' : 'Tự động'}
+              </span>
             </div>
-          </div>
-
-          <AnimatePresence initial={false}>
-            {isDbOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800"
-              >
-                {/* Hidden input file tag required for backup restore click trigger */}
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileUpload} 
-                  accept=".json" 
-                  className="hidden" 
-                />
-
-                {/* Grid of Square Small tiles */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  
-                  {/* 1. Tải từ Đám mây */}
-                  <button
-                    type="button"
-                    onClick={handleCloudPull}
-                    disabled={syncStatus === 'syncing'}
-                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-indigo-400 dark:hover:border-indigo-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer disabled:opacity-50 min-h-[84px]"
-                  >
-                    <Download className="w-4 h-4 text-indigo-500 mb-1" />
-                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Tải đám mây</span>
-                    <span className="text-[8.5px] text-indigo-650 dark:text-indigo-400 font-mono font-black mt-0.5">PULL CLOUD</span>
-                  </button>
-
-                  {/* 2. Lưu lên Đám mây */}
-                  <button
-                    type="button"
-                    onClick={handleCloudPush}
-                    disabled={syncStatus === 'syncing' || userRole !== 'admin'}
-                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-emerald-400 dark:hover:border-emerald-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-emerald-500/10 cursor-pointer disabled:opacity-50 min-h-[84px]"
-                    title={userRole !== 'admin' ? "Chỉ Quản trị viên mới được sao lưu" : ""}
-                  >
-                    <Upload className="w-4 h-4 text-emerald-500 mb-1" />
-                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Lưu đám mây</span>
-                    <span className="text-[8.5px] text-emerald-650 dark:text-emerald-405 font-mono font-black mt-0.5">PUSH CLOUD</span>
-                  </button>
-
-                  {/* 3. Sửa lỗi & Pull (Wipe cache) */}
-                  <button
-                    type="button"
-                    onClick={handleWipeCacheAndSync}
-                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-amber-400 dark:hover:border-amber-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-amber-500/10 cursor-pointer min-h-[84px]"
-                  >
-                    <RefreshCw className="w-4 h-4 text-amber-500 mb-1" />
-                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Sửa lỗi & Pull</span>
-                    <span className="text-[8.5px] text-amber-650 dark:text-amber-405 font-mono font-black mt-0.5">XÓA CACHE</span>
-                  </button>
-
-                  {/* 4. Môi trường DB */}
-                  <button
-                    type="button"
-                    onClick={handleToggleForceDefaultDb}
-                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-blue-500/10 cursor-pointer min-h-[84px]"
-                  >
-                    {forceDefaultDb ? (
-                      <ToggleRight className="w-5 h-5 text-indigo-500 mb-0.5" />
-                    ) : (
-                      <ToggleLeft className="w-5 h-5 text-slate-400 dark:text-slate-600 mb-0.5" />
-                    )}
-                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Môi trường DB</span>
-                    <span className="text-[8.5px] text-blue-650 dark:text-blue-405 font-mono font-black truncate max-w-full">
-                      {forceDefaultDb ? "DEFAULT" : "SANDBOX"}
-                    </span>
-                  </button>
-
-                  {/* 5. Xuất tệp JSON (Local Backup) */}
-                  <button
-                    type="button"
-                    onClick={exportDatabasePackage}
-                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer min-h-[84px]"
-                  >
-                    <Download className="w-4 h-4 text-blue-550 dark:text-blue-400 mb-1" />
-                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Xuất file backup</span>
-                    <span className="text-[8.5px] text-blue-600 dark:text-blue-400 font-mono font-black mt-0.5">LOCAL JSON</span>
-                  </button>
-
-                  {/* 6. Nhập tệp JSON (Local Restore) */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer min-h-[84px]"
-                  >
-                    <Upload className="w-4 h-4 text-violet-550 dark:text-violet-400 mb-1" />
-                    <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Nhập file backup</span>
-                    <span className="text-[8.5px] text-violet-600 dark:text-violet-400 font-mono font-black mt-0.5">RESTORE</span>
-                  </button>
-
-                  {/* 7. Xóa sạch máy / Đăng xuất (Full Logout Reset) */}
-                  <button
-                    type="button"
-                    onClick={handleLogoutAndWipeAll}
-                    className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-rose-200 dark:border-rose-900/30 bg-rose-50/10 dark:bg-rose-955/5 hover:bg-rose-50 dark:hover:bg-rose-955/15 hover:border-rose-400 dark:hover:border-rose-900 transition col-span-2 sm:col-span-3 shadow-2xs hover:ring-1 hover:ring-rose-500/10 cursor-pointer min-h-[80px]"
-                  >
-                    <Trash2 className="w-4 h-4 text-rose-505 mb-1" />
-                    <span className="text-[10.5px] font-black text-rose-700 dark:text-rose-400">Xóa dữ liệu cục bộ & Đăng xuất</span>
-                    <span className="text-[8.5px] text-slate-400 dark:text-slate-500 mt-0.5 leading-none">
-                      (Bảo lưu tệp an tâm trên đám mây Firestore)
-                    </span>
-                  </button>
-
-                </div>
-
-                {/* 8. Danh sách tự động sao lưu an toàn */}
-                <div className="mt-4 pt-3 border-t border-slate-150 dark:border-slate-800 space-y-2 text-left">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                    <span className="text-[10px] font-black tracking-wider uppercase text-slate-450 dark:text-slate-400 flex items-center gap-1.5 font-mono">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Nhật ký tự động sao lưu an toàn</span>
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-650 dark:bg-indigo-950/30 dark:text-indigo-400 self-start">
-                      Auto-save: 5 phút / Thay đổi dữ liệu
-                    </span>
-                  </div>
-
-                  {autoBackups.length === 0 ? (
-                    <div className="text-center py-5 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 dark:text-slate-500 text-[10.5px]">
-                      Chưa có bản tự động sao lưu nào. Hệ thống sẽ lưu sau mỗi 5 phút hoặc khi sửa đổi dữ liệu quan trọng.
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-                      {autoBackups.map((bak) => {
-                        const isCrucial = bak.trigger === 'crucial_change';
-                        return (
-                          <div 
-                            key={bak.id} 
-                            className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 hover:bg-slate-50 dark:hover:bg-slate-950/40 transition flex items-center justify-between gap-3 text-xs"
-                          >
-                            <div className="space-y-0.5">
-                              <div className="font-mono text-[11px] font-extrabold text-slate-700 dark:text-slate-350 flex items-center gap-1.5">
-                                <span className={`w-1.5 h-1.5 rounded-full ${isCrucial ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                                <span>{bak.timeStr}</span>
-                              </div>
-                              <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                                <span>Hình thức:</span>
-                                <strong className={`font-black ${isCrucial ? 'text-amber-650 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                  {isCrucial ? 'Thay đổi dữ liệu' : 'Định kỳ 5 phút'}
-                                </strong>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleRestoreAutoBackup(bak)}
-                              className="px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:border-indigo-300 bg-indigo-50 hover:bg-indigo-105 text-indigo-700 font-bold text-[10px] uppercase transition cursor-pointer flex items-center gap-1 shrink-0 dark:border-indigo-900/40 dark:bg-indigo-950/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
-                            >
-                              <RefreshCw className="w-2.5 h-2.5" />
-                              <span>Khôi phục</span>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Info Drawer inline */}
-                <AnimatePresence>
-                  {showCloudInfo && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-450 space-y-3 leading-relaxed relative mt-2 text-left"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setShowCloudInfo(false)}
-                        className="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-600 cursor-pointer font-bold font-mono text-[10px]"
-                      >
-                        ✕
-                      </button>
-
-                      <div className="space-y-1">
-                        <span className="font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[9.5px] flex items-center gap-1">
-                          <Cloud className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>Cơ chế bộ nhớ & Tối ưu:</span>
-                        </span>
-                        <p>
-                          Dữ liệu của xưởng lưu trữ <strong className="text-slate-850 dark:text-slate-100">cache-first</strong> tại trình duyệt máy này. 
-                          Bạn chỉ tiêu thụ lượt đọc/ghi từ đám mây khi chủ động bấm Tải đám mây (Pull) hoặc Lưu đám mây (Push), đảm bảo ứng dụng chạy tức thời, tiết kiệm dung lượng Firestore.
-                        </p>
-                      </div>
-
-                      <div className="space-y-1 pt-2 border-t border-slate-200/60 dark:border-slate-800/80">
-                        <span className="font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[9.5px] flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                          <Shield className="w-3.5 h-3.5" />
-                          <span>Hướng dẫn Khắc phục Lỗi Quyền (Permission Error):</span>
-                        </span>
-                        <p>
-                          Nếu gặp lỗi <strong>"Missing or insufficient permissions"</strong> (thường do môi trường Sandbox bị mất session hoặc hết hạn), hãy bấm nút <strong>"Sửa lỗi & Pull"</strong> để tái đồng bộ. Nếu chạy trong container Cloud Run riêng, hãy đổi <strong>Môi trường DB sang DEFAULT</strong>.
-                        </p>
-                      </div>
-
-                      {userRole !== 'admin' && (
-                        <div className="p-2 border border-amber-200/60 dark:border-amber-900/40 bg-amber-500/[0.03] dark:bg-amber-500/[0.01] rounded-lg text-amber-800 dark:text-amber-400 leading-normal">
-                          🔒 Tài khoản của bạn đang có vai trò <strong>{userRole === 'staff' ? 'Nhân viên nhập thợ' : 'Chỉ xem'}</strong>, chỉ dùng để cập nhật nghiệp vụ cục bộ, không thể PUSH ghi đè cơ sở dữ liệu chung trên đám mây.
-                        </div>
-                      )}
-
-                      {lastSyncTime && (
-                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 pt-2 border-t border-slate-200/65 dark:border-slate-800/80">
-                          <span>🔄 Lần đồng bộ máy này gần nhất:</span>
-                          <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{lastSyncTime}</strong>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-              </motion.div>
+            {isThemeOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
             )}
-          </AnimatePresence>
+          </button>
+
+          {/* Tile 2: Database & Sync */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsDbOpen(!isDbOpen);
+              setIsThemeOpen(false);
+              setIsGpsOpen(false);
+              setIsUpdatesOpen(false);
+              setIsGroupOpen(false);
+              setIsUsersOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isDbOpen
+                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+            }`}
+          >
+            <div className={`p-2 rounded-lg shrink-0 ${isDbOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <Database className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Cơ sở dữ liệu</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                {syncStatus === 'syncing' ? 'Sync...' : syncStatus === 'error' ? 'Lỗi' : 'Sẵn sàng'}
+              </span>
+            </div>
+            {isDbOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+            )}
+          </button>
+
+          {/* Tile 3: Device hardware GPS/Camera */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsGpsOpen(!isGpsOpen);
+              setIsThemeOpen(false);
+              setIsDbOpen(false);
+              setIsUpdatesOpen(false);
+              setIsGroupOpen(false);
+              setIsUsersOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isGpsOpen
+                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+            }`}
+          >
+            <div className={`p-2 rounded-lg shrink-0 ${isGpsOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Thiết bị & GPS</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                {gpsData.latitude !== null ? `${gpsData.latitude.toFixed(1)}, ${gpsData.longitude?.toFixed(1)}` : 'Sẵn sàng'}
+              </span>
+            </div>
+            {isGpsOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+            )}
+          </button>
+
+          {/* Tile 4: OTA App Updates */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsUpdatesOpen(!isUpdatesOpen);
+              setIsThemeOpen(false);
+              setIsDbOpen(false);
+              setIsGpsOpen(false);
+              setIsGroupOpen(false);
+              setIsUsersOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isUpdatesOpen
+                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+            }`}
+          >
+            <div className={`p-2 rounded-lg shrink-0 ${isUpdatesOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <ArrowUpCircle className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Nâng cấp OTA</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                v{localStorage.getItem('capgo_active_version') || CURRENT_VERSION}
+              </span>
+            </div>
+            {isUpdatesOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+            )}
+          </button>
+
+          {/* Tile 5: Multi-Group Collab */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsGroupOpen(!isGroupOpen);
+              setIsThemeOpen(false);
+              setIsDbOpen(false);
+              setIsGpsOpen(false);
+              setIsUpdatesOpen(false);
+              setIsUsersOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isGroupOpen
+                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+            }`}
+          >
+            <div className={`p-2 rounded-lg shrink-0 ${isGroupOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <Share2 className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Liên kết Nhóm</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                {localStorage.getItem("xuongan_group_code") ? `Mã: ${localStorage.getItem("xuongan_group_code")}` : 'Mặc định chung'}
+              </span>
+            </div>
+            {isGroupOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+            )}
+          </button>
+
+          {/* Tile 6: Security Members & Roles */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsUsersOpen(!isUsersOpen);
+              setIsThemeOpen(false);
+              setIsDbOpen(false);
+              setIsGpsOpen(false);
+              setIsUpdatesOpen(false);
+              setIsGroupOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isUsersOpen
+                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+            }`}
+          >
+            <div className={`p-2 rounded-lg shrink-0 ${isUsersOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <Users className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Thành viên xưởng</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                {userProfiles.length || 0} thành viên
+              </span>
+            </div>
+            {isUsersOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+            )}
+          </button>
         </div>
       </div>
+
+      {/* 1. CHẾ ĐỘ GIAO DIỆN COLLAPSIBLE CARD */}
+      <AnimatePresence initial={false}>
+        {isThemeOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            className="overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4 text-left"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                  <Palette className="w-4 h-4 text-indigo-500 animate-pulse" />
+                  <span>Tuỳ chỉnh Giao diện hiển thị (Theme Selection)</span>
+                </h3>
+                <p className="text-xs text-slate-450 mt-1">Điều chỉnh độ sáng màn hình để tối ưu hóa khả năng đọc và bảo vệ thị lực.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsThemeOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition shrink-0 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => setSettings(prev => ({ ...prev, theme: 'light' }))}
+                className={`p-3 border rounded-xl flex flex-col items-center gap-1.5 transition cursor-pointer text-xs ${settings.theme === 'light' ? 'border-indigo-500 bg-indigo-50/10 text-indigo-600 font-bold dark:text-indigo-400' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'}`}
+              >
+                <Sun className="w-5 h-5 text-amber-500" />
+                <span className="text-[11px] font-bold">Chế độ Sáng</span>
+              </button>
+
+              <button
+                onClick={() => setSettings(prev => ({ ...prev, theme: 'dark' }))}
+                className={`p-3 border rounded-xl flex flex-col items-center gap-1.5 transition cursor-pointer text-xs ${settings.theme === 'dark' ? 'border-indigo-400 bg-indigo-950/10 text-indigo-400 font-bold' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'}`}
+              >
+                <Moon className="w-5 h-5 text-indigo-400" />
+                <span className="text-[11px] font-bold">Chế độ Tối</span>
+              </button>
+
+              <button
+                onClick={() => setSettings(prev => ({ ...prev, theme: 'system' }))}
+                className={`p-3 border rounded-xl flex flex-col items-center gap-1.5 transition cursor-pointer text-xs ${settings.theme === 'system' ? 'border-indigo-500 bg-indigo-550/10 text-indigo-650 dark:text-indigo-400 font-bold' : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850'}`}
+              >
+                <Smartphone className="w-5 h-5 text-emerald-500" />
+                <span className="text-[11px] font-bold">Tự động</span>
+              </button>
+            </div>
+            <p className="text-[10.5px] text-slate-400 leading-normal font-sans italic text-center">
+              Trạng thái tự động đồng bộ theo cấu hình mặc định của thiết bị.
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 2. CHẾ ĐỘ CƠ SỞ DỮ LIỆU & ĐỒNG BỘ COLLAPSIBLE CARD */}
+      <AnimatePresence initial={false}>
+        {isDbOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            className="overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4 text-left"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                  <Database className="w-4 h-4 text-emerald-500 animate-pulse" />
+                  <span>Quản lý cơ sở dữ liệu & Đồng bộ</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCloudInfo(prev => !prev);
+                    }}
+                    className={`p-1 rounded-md transition ${showCloudInfo ? 'bg-indigo-100 text-indigo-750 dark:bg-indigo-950/40 dark:text-indigo-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650'}`}
+                    title="Thông tin chi tiết cấu hình đám mây"
+                  >
+                    <Info className="w-3.5 h-3.5 cursor-pointer" />
+                  </button>
+                </h3>
+                <p className="text-xs text-slate-450 mt-1">Đồng bộ đám mây, sao lưu dự phòng, và xử lý kết nối máy chủ.</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={`w-2 h-2 rounded-full ${syncStatus === 'syncing' ? 'bg-orange-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                  <span className="text-[9.5px] font-black text-slate-500 dark:text-slate-400 font-mono uppercase">
+                    {syncStatus === 'syncing' ? 'Sync...' : syncStatus === 'error' ? 'Lỗi' : 'Sẵn sàng'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDbOpen(false)}
+                  className="p-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition shrink-0 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Hidden input file tag required for backup restore click trigger */}
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileUpload} 
+              accept=".json" 
+              className="hidden" 
+            />
+
+            {/* Grid of Square Small tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              
+              {/* 1. Tải từ Đám mây */}
+              <button
+                type="button"
+                onClick={handleCloudPull}
+                disabled={syncStatus === 'syncing'}
+                className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-indigo-400 dark:hover:border-indigo-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer disabled:opacity-50 min-h-[84px]"
+              >
+                <Download className="w-4 h-4 text-indigo-500 mb-1" />
+                <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Tải đám mây</span>
+                <span className="text-[8.5px] text-indigo-650 dark:text-indigo-400 font-mono font-black mt-0.5">PULL CLOUD</span>
+              </button>
+
+              {/* 2. Lưu lên Đám mây */}
+              <button
+                type="button"
+                onClick={handleCloudPush}
+                disabled={syncStatus === 'syncing' || userRole !== 'admin'}
+                className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-emerald-400 dark:hover:border-emerald-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-emerald-500/10 cursor-pointer disabled:opacity-50 min-h-[84px]"
+                title={userRole !== 'admin' ? "Chỉ Quản trị viên mới được sao lưu" : ""}
+              >
+                <Upload className="w-4 h-4 text-emerald-500 mb-1" />
+                <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Lưu đám mây</span>
+                <span className="text-[8.5px] text-emerald-650 dark:text-emerald-405 font-mono font-black mt-0.5">PUSH CLOUD</span>
+              </button>
+
+              {/* 3. Sửa lỗi & Pull (Wipe cache) */}
+              <button
+                type="button"
+                onClick={handleWipeCacheAndSync}
+                className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-amber-400 dark:hover:border-amber-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-amber-500/10 cursor-pointer min-h-[84px]"
+              >
+                <RefreshCw className="w-4 h-4 text-amber-500 mb-1" />
+                <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Sửa lỗi & Pull</span>
+                <span className="text-[8.5px] text-amber-655 dark:text-amber-405 font-mono font-black mt-0.5">XÓA CACHE</span>
+              </button>
+
+              {/* 4. Môi trường DB */}
+              <button
+                type="button"
+                onClick={handleToggleForceDefaultDb}
+                className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-blue-500/10 cursor-pointer min-h-[84px]"
+              >
+                {forceDefaultDb ? (
+                  <ToggleRight className="w-5 h-5 text-indigo-505 mb-0.5" />
+                ) : (
+                  <ToggleLeft className="w-5 h-5 text-slate-400 dark:text-slate-600 mb-0.5" />
+                )}
+                <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Môi trường DB</span>
+                <span className="text-[8.5px] text-blue-650 dark:text-blue-405 font-mono font-black truncate max-w-full">
+                  {forceDefaultDb ? "DEFAULT" : "SANDBOX"}
+                </span>
+              </button>
+
+              {/* 5. Xuất tệp JSON (Local Backup) */}
+              <button
+                type="button"
+                onClick={exportDatabasePackage}
+                className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer min-h-[84px]"
+              >
+                <Download className="w-4 h-4 text-blue-550 dark:text-blue-400 mb-1" />
+                <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Xuất file backup</span>
+                <span className="text-[8.5px] text-blue-600 dark:text-blue-400 font-mono font-black mt-0.5">LOCAL JSON</span>
+              </button>
+
+              {/* 6. Nhập tệp JSON (Local Restore) */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-slate-205 dark:border-slate-800/80 bg-white dark:bg-slate-950/45 hover:bg-slate-50 dark:hover:bg-slate-900 transition col-span-1 shadow-2xs hover:ring-1 hover:ring-indigo-500/10 cursor-pointer min-h-[84px]"
+              >
+                <Upload className="w-4 h-4 text-violet-550 dark:text-violet-400 mb-1" />
+                <span className="text-[10.5px] font-bold text-slate-755 dark:text-slate-200">Nhập file backup</span>
+                <span className="text-[8.5px] text-violet-605 dark:text-violet-405 font-mono font-black mt-0.5">RESTORE JSON</span>
+              </button>
+
+              {/* 7. Xóa sạch máy / Đăng xuất (Full Logout Reset) */}
+              <button
+                type="button"
+                onClick={handleLogoutAndWipeAll}
+                className="flex flex-col items-center justify-center p-2.5 text-center rounded-xl border border-rose-200 dark:border-rose-900/30 bg-rose-50/10 dark:bg-rose-955/5 hover:bg-rose-50 dark:hover:bg-rose-955/15 hover:border-rose-400 dark:hover:border-rose-900 transition col-span-2 sm:col-span-3 shadow-2xs hover:ring-1 hover:ring-rose-500/10 cursor-pointer min-h-[84px]"
+              >
+                <Trash2 className="w-4 h-4 text-rose-505 mb-1" />
+                <span className="text-[10.5px] font-black text-rose-700 dark:text-rose-400">Xóa dữ liệu cục bộ & Đăng xuất</span>
+                <span className="text-[8.5px] text-slate-400 dark:text-slate-500 mt-0.5 leading-none">
+                  (Bảo lưu tệp an tâm trên đám mây Firestore)
+                </span>
+              </button>
+
+            </div>
+
+            {/* 8. Danh sách tự động sao lưu an toàn */}
+            <div className="mt-4 pt-3 border-t border-slate-150 dark:border-slate-800 space-y-2 text-left">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <span className="text-[10px] font-black tracking-wider uppercase text-slate-450 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Nhật ký tự động sao lưu an toàn</span>
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-650 dark:bg-indigo-950/30 dark:text-indigo-400 self-start">
+                  Auto-save: 5 phút / Thay đổi dữ liệu
+                </span>
+              </div>
+
+              {autoBackups.length === 0 ? (
+                <div className="text-center py-5 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 dark:text-slate-500 text-[10.5px]">
+                  Chưa có bản tự động sao lưu nào. Hệ thống sẽ lưu sau mỗi 5 phút hoặc khi sửa đổi dữ liệu quan trọng.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                  {autoBackups.map((bak) => {
+                    const isCrucial = bak.trigger === 'crucial_change';
+                    return (
+                      <div
+                        key={bak.id}
+                        className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 hover:bg-slate-50 dark:hover:bg-slate-955/40 transition flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="font-mono text-[11px] font-extrabold text-slate-700 dark:text-slate-350 flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isCrucial ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                            <span>{bak.timeStr}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-455 dark:text-slate-500 flex items-center gap-1">
+                            <span>Hình thức:</span>
+                            <strong className={`font-black ${isCrucial ? 'text-amber-655 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                              {isCrucial ? 'Thay đổi dữ liệu' : 'Định kỳ 5 phút'}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreAutoBackup(bak)}
+                          className="px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] uppercase transition cursor-pointer flex items-center gap-1 shrink-0 dark:border-indigo-900/40 dark:bg-indigo-950/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50"
+                        >
+                          <RefreshCw className="w-2.5 h-2.5" />
+                          <span>Khôi phục</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Info Drawer inline */}
+            <AnimatePresence>
+              {showCloudInfo && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-slate-50 dark:bg-slate-955 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-450 space-y-3 leading-relaxed relative mt-2 text-left"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowCloudInfo(false)}
+                    className="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-600 cursor-pointer font-bold font-mono text-[10px]"
+                  >
+                    ✕
+                  </button>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[9.5px] flex items-center gap-1">
+                      <Cloud className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Cơ chế bộ nhớ & Tối ưu:</span>
+                    </span>
+                    <p>
+                      Dữ liệu của xưởng lưu trữ <strong className="text-slate-850 dark:text-slate-100">cache-first</strong> tại trình duyệt máy này. 
+                      Bạn chỉ tiêu thụ lượt đọc/ghi từ đám mây khi chủ động bấm Tải đám mây (Pull) hoặc Lưu đám mây (Push), đảm bảo ứng dụng chạy tức thời, tiết kiệm dung lượng Firestore.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1 pt-2 border-t border-slate-200/60 dark:border-slate-800/80">
+                    <span className="font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-wider text-[9.5px] flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>Hướng dẫn Khắc phục Lỗi Quyền (Permission Error):</span>
+                    </span>
+                    <p>
+                      Nếu gặp lỗi <strong>"Missing or insufficient permissions"</strong> (thường do môi trường Sandbox bị mất session hoặc hết hạn), hãy bấm nút <strong>"Sửa lỗi & Pull"</strong> để tái đồng bộ. Nếu chạy trong container Cloud Run riêng, hãy đổi <strong>Môi trường DB sang DEFAULT</strong>.
+                    </p>
+                  </div>
+
+                  {userRole !== 'admin' && (
+                    <div className="p-2 border border-amber-200/60 dark:border-amber-900/40 bg-amber-500/[0.03] dark:bg-amber-500/[0.01] rounded-lg text-amber-800 dark:text-amber-400 leading-normal">
+                      🔒 Tài khoản của bạn đang có vai trò <strong>{userRole === 'staff' ? 'Nhân viên nhập thợ' : 'Chỉ xem'}</strong>, chỉ dùng để cập nhật nghiệp vụ cục bộ, không thể PUSH ghi đè cơ sở dữ liệu chung trên đám mây.
+                    </div>
+                  )}
+
+                  {lastSyncTime && (
+                    <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 pt-2 border-t border-slate-200/65 dark:border-slate-800/80">
+                      <span>🔄 Lần đồng bộ máy này gần nhất:</span>
+                      <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{lastSyncTime}</strong>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Camera & GPS Geolocation configuration card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
@@ -1555,100 +1777,178 @@ export default function SettingsTab({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800"
+              className="overflow-hidden space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800"
             >
-              {/* Responsive Table of Versions */}
-              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/20">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider font-mono">
-                      <th className="py-2.5 px-3 text-center w-24">Phiên bản</th>
-                      <th className="py-2.5 px-3 text-center w-28">Phát hành</th>
-                      <th className="py-2.5 px-3 w-40">Phân loại</th>
-                      <th className="py-2.5 px-4">Chi tiết thay đổi & Tính năng mới</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60 text-xs">
-                    {[
-                      {
-                        version: "v1.0.5",
-                        date: "18/06/2026",
-                        type: "Giao diện & Tiện ích",
-                        typeColor: "bg-indigo-50 border-indigo-150 text-indigo-750 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400",
-                        changes: [
-                          "Cập nhật menu điều hành hệ thống trong nút hamburger 3 gạch thành hệ thống Icon dạng grid 2 cột trực quan.",
-                          "Bổ sung Bảng Nhật Ký Thay Đổi Phiên Bản (Changelog) chi tiết ngay tại Trung tâm Cài đặt.",
-                          "Khắc phục triệt để lỗi thẻ đóng drawer menu làm hỏng cấu trúc mã nguồn.",
-                          "Tự động hóa luồng tăng số phiên bản trong package.json, types.ts và version.json khi click build ứng dụng."
-                        ],
-                        active: true
-                      },
-                      {
-                        version: "v1.0.4",
-                        date: "15/05/2026",
-                        type: "Hạ tầng & Đồng bộ",
-                        typeColor: "bg-emerald-50 border-emerald-150 text-emerald-750 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400",
-                        changes: [
-                          "Cải tiến cơ cấu nén và tối ưu hóa ảnh hóa đơn gốc, giúp thao tác mượt mà trong điều kiện sóng 3G yếu.",
-                          "Khôi phục cơ chế hàng đợi đồng bộ dữ liệu Offline khi người dùng bị ngắt mạng bất chợt."
-                        ]
-                      },
-                      {
-                        version: "v1.0.3",
-                        date: "20/04/2026",
-                        type: "Định vị & Tối ưu",
-                        typeColor: "bg-amber-50 border-amber-150 text-amber-700 dark:bg-amber-950/20 dark:border-amber-900/40 dark:text-amber-400",
-                        changes: [
-                          "Hỗ trợ chế độ thu thập vị trí GPS chính xác cao của vệ tinh trên thiết bị chạy Android 11+.",
-                          "Nhúng bảng xem chi tiết dung lượng bộ nhớ dùng chung, nâng cao khả năng quản trị thiết bị."
-                        ]
-                      },
-                      {
-                        version: "v1.0.2",
-                        date: "05/03/2026",
-                        type: "Khởi tạo hệ thống",
-                        typeColor: "bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800/40 dark:border-slate-800/80 dark:text-slate-300",
-                        changes: [
-                          "Khởi hoạt chuỗi hệ quản trị sổ sách sản xuất xưởng may An tích hợp cơ sở dữ liệu đồng bộ hai chiều."
-                        ]
-                      }
-                    ].map((row, idx) => (
-                      <tr 
-                        key={idx} 
-                        className={`transition hover:bg-slate-50/50 dark:hover:bg-slate-800/10 ${row.active ? 'bg-indigo-500/[0.01] dark:bg-indigo-500/[0.02]' : ''}`}
-                      >
-                        <td className="py-3 px-3 text-center divide-y divide-transparent font-sans">
-                          <span className={`inline-block px-2 py-0.5 rounded-md font-mono text-[11px] font-black tracking-wide ${row.active ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-850 text-slate-750 dark:text-slate-300'}`}>
-                            {row.version}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-center text-[10.5px] font-mono font-medium text-slate-500">
-                          {row.date}
-                        </td>
-                        <td className="py-3 px-3 font-semibold text-[11px]">
-                          <span className={`px-2 py-0.5 rounded-full border text-[10px] uppercase font-bold tracking-wide ${row.typeColor}`}>
-                            {row.type}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <ul className="space-y-1">
-                            {row.changes.map((change, cIdx) => (
-                              <li key={cIdx} className="flex gap-1.5 items-start text-[11.5px] text-slate-655 dark:text-slate-350 leading-relaxed font-semibold">
-                                <span className={`text-[10px] select-none font-bold mt-0.5 shrink-0 ${row.active ? 'text-indigo-500' : 'text-slate-400'}`}>•</span>
-                                <span>{change}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Compact Versions Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  {
+                    version: "v1.0.5",
+                    date: "18/06/2026",
+                    type: "Giao diện & Tiện ích",
+                    typeColor: "bg-indigo-50 border-indigo-150 text-indigo-750 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400",
+                    changes: [
+                      "Cập nhật menu điều hành hệ thống trong nút hamburger 3 gạch thành hệ thống Icon dạng grid 2 cột trực quan.",
+                      "Bổ sung Bảng Nhật Ký Thay Đổi Phiên Bản (Changelog) chi tiết ngay tại Trung tâm Cài đặt.",
+                      "Khắc phục triệt để lỗi thẻ đóng drawer menu làm hỏng cấu trúc mã nguồn.",
+                      "Tự động hóa luồng tăng số phiên bản trong package.json, types.ts và version.json khi click build ứng dụng."
+                    ],
+                    active: true
+                  },
+                  {
+                    version: "v1.0.4",
+                    date: "15/05/2026",
+                    type: "Hạ tầng & Đồng bộ",
+                    typeColor: "bg-emerald-50 border-emerald-150 text-emerald-750 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-400",
+                    changes: [
+                      "Cải tiến cơ cấu nén và tối ưu hóa ảnh hóa đơn gốc, giúp thao tác mượt mà trong điều kiện sóng 3G yếu.",
+                      "Khôi phục cơ chế hàng đợi đồng bộ dữ liệu Offline khi người dùng bị ngắt mạng bất chợt."
+                    ]
+                  },
+                  {
+                    version: "v1.0.3",
+                    date: "20/04/2026",
+                    type: "Định vị & Tối ưu",
+                    typeColor: "bg-amber-50 border-amber-150 text-amber-700 dark:bg-amber-950/20 dark:border-amber-900/40 dark:text-amber-400",
+                    changes: [
+                      "Hỗ trợ chế độ thu thập vị trí GPS chính xác cao của vệ tinh trên thiết bị chạy Android 11+.",
+                      "Nhúng bảng xem chi tiết dung lượng bộ nhớ dùng chung, nâng cao khả năng quản trị thiết bị."
+                    ]
+                  },
+                  {
+                    version: "v1.0.2",
+                    date: "05/03/2026",
+                    type: "Khởi tạo hệ thống",
+                    typeColor: "bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800/40 dark:border-slate-800/80 dark:text-slate-300",
+                    changes: [
+                      "Khởi hoạt chuỗi hệ quản trị sổ sách sản xuất xưởng may An tích hợp cơ sở dữ liệu đồng bộ hai chiều."
+                    ]
+                  }
+                ].map((row, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedChangelogVersion(row)}
+                    className={`p-3.5 rounded-xl border transition duration-200 cursor-pointer text-left flex flex-col justify-between gap-3 relative overflow-hidden group select-none active:scale-[0.98] ${
+                      row.active
+                        ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-900/50 hover:bg-indigo-50/45 dark:hover:bg-indigo-950/15'
+                        : 'bg-slate-50/50 dark:bg-slate-950/15 border-slate-205 dark:border-slate-800/75 hover:bg-slate-50 dark:hover:bg-slate-950/30'
+                    }`}
+                  >
+                    {/* Ring highlight accent for the active version */}
+                    {row.active && (
+                      <span className="absolute top-0 right-0 w-2 h-2 rounded-bl-lg bg-indigo-600 dark:bg-indigo-500 shrink-0" />
+                    )}
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-lg font-mono text-[11px] font-black tracking-wider ${
+                          row.active ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-850 text-slate-750 dark:text-slate-300'
+                        }`}>
+                          {row.version}
+                        </span>
+
+                        <span className="text-[10px] font-mono text-slate-400 font-bold">{row.date}</span>
+                      </div>
+
+                      <div className="flex flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-md border text-[9px] uppercase font-extrabold tracking-wider ${row.typeColor}`}>
+                          {row.type}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-150/60 dark:border-slate-850/60 text-[10.5px] font-extrabold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 transition duration-200">
+                      <span>Bấm xem {row.changes.length} thay đổi</span>
+                      <ChevronRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                    </div>
+                  </div>
+                ))}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+      {/* POPUP HỘP THOẠI CHI TIẾT PHIÊN BẢN (CHANGELOG DETAILS POPUP MODAL) */}
+      <AnimatePresence>
+        {selectedChangelogVersion && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            {/* Tap to dismiss dimmed backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedChangelogVersion(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs cursor-pointer"
+            />
+
+            {/* Centered animated card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', duration: 0.35 }}
+              className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-sm w-full shadow-2xl p-5 flex flex-col gap-4 font-sans text-left overflow-hidden z-10"
+            >
+              {/* Dismiss Button */}
+              <button
+                onClick={() => setSelectedChangelogVersion(null)}
+                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-850 text-slate-400 hover:text-slate-655 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Header title */}
+              <div className="space-y-1.5 pr-8">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] bg-amber-105 dark:bg-amber-955/50 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md font-extrabold uppercase tracking-wider">
+                    Phát hành {selectedChangelogVersion.date}
+                  </span>
+                  {selectedChangelogVersion.active && (
+                    <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded-md font-black uppercase tracking-wider animate-pulse">
+                      Hiện tại
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-wide">
+                  Chi tiết bản {selectedChangelogVersion.version}
+                </h3>
+              </div>
+
+              {/* Classification badge block */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-150 dark:border-slate-850/80">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">Phân loại cập nhật:</p>
+                <div className="mt-1">
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full border text-[10px] uppercase font-extrabold tracking-wide ${selectedChangelogVersion.typeColor}`}>
+                    {selectedChangelogVersion.type}
+                  </span>
+                </div>
+              </div>
+
+              {/* Changes List */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono font-black text-slate-400 uppercase tracking-wider">Chi tiết nội dung nâng cấp:</span>
+                <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1 bg-slate-50/40 dark:bg-zinc-900/30 p-3 rounded-2xl border border-slate-150 dark:border-slate-800">
+                  {selectedChangelogVersion.changes.map((change, cIdx) => (
+                    <div key={cIdx} className="flex gap-2 items-start text-[11.5px] leading-relaxed text-slate-655 dark:text-slate-300 font-bold">
+                      <span className="text-emerald-505 shrink-0 font-bold select-none mt-0.5">✓</span>
+                      <span>{change}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer action */}
+              <button
+                onClick={() => setSelectedChangelogVersion(null)}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl transition text-xs uppercase cursor-pointer text-center"
+              >
+                Đồng ý & Đóng
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Group Coupling / Collective Coordination Panel (Chức năng Kết hợp Nhóm & Đa liên kết) */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
