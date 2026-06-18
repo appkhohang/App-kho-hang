@@ -9,7 +9,8 @@ const config: CapacitorConfig = {
   },
   plugins: {
     CapacitorUpdater: {
-      autoUpdate: true
+      autoUpdate: true,
+      appId: '9bc744d0-6da2-4d42-9d7e-441b4c25b763'
     }
   }
 };

@@ -32,7 +32,8 @@ export async function checkAppUpdate(customUrl?: string): Promise<AppUpdateInfo 
     
     // Ensure accurate fields exist before proceeding
     if (data && typeof data.version === 'string' && Array.isArray(data.changelog)) {
-      if (isNewerVersion(data.version, CURRENT_VERSION)) {
+      const activeVer = localStorage.getItem('capgo_active_version') || CURRENT_VERSION;
+      if (isNewerVersion(data.version, activeVer)) {
         return data;
       }
     }
