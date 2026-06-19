@@ -22,30 +22,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Update version with Run Number
-        run: |
-          node -e "
-            const fs = require('fs');
-            // Update package.json
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const newVer = '1.0.${{ github.run_number }}';
-            pkg.version = newVer;
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-            console.log('Updated package.json version to: ' + newVer);
-            
-            // Update src/types.ts
-            if (fs.existsSync('src/types.ts')) {
-              let types = fs.readFileSync('src/types.ts', 'utf8');
-              const searchReg = /export\s+const\s+CURRENT_VERSION\s*=\s*['\"][^'\"]+['\"]/;
-              const replacement = 'export const CURRENT_VERSION = ' + \"'\" + newVer + \"'\";
-              types = types.replace(searchReg, replacement);
-              fs.writeFileSync('src/types.ts', types, 'utf8');
-              console.log('Updated src/types.ts CURRENT_VERSION to: ' + newVer);
-            }
-          "
-
       - name: Build production app
-        run: npm run build
+        run: npx vite build
 
       - name: Upload and deploy to Capgo
         env:
@@ -55,4 +33,5 @@ jobs:
             echo "::error::CAPGO_API_KEY secret is not configured in your GitHub repository secrets! Please set CAPGO_API_KEY in your GitHub Settings -> Secrets and variables -> Actions to enable automatic deployments."
             exit 1
           fi
-          npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production -v "1.0.${{ github.run_number }}"
+          VERSION=$(node -p "require('./package.json').version")
+          npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production -v "$VERSION"
