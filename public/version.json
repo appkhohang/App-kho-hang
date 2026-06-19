@@ -1,6 +1,6 @@
 {
-  "version": "1.0.15",
-  "releaseDate": "18/06/2026",
+  "version": "1.0.21",
+  "releaseDate": "19/06/2026",
   "critical": false,
   "changelog": [
     "Cải tiến cơ cấu nén ảnh hóa đơn gốc giúp chạy mượt khi mạng yếu",

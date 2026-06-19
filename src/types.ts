@@ -211,7 +211,7 @@ export interface UserProfile {
   lastLocationTime?: string; // Thời gian cập nhật vị trí gần nhất
 }
 
-export const CURRENT_VERSION = '1.0.15';
+export const CURRENT_VERSION = '1.0.21';
 
 export interface AppUpdateInfo {
   version: string;
