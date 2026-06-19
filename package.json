@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "1.0.15",
+  "version": "1.0.17",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "capgo-push": "node scripts/bump-version.js && npm run build && npx @capgo/cli bundle upload -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production"
+    "capgo-push": "node scripts/bump-version.js && npm run build && npx @capgo/cli bundle upload -c production 9bc744d0-6da2-4d42-9d7e-441b4c25b763"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",

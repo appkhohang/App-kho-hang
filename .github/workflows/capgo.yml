@@ -34,4 +34,5 @@ jobs:
             exit 1
           fi
           VERSION=$(node -p "require('./package.json').version")
-          npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -a 9bc744d0-6da2-4d42-9d7e-441b4c25b763 -c production -v "$VERSION"
+          echo "Uploading bundle version $VERSION to Capgo..."
+          npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -c production -b "$VERSION" 9bc744d0-6da2-4d42-9d7e-441b4c25b763
