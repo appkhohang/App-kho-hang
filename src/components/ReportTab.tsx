@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft,
@@ -20,7 +20,8 @@ import {
   Percent,
   CheckCircle,
   Truck,
-  Users
+  Users,
+  ExternalLink
 } from 'lucide-react';
 import { ImportItem, Bill, ProductionBatch, Worker, WorkerJob, PaymentRecord, LaborPayment, Customer } from '../types';
 import { useAndroidBack } from '../hooks/useAndroidBack';
@@ -36,6 +37,40 @@ interface ReportTabProps {
   payments?: PaymentRecord[];
   laborPayments?: LaborPayment[];
   customers?: Customer[];
+}
+
+function removeVietnameseTones(str: string): string {
+  if (!str) return "";
+  let res = str;
+  res = res.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+  res = res.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+  res = res.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+  res = res.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  res = res.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+  res = res.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+  res = res.replace(/đ/g, "d");
+  res = res.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+  res = res.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+  res = res.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+  res = res.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+  res = res.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+  res = res.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+  res = res.replace(/Đ/g, "D");
+  res = res.replace(/\u0300|\u0301|\u0309|\u0303|\u0323/g, "");
+  res = res.replace(/\u02C6|\u0306|\u031B/g, "");
+  return res;
+}
+
+function cleansAndSortsWords(name: string): string {
+  if (!name) return "";
+  const noTones = removeVietnameseTones(name.trim().toLowerCase());
+  const basic = noTones.replace(/[^a-z0-9\s]/gi, " ");
+  return basic.split(/\s+/).filter(Boolean).sort().join(" ");
+}
+
+function isModelNameMatch(nameA: string, nameB: string): boolean {
+  if (!nameA || !nameB) return false;
+  return cleansAndSortsWords(nameA) === cleansAndSortsWords(nameB);
 }
 
 type PeriodType = 'day' | 'week' | 'month' | 'year' | 'all';
@@ -58,8 +93,10 @@ export default function ReportTab({
   const [period, setPeriod] = useState<PeriodType>('month');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [chartValueType, setChartValueType] = useState<'value' | 'quantity'>('value');
+  const [reportDetailView, setReportDetailView] = useState<'none' | 'cost_structure' | 'suit_profit'>('none');
 
   useAndroidBack(showPeriodMenu, () => setShowPeriodMenu(false));
+  useAndroidBack(reportDetailView !== 'none', () => setReportDetailView('none'));
 
   // 2. Intelligently pre-calculate the latest active date in database to show meaningful data on initial load
   const latestDateStr = useMemo(() => {
@@ -84,6 +121,10 @@ export default function ReportTab({
   }, [bills, items]);
 
   const [selectedDate, setSelectedDate] = useState<string>(latestDateStr);
+
+  useEffect(() => {
+    setReportDetailView('none');
+  }, [activeSubTab, period, selectedDate]);
 
   // Helper date parsing/formatting functions
   const formatDisplayDate = (dateStr: string) => {
@@ -236,7 +277,18 @@ export default function ReportTab({
   const [manualCosts, setManualCosts] = useState<Record<string, number>>(() => {
     try {
       const saved = localStorage.getItem('xuongan_manual_report_costs');
-      return saved ? JSON.parse(saved) : {};
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const map: Record<string, number> = {};
+        Object.entries(parsed).forEach(([k, v]) => {
+          const cleanK = cleansAndSortsWords(k);
+          if (cleanK) {
+            map[cleanK] = Number(v);
+          }
+        });
+        return map;
+      }
+      return {};
     } catch (e) {
       return {};
     }
@@ -252,8 +304,10 @@ export default function ReportTab({
         // Sort oldest first, newer overrides it.
         list.slice().reverse().forEach((est: any) => {
           if (est.modelName && est.totalProductionCost) {
-            const key = est.modelName.trim().toLowerCase();
-            map[key] = est.totalProductionCost;
+            const key = cleansAndSortsWords(est.modelName);
+            if (key) {
+              map[key] = est.totalProductionCost;
+            }
           }
         });
       }
@@ -266,7 +320,8 @@ export default function ReportTab({
   // Update a single model's unit cost
   const handleUpdateCost = (model: string, cost: number) => {
     setManualCosts(prev => {
-      const updated = { ...prev, [model.trim().toLowerCase()]: cost };
+      const cleanKey = cleansAndSortsWords(model);
+      const updated = { ...prev, [cleanKey]: cost };
       localStorage.setItem('xuongan_manual_report_costs', JSON.stringify(updated));
       return updated;
     });
@@ -321,15 +376,16 @@ export default function ReportTab({
           const qty = item.sốLượng || 0;
           const wholesalePrice = item.đơnGiá || 0;
           const modelKey = item.mẫuMã ? item.mẫuMã.trim().toLowerCase() : '';
+          const normalizedKey = modelKey ? cleansAndSortsWords(modelKey) : '';
           
           let unitCost = 0;
-          if (modelKey && manualCosts[modelKey] !== undefined) {
-            unitCost = manualCosts[modelKey];
-          } else if (modelKey && savedCostMap[modelKey] !== undefined) {
-            unitCost = savedCostMap[modelKey];
+          if (normalizedKey && manualCosts[normalizedKey] !== undefined) {
+            unitCost = manualCosts[normalizedKey];
+          } else if (normalizedKey && savedCostMap[normalizedKey] !== undefined) {
+            unitCost = savedCostMap[normalizedKey];
           } else {
             // Try to find if we've recorded manufacture price of this model
-            const matchedImport = items.find(imp => imp.mẫu.trim().toLowerCase() === modelKey);
+            const matchedImport = items.find(imp => imp.mẫu && cleansAndSortsWords(imp.mẫu) === normalizedKey);
             const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(wholesalePrice * 0.45);
             const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnTP_ĐT || 0) - (matchedImport.vậnChuyểnĐT_TP || 0)) : 0;
             unitCost = laborCost + (shippingCost * (1 / 100)); // Average shipping averaged cost
@@ -360,14 +416,15 @@ export default function ReportTab({
           const qty = item.sốLượng || 0;
           const wholesalePrice = item.đơnGiá || 0;
           const modelKey = item.mẫuMã ? item.mẫuMã.trim().toLowerCase() : '';
+          const normalizedKey = modelKey ? cleansAndSortsWords(modelKey) : '';
           
           let unitCost = 0;
-          if (modelKey && manualCosts[modelKey] !== undefined) {
-            unitCost = manualCosts[modelKey];
-          } else if (modelKey && savedCostMap[modelKey] !== undefined) {
-            unitCost = savedCostMap[modelKey];
+          if (normalizedKey && manualCosts[normalizedKey] !== undefined) {
+            unitCost = manualCosts[normalizedKey];
+          } else if (normalizedKey && savedCostMap[normalizedKey] !== undefined) {
+            unitCost = savedCostMap[normalizedKey];
           } else {
-            const matchedImport = items.find(imp => imp.mẫu.trim().toLowerCase() === modelKey);
+            const matchedImport = items.find(imp => imp.mẫu && cleansAndSortsWords(imp.mẫu) === normalizedKey);
             const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(wholesalePrice * 0.45);
             const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnTP_ĐT || 0) - (matchedImport.vậnChuyểnĐT_TP || 0)) : 0;
             unitCost = laborCost + (shippingCost * (1 / 100));
@@ -674,9 +731,374 @@ export default function ReportTab({
 
   return (
     <div className="bg-slate-50 dark:bg-[#0b0f19] min-h-screen text-slate-800 dark:text-slate-100 flex flex-col font-sans">
-      
-      {/* 1. FAITHFUL Centered HEADER PANEL with return arrow */}
-      <header className="shrink-0 bg-white dark:bg-[#121824] border-b border-slate-100 dark:border-slate-800/80 px-4 py-3 flex items-center justify-between z-10 sticky top-0">
+      {reportDetailView === 'cost_structure' ? (
+        <div className="flex flex-col flex-grow">
+          {/* CO-HEADER FOR COST STRUCTURE */}
+          <header className="shrink-0 bg-white dark:bg-[#121824] border-b border-slate-100 dark:border-slate-800/80 px-4 py-3 flex items-center justify-between z-10 sticky top-0 font-sans">
+            <button
+              onClick={() => setReportDetailView('none')}
+              className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-emerald-600 dark:text-emerald-500 transition active:scale-95 flex items-center gap-1 cursor-pointer font-bold text-xs"
+            >
+              <ArrowLeft className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
+              <span>Quay lại Lãi lỗ</span>
+            </button>
+            <h1 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-wide text-center uppercase">
+              Cơ cấu giá thành &amp; Chi phí ước tính
+            </h1>
+            <div className="w-16" />
+          </header>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-24">
+            {/* PERIOD BANNER */}
+            <div className="p-3 bg-white dark:bg-[#121824] border border-slate-100 dark:border-slate-800/80 rounded-xl flex justify-between items-center text-xs">
+              <span className="text-slate-400 font-semibold uppercase font-mono">Kỳ báo cáo ({getPeriodLabel()})</span>
+              <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                {period === 'day' 
+                  ? formatDisplayDate(selectedDate) 
+                  : period === 'month' 
+                    ? `Tháng ${selectedDate.substring(5, 7)}/${selectedDate.substring(0, 4)}` 
+                    : period === 'week' 
+                      ? `7 ngày quanh ${formatDisplayDate(selectedDate)}` 
+                      : period === 'year'
+                        ? `Năm ${selectedDate.substring(0, 4)}`
+                        : 'Toàn thời gian'}
+              </span>
+            </div>
+
+            {/* DETAILED PRODUCTION COST BREAKDOWN */}
+            <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs flex flex-col space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                    <TrendingUp className="w-5 h-5 text-emerald-600" />
+                    <span>Cơ cấu giá thành &amp; Chi phí ước tính</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">
+                    Phân tích chi phí bộ đồ của xưởng dựa vào chi phí may và chi phí vận chuyển tương ứng của mỗi mẫu đồ.
+                  </p>
+                </div>
+              </div>
+
+              {soldProductsList.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 italic text-xs">
+                  Chưa phát sinh hóa đơn bán hàng nào trong kỳ hạch toán này để phân tích.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto scrollbar-none">
+                    <table className="w-full text-left border-collapse min-w-[420px]">
+                      <thead>
+                        <tr className="border-b border-slate-100 dark:border-slate-800/80 text-[10px] uppercase font-mono tracking-wider text-slate-400">
+                          <th className="py-2.5 font-bold">Mẫu mã</th>
+                          <th className="py-2.5 text-center font-bold">SL Bán trên Bill</th>
+                          <th className="py-2.5 text-right font-bold w-32">chi phí bộ đồ (đ)</th>
+                          <th className="py-2.5 text-right font-bold w-36">Chi phí ước tính</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
+                        {soldProductsList.map((p) => {
+                          const normalizedKey = cleansAndSortsWords(p.modelName);
+                          let currentCostVal = 0;
+                          let costSource: 'manual' | 'saved' | 'default' = 'default';
+                          
+                          if (normalizedKey && manualCosts[normalizedKey] !== undefined) {
+                            currentCostVal = manualCosts[normalizedKey];
+                            costSource = 'manual';
+                          } else if (normalizedKey && savedCostMap[normalizedKey] !== undefined) {
+                            currentCostVal = savedCostMap[normalizedKey];
+                            costSource = 'saved';
+                          } else {
+                            const matchedImport = items.find(imp => imp.mẫu && cleansAndSortsWords(imp.mẫu) === normalizedKey);
+                            const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(p.avgWholesalePrice * 0.45);
+                            const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnTP_ĐT || 0) - (matchedImport.vậnChuyểnĐT_TP || 0)) : 0;
+                            currentCostVal = Math.round(laborCost + (shippingCost * (1 / 100)));
+                            costSource = 'default';
+                          }
+                          
+                          const totalEstCost = currentCostVal * p.totalQty;
+                          
+                          return (
+                            <tr key={p.modelName} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/10 transition-colors">
+                              <td className="py-3 pr-2">
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-extrabold text-slate-850 dark:text-slate-200">
+                                    {p.modelName}
+                                  </span>
+                                  {costSource === 'saved' && (
+                                    <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
+                                      ✨ Dự toán sẵn ({savedCostMap[normalizedKey].toLocaleString()}đ)
+                                    </span>
+                                  )}
+                                  {costSource === 'manual' && (
+                                    <span className="text-[9.5px] text-blue-500 dark:text-blue-400 font-bold mt-0.5">
+                                      ✏️ Ghi đè thủ công
+                                    </span>
+                                  )}
+                                  {costSource === 'default' && (
+                                    <span className="text-[9.5px] text-slate-450 mt-0.5">
+                                      ⚙️ Tự tính (May + VC)
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 text-center">
+                                <span className="font-mono font-black text-xs text-slate-750 dark:text-slate-300">
+                                  {p.totalQty.toLocaleString()}
+                                </span>
+                                <span className="text-[9px] text-slate-400 block font-sans">bộ</span>
+                              </td>
+                              <td className="py-3 text-right">
+                                <input
+                                  type="number"
+                                  value={currentCostVal || ''}
+                                  onChange={(e) => handleUpdateCost(p.modelName, Number(e.target.value))}
+                                  placeholder="0"
+                                  className="w-24 text-right px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-xs text-slate-850 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </td>
+                              <td className="py-3 text-right font-mono font-extrabold text-xs text-slate-800 dark:text-slate-100">
+                                {totalEstCost.toLocaleString()}đ
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="text-slate-400 text-[9.5px] uppercase font-mono font-bold leading-relaxed">
+                      * Ghi chú: Chỉnh sửa trực tiếp chi phí bộ đồ của mẫu mã để cập nhật chi phí giá vốn live.
+                    </div>
+                    <div className="flex gap-4 justify-end font-mono shrink-0">
+                      <div className="text-right">
+                        <span className="text-slate-400 block text-[9px] uppercase">Doanh Thu Bill</span>
+                        <span className="font-extrabold text-blue-600 dark:text-blue-400 block text-xs font-mono">
+                          {soldProductsList.reduce((sum, p) => sum + p.totalRev, 0).toLocaleString()}đ
+                        </span>
+                      </div>
+                      <div className="text-right border-l border-slate-150 dark:border-slate-850 pl-4">
+                        <span className="text-slate-400 block text-[9px] uppercase">Vốn ước tính (định mức)</span>
+                        <span className="font-extrabold text-amber-600 dark:text-amber-550 block text-xs font-mono">
+                          {profitLossMetrics.cost.toLocaleString()}đ
+                        </span>
+                      </div>
+                      <div 
+                        onClick={() => setReportDetailView('suit_profit')}
+                        className="text-right border-l border-slate-150 dark:border-slate-850 pl-4 cursor-pointer hover:opacity-90 group/lr transition-all"
+                        title="Nhấn để xem phân tích Chi tiết lãi/lời bộ đồ"
+                      >
+                        <span className="text-emerald-600 dark:text-emerald-450 block text-[9px] uppercase font-black flex items-center justify-end gap-0.5">
+                          Lợi nhuận gộp <ExternalLink className="w-2.5 h-2.5 inline" />
+                        </span>
+                        <span className="font-black text-emerald-600 dark:text-emerald-500 block text-xs font-mono group-hover/lr:-translate-y-[0.5px] transition-transform underline decoration-dotted decoration-emerald-500/40">
+                          {profitLossMetrics.profit.toLocaleString()}đ
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : reportDetailView === 'suit_profit' ? (
+        <div className="flex flex-col flex-grow">
+          {/* CO-HEADER FOR SUIT PROFIT */}
+          <header className="shrink-0 bg-white dark:bg-[#121824] border-b border-slate-100 dark:border-slate-800/80 px-4 py-3 flex items-center justify-between z-10 sticky top-0 font-sans">
+            <button
+              onClick={() => setReportDetailView('none')}
+              className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-emerald-600 dark:text-emerald-500 transition active:scale-95 flex items-center gap-1 cursor-pointer font-bold text-xs"
+            >
+              <ArrowLeft className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
+              <span>Quay lại Lãi lỗ</span>
+            </button>
+            <h1 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-wide text-center uppercase">
+              Phân tích Tiền lời bộ đồ
+            </h1>
+            <div className="w-16" />
+          </header>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-24">
+            {/* PERIOD BANNER */}
+            <div className="p-3 bg-white dark:bg-[#121824] border border-slate-100 dark:border-slate-800/80 rounded-xl flex justify-between items-center text-xs">
+              <span className="text-slate-400 font-semibold uppercase font-mono">Kỳ báo cáo ({getPeriodLabel()})</span>
+              <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                {period === 'day' 
+                  ? formatDisplayDate(selectedDate) 
+                  : period === 'month' 
+                    ? `Tháng ${selectedDate.substring(5, 7)}/${selectedDate.substring(0, 4)}` 
+                    : period === 'week' 
+                      ? `7 ngày quanh ${formatDisplayDate(selectedDate)}` 
+                      : period === 'year'
+                        ? `Năm ${selectedDate.substring(0, 4)}`
+                        : 'Toàn thời gian'}
+              </span>
+            </div>
+
+            {/* DETAILED SUIT/SET PROFIT BREAKDOWN */}
+            <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs flex flex-col space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                    <Percent className="w-5 h-5 text-emerald-600" />
+                    <span>Lợi nhuận chi tiết từng bộ đồ (Mẫu mã)</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-505 mt-0.5 leading-relaxed">
+                    Tính toán tiền lời của mỗi mẫu đồ dựa trên Giá bán bình quân trừ đi Chi phí bộ đồ hạch toán. Sếp có thể thay đổi chi phí bộ đồ trực tiếp để cập nhật live.
+                  </p>
+                </div>
+              </div>
+
+              {soldProductsList.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 italic text-xs">
+                  Chưa phát sinh hóa đơn bán hàng nào trong kỳ hạch toán này để tính tiền lời.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto scrollbar-none">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
+                      <thead>
+                        <tr className="border-b border-slate-100 dark:border-slate-800/80 text-[10px] uppercase font-mono tracking-wider text-slate-400">
+                          <th className="py-2.5 font-bold">Mẫu mã</th>
+                          <th className="py-2.5 text-center font-bold">Số lượng bán</th>
+                          <th className="py-2.5 text-right font-bold w-24">Giá bán sỉ TB</th>
+                          <th className="py-2.5 text-right font-bold w-24">chi phí bộ đồ (đ)</th>
+                          <th className="py-2.5 text-right font-bold w-24">Lời/Bộ</th>
+                          <th className="py-2.5 text-right font-bold w-28">Tổng tiền lời</th>
+                          <th className="py-2.5 text-center font-bold w-16">Tỷ suất</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
+                        {soldProductsList.map((p) => {
+                          const normalizedKey = cleansAndSortsWords(p.modelName);
+                          let currentCostVal = 0;
+                          let costSource: 'manual' | 'saved' | 'default' = 'default';
+                          
+                          if (normalizedKey && manualCosts[normalizedKey] !== undefined) {
+                            currentCostVal = manualCosts[normalizedKey];
+                            costSource = 'manual';
+                          } else if (normalizedKey && savedCostMap[normalizedKey] !== undefined) {
+                            currentCostVal = savedCostMap[normalizedKey];
+                            costSource = 'saved';
+                          } else {
+                            const matchedImport = items.find(imp => imp.mẫu && cleansAndSortsWords(imp.mẫu) === normalizedKey);
+                            const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(p.avgWholesalePrice * 0.45);
+                            const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnTP_ĐT || 0) - (matchedImport.vậnChuyểnĐT_TP || 0)) : 0;
+                            currentCostVal = Math.round(laborCost + (shippingCost * (1 / 100)));
+                            costSource = 'default';
+                          }
+                          
+                          const totalEstCost = currentCostVal * p.totalQty;
+                          const totalProfit = p.totalRev - totalEstCost;
+                          const profitPerSuit = p.avgWholesalePrice - currentCostVal;
+                          const marginPercent = p.totalRev > 0 ? Math.round((totalProfit / p.totalRev) * 100) : 0;
+                          
+                          return (
+                            <tr key={p.modelName} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/10 transition-colors">
+                              <td className="py-3 pr-2">
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-extrabold text-slate-850 dark:text-slate-205">
+                                    {p.modelName}
+                                  </span>
+                                  {costSource === 'saved' && (
+                                    <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
+                                      ✨ Dự toán ({savedCostMap[normalizedKey].toLocaleString()}đ)
+                                    </span>
+                                  )}
+                                  {costSource === 'manual' && (
+                                    <span className="text-[9px] text-blue-500 dark:text-blue-400 font-bold mt-0.5">
+                                      ✏️ Ghi đè thủ công
+                                    </span>
+                                  )}
+                                  {costSource === 'default' && (
+                                    <span className="text-[9px] text-slate-450 mt-0.5">
+                                      ⚙️ Tự tính (May + VC)
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 text-center">
+                                <span className="font-mono font-black text-xs text-slate-755 dark:text-slate-300">
+                                  {p.totalQty.toLocaleString()}
+                                </span>
+                                <span className="text-[9px] text-slate-400 block font-sans">bộ</span>
+                              </td>
+                              <td className="py-3 text-right font-mono font-bold text-xs text-slate-700 dark:text-slate-300">
+                                {p.avgWholesalePrice.toLocaleString()}đ
+                              </td>
+                              <td className="py-3 text-right">
+                                <input
+                                  type="number"
+                                  value={currentCostVal || ''}
+                                  onChange={(e) => handleUpdateCost(p.modelName, Number(e.target.value))}
+                                  placeholder="0"
+                                  className="w-20 text-right px-1.5 py-0.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-[11px] text-slate-850 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </td>
+                              <td className={`py-3 text-right font-mono font-extrabold text-xs ${profitPerSuit >= 0 ? 'text-slate-700 dark:text-slate-300' : 'text-rose-600'}`}>
+                                {profitPerSuit.toLocaleString()}đ
+                              </td>
+                              <td className={`py-3 text-right font-mono font-black text-xs ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600'}`}>
+                                {totalProfit >= 0 ? '+' : ''}{totalProfit.toLocaleString()}đ
+                              </td>
+                              <td className="py-3 text-center">
+                                <span className={`inline-block px-1.5 py-0.5 rounded font-mono font-bold text-[9.5px] ${
+                                  marginPercent >= 40 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' :
+                                  marginPercent >= 20 ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400' :
+                                  marginPercent >= 10 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400' :
+                                  'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                                }`}>
+                                  {marginPercent}%
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="text-slate-400 text-[9.5px] uppercase font-mono font-bold leading-relaxed">
+                      * Nhận xét: Mẫu có tỷ suất &gt; 40% là sinh lời lý tưởng, &lt; 10% sếp nên tối ưu lại chi phí sản xuất.
+                    </div>
+                    <div className="flex gap-4 justify-end font-mono shrink-0">
+                      <div className="text-right">
+                        <span className="text-slate-400 block text-[9px] uppercase">Tổng bán</span>
+                        <span className="font-extrabold text-blue-600 dark:text-blue-400 block text-xs font-mono">
+                          {soldProductsList.reduce((sum, p) => sum + p.totalRev, 0).toLocaleString()}đ
+                        </span>
+                      </div>
+                      <div 
+                        onClick={() => setReportDetailView('cost_structure')}
+                        className="text-right border-l border-slate-150 dark:border-slate-850 pl-4 cursor-pointer hover:opacity-90 group/cp transition-all"
+                        title="Nhấn để xem Phân tích Cơ cấu chi phí & giá thành"
+                      >
+                        <span className="text-amber-600 dark:text-amber-450 block text-[9px] uppercase font-black flex items-center justify-end gap-0.5">
+                          Tổng vốn sỉ <ExternalLink className="w-2.5 h-2.5 inline" />
+                        </span>
+                        <span className="font-extrabold text-amber-600 dark:text-amber-555 block text-xs font-mono group-hover/cp:-translate-y-[0.5px] transition-transform underline decoration-dotted decoration-amber-500/40">
+                          {profitLossMetrics.cost.toLocaleString()}đ
+                        </span>
+                      </div>
+                      <div className="text-right border-l border-slate-150 dark:border-slate-850 pl-4">
+                        <span className="text-slate-400 block text-[9px] uppercase">Tổng Tiền Lời</span>
+                        <span className="font-black text-emerald-600 dark:text-emerald-500 block text-xs font-mono">
+                          {profitLossMetrics.profit.toLocaleString()}đ
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* 1. FAITHFUL Centered HEADER PANEL with return arrow */}
+          <header className="shrink-0 bg-white dark:bg-[#121824] border-b border-slate-100 dark:border-slate-800/80 px-4 py-3 flex items-center justify-between z-10 sticky top-0">
         <button
           onClick={() => setActiveTab && setActiveTab('home')}
           className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350 transition active:scale-95 flex items-center justify-center cursor-pointer"
@@ -802,33 +1224,72 @@ export default function ReportTab({
         
         {/* DYNAMIC METRIC OUTLINE CARD */}
         <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs text-center relative overflow-hidden">
-          <div className="space-y-1">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">
-              {activePrimaryMetric.title}
-            </span>
-            <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-500 font-mono tracking-tight my-1.5">
-              {activePrimaryMetric.value}
-            </h2>
-          </div>
+          {activeSubTab === 'profit' ? (
+            <div 
+              className="space-y-1 cursor-pointer group/main hover:opacity-90 active:scale-98 transition-all"
+              onClick={() => setReportDetailView('suit_profit')}
+              title="Click để xem chi tiết tiền lời bộ đồ"
+            >
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono flex items-center justify-center gap-1">
+                {activePrimaryMetric.title}
+                <ExternalLink className="w-3 h-3 text-emerald-600 group-hover/main:text-emerald-500 transition-colors" />
+              </span>
+              <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-500 font-mono tracking-tight my-1.5 group-hover/main:translate-y-[-1px] transition-transform underline decoration-dotted decoration-emerald-500/20 group-hover/main:decoration-emerald-500/70">
+                {activePrimaryMetric.value}
+              </h2>
+              <div className="inline-flex items-center gap-1 text-[9.5px] font-black text-emerald-600 bg-emerald-500/10 px-3 py-1 rounded-full mt-1.5 shadow-xs transition hover:bg-emerald-500/20">
+                <span>Nhấn để xem tiền lời bộ đồ</span>
+                <span>➔</span>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">
+                {activePrimaryMetric.title}
+              </span>
+              <h2 className="text-3xl font-black text-emerald-600 dark:text-emerald-500 font-mono tracking-tight my-1.5">
+                {activePrimaryMetric.value}
+              </h2>
+            </div>
+          )}
 
           {/* Dividing border */}
           <div className="my-4 border-t border-slate-100 dark:border-slate-800/60" />
 
           {/* Underneath three sub-metrics columns */}
           <div className="grid grid-cols-3 gap-1">
-            <div className="text-center">
+            <div className="text-center animate-fade-in">
               <span className="text-[9.5px] text-slate-400 block mb-1 truncate">{activePrimaryMetric.sub1Title}</span>
-              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 font-mono block">
+              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 font-mono block animate-fade-in">
                 {activePrimaryMetric.sub1Value}
               </span>
             </div>
             
-            <div className="text-center border-l border-slate-100 dark:border-slate-800/50">
-              <span className="text-[9.5px] text-slate-400 block mb-1 truncate">{activePrimaryMetric.sub2Title}</span>
-              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 font-mono block">
-                {activePrimaryMetric.sub2Value}
-              </span>
-            </div>
+            {activeSubTab === 'profit' ? (
+              <div 
+                onClick={() => setReportDetailView('cost_structure')}
+                className="text-center border-l border-slate-100 dark:border-slate-800/50 cursor-pointer group/cost hover:scale-102 transition-transform p-0.5 rounded-lg hover:bg-amber-50/50 dark:hover:bg-amber-950/10"
+                title="Click để xem cơ cấu giá thành & chi phí bộ đồ"
+              >
+                <span className="text-[9.5px] text-amber-600 dark:text-amber-500 block mb-1 truncate font-bold flex items-center justify-center gap-0.5 underline decoration-dotted decoration-amber-550/20 group-hover/cost:decoration-amber-500/60">
+                  {activePrimaryMetric.sub2Title}
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </span>
+                <span className="text-xs font-extrabold text-amber-600 dark:text-amber-500 font-mono block group-hover/cost:translate-y-[-0.5px] transition-transform underline decoration-dotted decoration-amber-500/20 group-hover/cost:decoration-amber-500/70">
+                  {activePrimaryMetric.sub2Value}
+                </span>
+                <span className="text-[8px] text-slate-400 font-bold block mt-0.5 scale-90 opacity-90 group-hover/cost:text-amber-500">
+                  Phân tích ➔
+                </span>
+              </div>
+            ) : (
+              <div className="text-center border-l border-slate-100 dark:border-slate-800/50">
+                <span className="text-[9.5px] text-slate-400 block mb-1 truncate">{activePrimaryMetric.sub2Title}</span>
+                <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 font-mono block">
+                  {activePrimaryMetric.sub2Value}
+                </span>
+              </div>
+            )}
 
             <div className="text-center border-l border-slate-100 dark:border-slate-800/50">
               <span className="text-[9.5px] text-slate-400 block mb-1 truncate">{activePrimaryMetric.sub3Title}</span>
@@ -964,141 +1425,7 @@ export default function ReportTab({
               </div>
             </div>
 
-            {/* DETAILED PRODUCTION COST BREAKDOWN BY MODEL SALES (x BILL INVOICES) */}
-            {activeSubTab === 'profit' && (
-              <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs flex flex-col space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <div>
-                    <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-sans">
-                      <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
-                      <span>Cơ cấu giá thành &amp; Chi phí ước tính</span>
-                    </h3>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">
-                      Phân tích và tính toán chi phí gốc xưởng dựa vào Giá thành x Tổng sản lượng trên bill hóa đơn sỉ/lẻ của khách tương ứng.
-                    </p>
-                  </div>
-                </div>
-
-                {soldProductsList.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 dark:text-slate-500 italic text-xs">
-                    Chưa phát sinh hóa đơn bán hàng nào trong kỳ hạch toán này để phân tích.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Responsive table-like structure */}
-                    <div className="overflow-x-auto scrollbar-none">
-                      <table className="w-full text-left border-collapse min-w-[420px]">
-                        <thead>
-                          <tr className="border-b border-slate-100 dark:border-slate-800/80 text-[10px] uppercase font-mono tracking-wider text-slate-400 dark:text-slate-500">
-                            <th className="py-2.5 font-bold">Mẫu mã</th>
-                            <th className="py-2.5 text-center font-bold">SL Bán trên Bill</th>
-                            <th className="py-2.5 text-right font-bold w-28">Giá thành thắt (đ)</th>
-                            <th className="py-2.5 text-right font-bold w-32">Chi phí ước tính</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
-                          {soldProductsList.map((p) => {
-                            const lowerKey = p.modelName.toLowerCase();
-                            
-                            // Determine active unit cost
-                            let currentCostVal = 0;
-                            let costSource: 'manual' | 'saved' | 'default' = 'default';
-                            
-                            if (manualCosts[lowerKey] !== undefined) {
-                              currentCostVal = manualCosts[lowerKey];
-                              costSource = 'manual';
-                            } else if (savedCostMap[lowerKey] !== undefined) {
-                              currentCostVal = savedCostMap[lowerKey];
-                              costSource = 'saved';
-                            } else {
-                              const matchedImport = items.find(imp => imp.mẫu.trim().toLowerCase() === lowerKey);
-                              const laborCost = matchedImport ? (matchedImport.đơnGiáMay || 0) : Math.round(p.avgWholesalePrice * 0.45);
-                              const shippingCost = matchedImport ? ((matchedImport.vậnChuyểnTP_ĐT || 0) - (matchedImport.vậnChuyểnĐT_TP || 0)) : 0;
-                              currentCostVal = Math.round(laborCost + (shippingCost * (1 / 100)));
-                              costSource = 'default';
-                            }
-                            
-                            const totalEstCost = currentCostVal * p.totalQty;
-                            
-                            return (
-                              <tr key={p.modelName} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/10 transition-colors">
-                                <td className="py-3 pr-2">
-                                  <div className="flex flex-col">
-                                    <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
-                                      {p.modelName}
-                                    </span>
-                                    {costSource === 'saved' && (
-                                      <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
-                                        ✨ Dự toán sẵn ({savedCostMap[lowerKey].toLocaleString()}đ)
-                                      </span>
-                                    )}
-                                    {costSource === 'manual' && (
-                                      <span className="text-[9.5px] text-blue-500 dark:text-blue-400 font-bold mt-0.5 font-sans">
-                                        ✏️ Ghi đè thủ công
-                                      </span>
-                                    )}
-                                    {costSource === 'default' && (
-                                      <span className="text-[9.5px] text-slate-400 dark:text-slate-500 mt-0.5 font-sans">
-                                        ⚙️ Tự tính (May + VC)
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="py-3 text-center">
-                                  <span className="font-mono font-black text-xs text-slate-700 dark:text-slate-350">
-                                    {p.totalQty.toLocaleString()}
-                                  </span>
-                                  <span className="text-[9px] text-slate-400 dark:text-slate-500 block">bộ</span>
-                                </td>
-                                <td className="py-3 text-right">
-                                  <input
-                                    type="number"
-                                    value={currentCostVal || ''}
-                                    onChange={(e) => handleUpdateCost(p.modelName, Number(e.target.value))}
-                                    placeholder="0"
-                                    className="w-24 text-right px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-xs text-slate-850 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                  />
-                                </td>
-                                <td className="py-3 text-right font-mono font-extrabold text-xs text-slate-800 dark:text-slate-100">
-                                  {totalEstCost.toLocaleString()}đ
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Total Aggregated Summary */}
-                    <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                      <div className="text-slate-400 dark:text-slate-500 text-[9.5px] uppercase font-mono font-bold leading-relaxed">
-                        * Ghi chú: Chỉnh sửa trực tiếp đơn giá thành của từng mẫu mã để cập nhật tổng chi phí giá vốn của sếp live.
-                      </div>
-                      <div className="flex gap-4 justify-end font-mono shrink-0">
-                        <div className="text-right">
-                          <span className="text-slate-400 dark:text-slate-500 block text-[9px] uppercase">Doanh Thu Bill</span>
-                          <span className="font-extrabold text-blue-600 dark:text-blue-400 block text-xs">
-                            {soldProductsList.reduce((sum, p) => sum + p.totalRev, 0).toLocaleString()}đ
-                          </span>
-                        </div>
-                        <div className="text-right border-l border-slate-150 dark:border-slate-850 pl-4">
-                          <span className="text-slate-400 dark:text-slate-500 block text-[9px] uppercase">Vốn ước tính (định mức)</span>
-                          <span className="font-extrabold text-amber-600 dark:text-amber-500 block text-xs">
-                            {profitLossMetrics.cost.toLocaleString()}đ
-                          </span>
-                        </div>
-                        <div className="text-right border-l border-slate-150 dark:border-slate-850 pl-4">
-                          <span className="text-slate-400 dark:text-slate-500 block text-[9px] uppercase">Lợi nhuận gộp</span>
-                          <span className="font-black text-emerald-600 dark:text-emerald-500 block text-xs">
-                            {profitLossMetrics.profit.toLocaleString()}đ
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* COST BREAKDOWN REMOVED AND MOVED TO INDEPENDENT SUB-PAGE VIA CHI PHÍ ƯỚC TÍNH */}
 
             {/* 6. PAYMENTS METHODS PROGRESS LIST */}
             <div className="bg-white dark:bg-[#121824] rounded-2xl border border-slate-100 dark:border-slate-800/80 p-5 shadow-xs">
@@ -1192,9 +1519,9 @@ export default function ReportTab({
             </div>
           </>
         )}
-
       </div>
-
+        </>
+      )}
     </div>
   );
 }
