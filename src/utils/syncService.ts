@@ -48,6 +48,7 @@ export const COLLECTION_MAP = {
   materialRecipes: 'material_recipes',
   productionBatches: 'production_batches',
   materialReimports: 'material_reimports',
+  materialLogs: 'material_logs',
   loginNotifications: 'login_notifications',
   tasks: 'tasks',
   userProfiles: 'user_profiles'
@@ -202,6 +203,7 @@ export async function downloadAllFromCloud() {
       materialRecipes,
       productionBatches,
       materialReimports,
+      materialLogs,
       loginNotifications,
       tasks,
       userProfiles
@@ -219,6 +221,7 @@ export async function downloadAllFromCloud() {
       downloadCollectionFromCloud<ModelMaterialRecipe>('material_recipes'),
       downloadCollectionFromCloud<ProductionBatch>('production_batches'),
       downloadCollectionFromCloud<MaterialReimport>('material_reimports'),
+      downloadCollectionFromCloud<any>('material_logs'),
       downloadCollectionFromCloud<LoginNotification>('login_notifications'),
       downloadCollectionFromCloud<TaskType>('tasks'),
       isMasterOrAdmin
@@ -251,6 +254,7 @@ export async function downloadAllFromCloud() {
       materialRecipes,
       productionBatches,
       materialReimports,
+      materialLogs,
       loginNotifications,
       tasks,
       userProfiles,
@@ -279,6 +283,7 @@ export async function pushAllLocalStateToCloud(localData: {
   materialRecipes: ModelMaterialRecipe[];
   productionBatches: ProductionBatch[];
   materialReimports: MaterialReimport[];
+  materialLogs: any[];
   loginNotifications: LoginNotification[];
   tasks: TaskType[];
   userProfiles: UserProfile[];
@@ -311,6 +316,7 @@ export async function pushAllLocalStateToCloud(localData: {
       uploadCollectionToCloud('material_recipes', localData.materialRecipes),
       uploadCollectionToCloud('production_batches', localData.productionBatches),
       uploadCollectionToCloud('material_reimports', localData.materialReimports),
+      uploadCollectionToCloud('material_logs', localData.materialLogs || []),
       uploadCollectionToCloud('login_notifications', localData.loginNotifications.slice(0, 100)), // cap to prevent write spikes
       uploadCollectionToCloud('tasks', localData.tasks),
       uploadCollectionToCloud('user_profiles', localData.userProfiles)

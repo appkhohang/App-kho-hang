@@ -53,6 +53,7 @@ export default function SettingsTab({
 }: SettingsTabProps) {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mapRef = useRef<any>(null);
   const [showCloudInfo, setShowCloudInfo] = React.useState(false);
 
   // States of collapsible sections (defaulting to false / collapsed for tidiness)
@@ -326,6 +327,199 @@ export default function SettingsTab({
     window.addEventListener('xuongan_autobackup_updated', handleUpdate);
     return () => window.removeEventListener('xuongan_autobackup_updated', handleUpdate);
   }, []);
+
+  // Dynamic Leaflet Map setup and markers loop
+  React.useEffect(() => {
+    if (!isGpsOpen) {
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (e) {
+          console.error("Error removing map instance:", e);
+        }
+        mapRef.current = null;
+      }
+      return;
+    }
+
+    let isMounted = true;
+
+    // Helper functions to load scripts and styles dynamically
+    const loadStyle = (url: string): Promise<void> => {
+      return new Promise<void>((resolve) => {
+        if (document.querySelector(`link[href="${url}"]`)) {
+          resolve();
+          return;
+        }
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = url;
+        link.onload = () => resolve();
+        link.onerror = () => resolve(); // continue anyway
+        document.head.appendChild(link);
+      });
+    };
+
+    const loadScript = (url: string): Promise<void> => {
+      return new Promise<void>((resolve) => {
+        if ((window as any).L) {
+          resolve();
+          return;
+        }
+        const existingScript = document.querySelector(`script[src="${url}"]`);
+        if (existingScript) {
+          (existingScript as any).addEventListener('load', () => resolve());
+          (existingScript as any).addEventListener('error', () => resolve());
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = url;
+        script.onload = () => resolve();
+        script.onerror = () => resolve();
+        document.body.appendChild(script);
+      });
+    };
+
+    const initMap = async () => {
+      // 1. Load Leaflet assets
+      await loadStyle('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+      await loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
+
+      if (!isMounted) return;
+
+      const L = (window as any).L;
+      if (!L) {
+        console.error("Leaflet library could not be loaded dynamically");
+        return;
+      }
+
+      // Wait a tiny moment to ensure the element is in the DOM
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      if (!isMounted) return;
+
+      const mapContainer = document.getElementById('xuongan-live-leaflet-map');
+      if (!mapContainer) {
+        console.warn("Map container element 'xuongan-live-leaflet-map' not found in DOM");
+        return;
+      }
+
+      // If map is already initialized on this container, reuse or recreate it
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (e) {}
+        mapRef.current = null;
+      }
+
+      // Get users who have valid lat/lng coordinates
+      const activeMembers = userProfiles.filter(u => u.latitude && u.longitude);
+
+      // Determine center coordinate
+      let centerLat = 10.3800; // Dong Thap province coordinate
+      let centerLng = 105.6300;
+      let defaultZoom = 11;
+
+      if (activeMembers.length > 0) {
+        // Center on the logged-in user if available in active locations
+        const currentUserEmail = auth.currentUser?.email?.toLowerCase().trim();
+        const meProfile = activeMembers.find(u => u.email?.toLowerCase().trim() === currentUserEmail);
+        if (meProfile && meProfile.latitude && meProfile.longitude) {
+          centerLat = meProfile.latitude;
+          centerLng = meProfile.longitude;
+          defaultZoom = 13;
+        } else if (activeMembers[0].latitude && activeMembers[0].longitude) {
+          centerLat = activeMembers[0].latitude;
+          centerLng = activeMembers[0].longitude;
+          defaultZoom = 12;
+        }
+      }
+
+      // Create new map
+      const map = L.map('xuongan-live-leaflet-map', {
+        zoomControl: true,
+        scrollWheelZoom: true
+      }).setView([centerLat, centerLng], defaultZoom);
+
+      mapRef.current = map;
+
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      // Add markers for each team member
+      activeMembers.forEach((member) => {
+        if (!member.latitude || !member.longitude) return;
+
+        const isMe = member.email?.toLowerCase().trim() === auth.currentUser?.email?.toLowerCase().trim();
+        const displayName = member.displayName || member.email || 'Thành viên';
+        
+        // Custom SVG DivIcon to prevent asset path resolution issues in bundlers
+        const markerIcon = L.divIcon({
+          html: `<div class="relative flex items-center justify-center">
+                   <div class="absolute h-9 w-9 ${isMe ? 'bg-indigo-500/25' : 'bg-emerald-500/25'} rounded-full animate-ping"></div>
+                   <div class="relative ${isMe ? 'bg-indigo-600' : 'bg-emerald-650'} border-2 border-white text-white rounded-full p-2.5 shadow-md flex items-center justify-center">
+                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4.5 h-4.5">
+                       <path fill-rule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.702 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+                     </svg>
+                   </div>
+                 </div>`,
+          className: 'custom-leaflet-svg-icon',
+          iconSize: [36, 36],
+          iconAnchor: [18, 36],
+          popupAnchor: [0, -32]
+        });
+
+        const activeBadge = isMe
+          ? `<span class="bg-indigo-600 text-white text-[8.5px] font-bold px-1.5 py-0.5 rounded ml-1">Tôi</span>`
+          : `<span class="bg-emerald-600 text-white text-[8.5px] font-bold px-1.5 py-0.5 rounded ml-1">${member.role === 'admin' ? 'Chủ xưởng' : 'Nhân viên'}</span>`;
+
+        const popupContent = `
+          <div class="font-sans p-1.5 text-xs space-y-1.5" style="min-width: 170px;">
+            <div class="font-bold text-[#111827] flex items-center justify-between border-b pb-1 border-slate-150">
+              <span class="text-sm truncate mr-1" style="max-width: 110px;">${displayName}</span>
+              ${activeBadge}
+            </div>
+            <div class="text-[10px] text-slate-500 font-mono">
+              📅 Cập nhật: ${member.lastLocationTime || 'Vừa cập nhật'}
+            </div>
+            <div class="text-[10px] text-[#22c55e] font-bold font-mono">
+              📍 GPS: ${member.latitude.toFixed(5)}, ${member.longitude.toFixed(5)}
+            </div>
+            <div class="pt-1.5">
+              <a 
+                href="https://www.google.com/maps/search/?api=1&query=${member.latitude},${member.longitude}" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                class="block text-[9.5px] bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 py-1.5 rounded hover:bg-indigo-100 transition font-black uppercase text-center w-full"
+                style="text-decoration: none;"
+              >
+                Mở Google Maps →
+              </a>
+            </div>
+          </div>
+        `;
+
+        L.marker([member.latitude, member.longitude], { icon: markerIcon })
+          .addTo(map)
+          .bindPopup(popupContent, { maxWidth: 220 });
+      });
+    };
+
+    initMap();
+
+    return () => {
+      isMounted = false;
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (e) {
+          console.error("Error removing map instance in cleanup:", e);
+        }
+        mapRef.current = null;
+      }
+    };
+  }, [isGpsOpen, userProfiles]);
 
   const handleRestoreAutoBackup = (backup: any) => {
     if (window.confirm(`Bạn có chắc chắn muốn khôi phục dữ liệu xưởng về phiên bản tự động sao lưu lúc [${backup.timeStr}]?\n(Chú ý: Toàn bộ dữ liệu hiện tại trên trình duyệt sẽ được thay thế)`)) {
@@ -2041,8 +2235,8 @@ export default function SettingsTab({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   {
-                    version: latestVersionMetadata ? `v${latestVersionMetadata.version}` : "v1.0.4",
-                    date: latestVersionMetadata ? latestVersionMetadata.releaseDate : "12/06/2026",
+                    version: latestVersionMetadata ? `v${latestVersionMetadata.version}` : `v${CURRENT_VERSION}`,
+                    date: latestVersionMetadata ? latestVersionMetadata.releaseDate : "20/06/2026",
                     type: "Phiên bản hiện hành",
                     typeColor: "bg-indigo-50 border-indigo-150 text-indigo-750 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-400",
                     changes: latestVersionMetadata ? latestVersionMetadata.changelog : [

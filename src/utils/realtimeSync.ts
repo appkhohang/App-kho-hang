@@ -149,6 +149,9 @@ export interface RealtimeSyncProps {
   materialReimports: any[];
   setMaterialReimports: React.Dispatch<React.SetStateAction<any[]>>;
   
+  materialLogs: any[];
+  setMaterialLogs: React.Dispatch<React.SetStateAction<any[]>>;
+  
   tasks: any[];
   setTasks: React.Dispatch<React.SetStateAction<any[]>>;
   
@@ -181,6 +184,7 @@ export function useRealtimeSync({
   materialRecipes, setMaterialRecipes,
   productionBatches, setProductionBatches,
   materialReimports, setMaterialReimports,
+  materialLogs, setMaterialLogs,
   tasks, setTasks,
   userProfiles, setUserProfiles,
   settings, setSettings,
@@ -210,6 +214,7 @@ export function useRealtimeSync({
     materialRecipes: materialRecipes,
     productionBatches: productionBatches,
     materialReimports: materialReimports,
+    materialLogs: materialLogs,
     tasks: tasks,
     userProfiles: userProfiles
   };
@@ -253,6 +258,7 @@ export function useRealtimeSync({
       { key: 'materialRecipes', colName: COLLECTION_MAP.materialRecipes, setter: setMaterialRecipes },
       { key: 'productionBatches', colName: COLLECTION_MAP.productionBatches, setter: setProductionBatches },
       { key: 'materialReimports', colName: COLLECTION_MAP.materialReimports, setter: setMaterialReimports },
+      { key: 'materialLogs', colName: COLLECTION_MAP.materialLogs, setter: setMaterialLogs },
       { key: 'tasks', colName: COLLECTION_MAP.tasks, setter: setTasks },
       { key: 'userProfiles', colName: COLLECTION_MAP.userProfiles, setter: setUserProfiles }
     ];
@@ -524,6 +530,7 @@ export function useRealtimeSync({
   useEffect(() => { syncLocalToCloud('materialRecipes', COLLECTION_MAP.materialRecipes, materialRecipes); }, [materialRecipes]);
   useEffect(() => { syncLocalToCloud('productionBatches', COLLECTION_MAP.productionBatches, productionBatches); }, [productionBatches]);
   useEffect(() => { syncLocalToCloud('materialReimports', COLLECTION_MAP.materialReimports, materialReimports); }, [materialReimports]);
+  useEffect(() => { syncLocalToCloud('materialLogs', COLLECTION_MAP.materialLogs, materialLogs); }, [materialLogs]);
   useEffect(() => { syncLocalToCloud('tasks', COLLECTION_MAP.tasks, tasks); }, [tasks]);
   useEffect(() => { syncLocalToCloud('userProfiles', COLLECTION_MAP.userProfiles, userProfiles); }, [userProfiles]);
 

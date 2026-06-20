@@ -10,7 +10,7 @@ import {
   Scissors, Users, Package, Plus, Trash2, Edit, Check, Calendar, 
   AlertTriangle, Eye, Layers, DollarSign, Archive, RefreshCw, FileText, 
   ChevronRight, AlertCircle, ShoppingBag, TrendingUp, CheckSquare, Square, X,
-  FileSpreadsheet, Settings, ArrowUp, ArrowDown, PlusCircle, ListOrdered, Tag
+  FileSpreadsheet, Settings, ArrowUp, ArrowDown, PlusCircle, ListOrdered, Tag, Search
 } from 'lucide-react';
 import { 
   ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, 
@@ -36,6 +36,9 @@ interface ProductionTabProps {
   setProductionBatches: React.Dispatch<React.SetStateAction<ProductionBatch[]>>;
   materialReimports: MaterialReimport[];
   setMaterialReimports: React.Dispatch<React.SetStateAction<MaterialReimport[]>>;
+  materialLogs: any[];
+  setMaterialLogs: React.Dispatch<React.SetStateAction<any[]>>;
+  authState: any;
   laborPayments: LaborPayment[];
   setLaborPayments: React.Dispatch<React.SetStateAction<LaborPayment[]>>;
   settings: AppSettings;
@@ -61,6 +64,9 @@ export default function ProductionTab({
   setProductionBatches: rawSetProductionBatches,
   materialReimports,
   setMaterialReimports: rawSetMaterialReimports,
+  materialLogs,
+  setMaterialLogs: rawSetMaterialLogs,
+  authState,
   laborPayments,
   setLaborPayments: rawSetLaborPayments,
   settings,
@@ -89,10 +95,15 @@ export default function ProductionTab({
   const setMaterialRecipes = guard(rawSetMaterialRecipes);
   const setProductionBatches = guard(rawSetProductionBatches);
   const setMaterialReimports = guard(rawSetMaterialReimports);
+  const setMaterialLogs = guard(rawSetMaterialLogs);
   const setLaborPayments = guard(rawSetLaborPayments);
 
   // Current active sub-tab inside Quality Management
   const [subTab, setSubTab] = useState<'breakdown' | 'materials'>(initialSubTab || 'breakdown');
+  const [materialSubTab, setMaterialSubTab] = useState<'inventory' | 'fluctuation'>('inventory');
+  const [fluctSearch, setFluctSearch] = useState('');
+  const [fluctMatFilter, setFluctMatFilter] = useState('');
+  const [fluctTypeFilter, setFluctTypeFilter] = useState<'all' | 'nhap' | 'xuat'>('all');
 
   useEffect(() => {
     if (initialSubTab) {
@@ -903,6 +914,26 @@ export default function ProductionTab({
     };
 
     setRawMaterials([...rawMaterials, newMat]);
+    
+    // Log creation
+    if (materialInitStock > 0) {
+      const operatorName = authState?.displayName || 'Kế toán viên';
+      const newLog = {
+        id: 'log_' + Date.now(),
+        materialId: newMat.id,
+        materialName: newMat.name,
+        type: 'nhap' as const,
+        quantity: materialInitStock,
+        balanceBefore: 0,
+        balanceAfter: materialInitStock,
+        operator: operatorName,
+        date: getCurrentDateStr(),
+        note: 'Khởi tạo kho vật tư ban đầu',
+        createdAt: Date.now()
+      };
+      setMaterialLogs([newLog, ...materialLogs]);
+    }
+
     setMaterialName('');
     setMaterialInitStock(200);
     setMaterialAlertLevel(30);
@@ -935,6 +966,23 @@ export default function ProductionTab({
     };
 
     setMaterialReimports([reimport, ...materialReimports]);
+
+    // Log fluctuation
+    const operatorName = authState?.displayName || 'Kế toán viên';
+    const newLog = {
+      id: 'log_' + Date.now(),
+      materialId: replenishId,
+      materialName: material.name,
+      type: 'nhap' as const,
+      quantity: replenishQty,
+      balanceBefore: material.currentStock,
+      balanceAfter: material.currentStock + replenishQty,
+      operator: operatorName,
+      date: getCurrentDateStr(),
+      note: replenishNote.trim() || 'Nhập thêm vật tư',
+      createdAt: Date.now()
+    };
+    setMaterialLogs([newLog, ...materialLogs]);
 
     // Update stock
     setRawMaterials(rawMaterials.map(m => {
@@ -1045,6 +1093,28 @@ export default function ProductionTab({
       return m;
     }));
 
+    // Log fluctuations
+    const operatorName = authState?.displayName || 'Kế toán viên';
+    const newLogs = requirements.filter(r => r.amountUsed > 0).map((req, idx) => {
+      const mat = rawMaterials.find(m => m.id === req.materialId);
+      const before = mat ? mat.currentStock : 0;
+      const after = Math.max(0, before - req.amountUsed);
+      return {
+        id: `log_prod_${Date.now()}_${idx}`,
+        materialId: req.materialId,
+        materialName: req.materialName,
+        type: 'xuat' as const,
+        quantity: req.amountUsed,
+        balanceBefore: before,
+        balanceAfter: after,
+        operator: operatorName,
+        date: prodDate,
+        note: `Xuất sản xuất mã hàng ${prodModel} (SL: ${prodQty.toLocaleString()})`,
+        createdAt: Date.now() + idx
+      };
+    });
+    setMaterialLogs([...newLogs, ...materialLogs]);
+
     // Save batch record
     const newBatch: ProductionBatch = {
       id: 'bat_' + Date.now(),
@@ -1113,6 +1183,59 @@ export default function ProductionTab({
       return { ...m, currentStock: newStock };
     }));
 
+    // Log edit fluctuations
+    const operatorName = authState?.displayName || 'Kế toán viên';
+    const editLogs: any[] = [];
+    newRequirements.forEach((nr, idx) => {
+      const oldUsage = oldBatch.materialsUsed.find(om => om.materialId === nr.materialId)?.amountUsed || 0;
+      if (oldUsage !== nr.amountUsed) {
+        const mat = rawMaterials.find(m => m.id === nr.materialId);
+        const before = mat ? mat.currentStock : 0;
+        const netChange = nr.amountUsed - oldUsage; // positive means used more (xuat), negative means returned (nhap)
+        const after = Math.max(0, before - netChange);
+        editLogs.push({
+          id: `log_edit_${Date.now()}_${idx}`,
+          materialId: nr.materialId,
+          materialName: nr.materialName,
+          type: netChange > 0 ? ('xuat' as const) : ('nhap' as const),
+          quantity: Math.abs(netChange),
+          balanceBefore: before,
+          balanceAfter: after,
+          operator: operatorName,
+          date: editBatchDate,
+          note: netChange > 0 
+            ? `Xuất thêm do sửa đợt hàng ${editBatchModel} (cũ: ${oldBatch.targetQuantity.toLocaleString()} -> mới: ${editBatchQty.toLocaleString()})`
+            : `Nhập lại do sửa đợt hàng ${editBatchModel} (cũ: ${oldBatch.targetQuantity.toLocaleString()} -> mới: ${editBatchQty.toLocaleString()})`,
+          createdAt: Date.now() + idx
+        });
+      }
+    });
+    oldBatch.materialsUsed.forEach((om, idx) => {
+      const hasInNew = newRequirements.some(nr => nr.materialId === om.materialId);
+      if (!hasInNew && om.amountUsed > 0) {
+        const mat = rawMaterials.find(m => m.id === om.materialId);
+        const before = mat ? mat.currentStock : 0;
+        const after = before + om.amountUsed;
+        editLogs.push({
+          id: `log_edit_del_${Date.now()}_${idx}`,
+          materialId: om.materialId,
+          materialName: om.materialName,
+          type: 'nhap' as const,
+          quantity: om.amountUsed,
+          balanceBefore: before,
+          balanceAfter: after,
+          operator: operatorName,
+          date: editBatchDate,
+          note: `Nhập lại do sửa đổi đợt sản xuất ${editBatchModel}`,
+          createdAt: Date.now() + 100 + idx
+        });
+      }
+    });
+
+    if (editLogs.length > 0) {
+      setMaterialLogs([...editLogs, ...materialLogs]);
+    }
+
     // Update production batch list
     setProductionBatches(prevBatches => prevBatches.map(b => {
       if (b.id === oldBatch.id) {
@@ -1146,6 +1269,28 @@ export default function ProductionTab({
       const oldUsage = batch.materialsUsed.find(om => om.materialId === m.id)?.amountUsed || 0;
       return { ...m, currentStock: m.currentStock + oldUsage };
     }));
+
+    // Log deletion fluctuations
+    const operatorName = authState?.displayName || 'Kế toán viên';
+    const delLogs = batch.materialsUsed.filter(om => om.amountUsed > 0).map((om, idx) => {
+      const mat = rawMaterials.find(m => m.id === om.materialId);
+      const before = mat ? mat.currentStock : 0;
+      const after = before + om.amountUsed;
+      return {
+        id: `log_del_${Date.now()}_${idx}`,
+        materialId: om.materialId,
+        materialName: om.materialName,
+        type: 'nhap' as const,
+        quantity: om.amountUsed,
+        balanceBefore: before,
+        balanceAfter: after,
+        operator: operatorName,
+        date: getCurrentDateStr(),
+        note: `Nhập trả kho do xóa đợt sản xuất ${batch.modelName}`,
+        createdAt: Date.now() + idx
+      };
+    });
+    setMaterialLogs([...delLogs, ...materialLogs]);
 
     // Delete the batch
     setProductionBatches(prevBatches => prevBatches.filter(b => b.id !== batch.id));
@@ -1864,6 +2009,33 @@ export default function ProductionTab({
           </button>
         </div>
       </div>
+
+      {subTab === 'materials' && (
+        <div className="flex bg-slate-100/90 dark:bg-zinc-900 border border-slate-200/50 dark:border-slate-800 p-1 rounded-xl w-full max-w-xs sm:max-w-sm select-none gap-1">
+          <button
+            onClick={() => setMaterialSubTab('inventory')}
+            className={`flex-grow py-2 px-3 sm:px-4 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              materialSubTab === 'inventory'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-sm font-black'
+                : 'text-slate-550 dark:text-slate-400 hover:text-slate-800'
+            }`}
+          >
+            <Archive className="w-3.5 h-3.5" />
+            <span>Sổ kho & Định mức</span>
+          </button>
+          <button
+            onClick={() => setMaterialSubTab('fluctuation')}
+            className={`flex-grow py-2 px-3 sm:px-4 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              materialSubTab === 'fluctuation'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-400 shadow-sm font-black'
+                : 'text-slate-550 dark:text-slate-400 hover:text-slate-850'
+            }`}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Nhật ký biến động</span>
+          </button>
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {subTab === 'breakdown' ? (
@@ -2709,8 +2881,208 @@ export default function ProductionTab({
           </motion.div>
           )
         ) : (
-          <motion.div
-            key="sub-materials-tab"
+          materialSubTab === 'fluctuation' ? (
+            <motion.div
+              key="materials-fluctuation"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-6 w-full"
+            >
+              {(() => {
+                // Filter logs matches
+                const filteredLogs = (materialLogs || []).filter(log => {
+                  if (!log) return false;
+                  const matchesSearch = !fluctSearch.trim() || 
+                    (log.materialName && log.materialName.toLowerCase().includes(fluctSearch.toLowerCase())) ||
+                    (log.note && log.note.toLowerCase().includes(fluctSearch.toLowerCase())) ||
+                    (log.operator && log.operator.toLowerCase().includes(fluctSearch.toLowerCase()));
+                  const matchesMat = !fluctMatFilter || log.materialId === fluctMatFilter;
+                  const matchesType = fluctTypeFilter === 'all' || log.type === fluctTypeFilter;
+                  return matchesSearch && matchesMat && matchesType;
+                });
+
+                // Calculate stats on filtered or all logs
+                const totalTransactions = (materialLogs || []).length;
+                const totalNhap = (materialLogs || []).filter(l => l.type === 'nhap').reduce((sum, l) => sum + (l.quantity || 0), 0);
+                const totalXuat = (materialLogs || []).filter(l => l.type === 'xuat').reduce((sum, l) => sum + (l.quantity || 0), 0);
+
+                return (
+                  <div className="space-y-6 col-span-12">
+                    {/* KPI Summary cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 dark:text-slate-500 block">Tổng số giao dịch</span>
+                          <span className="text-2xl font-black font-mono mt-1 block dark:text-white">
+                            {totalTransactions.toLocaleString()} <span className="text-xs font-sans font-medium text-slate-400">lần</span>
+                          </span>
+                        </div>
+                        <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl text-indigo-650 dark:text-indigo-400">
+                          <ListOrdered className="w-5 h-5" />
+                        </div>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-black tracking-wider text-emerald-650 dark:text-emerald-400 block">Tổng Nhập kho</span>
+                          <span className="text-2xl font-black font-mono mt-1 block text-emerald-650 dark:text-emerald-400">
+                            +{totalNhap.toLocaleString()} <span className="text-xs font-sans font-medium text-slate-400">đv</span>
+                          </span>
+                        </div>
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl text-emerald-650 dark:text-emerald-400">
+                          <ArrowUp className="w-5 h-5" />
+                        </div>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-black tracking-wider text-rose-650 dark:text-rose-400 block">Tổng Xuất kho</span>
+                          <span className="text-2xl font-black font-mono mt-1 block text-rose-650 dark:text-rose-400">
+                            -{totalXuat.toLocaleString()} <span className="text-xs font-sans font-medium text-slate-400">đv</span>
+                          </span>
+                        </div>
+                        <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-xl text-rose-650 dark:text-rose-455">
+                          <ArrowDown className="w-5 h-5" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Filter Controls Component */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-1.5">
+                          <Archive className="w-4 h-4 text-emerald-600" />
+                          <h4 className="font-extrabold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-tight">
+                            Bộ lọc nhật ký biến động
+                          </h4>
+                        </div>
+                        <span className="text-[10.5px] font-bold text-slate-450 uppercase">{filteredLogs.length} kết quả</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                        {/* Search Query */}
+                        <div className="md:col-span-5 relative">
+                          <span className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500">
+                            <Search className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="text"
+                            value={fluctSearch}
+                            onChange={(e) => setFluctSearch(e.target.value)}
+                            placeholder="Tìm ghi chú, nguyên liệu, người làm..."
+                            className="w-full text-xs font-bold pl-9 pr-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-xs dark:text-white"
+                          />
+                        </div>
+
+                        {/* Material Filter */}
+                        <div className="md:col-span-4">
+                          <select
+                            value={fluctMatFilter}
+                            onChange={(e) => setFluctMatFilter(e.target.value)}
+                            className="w-full text-xs font-bold p-2 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-xs dark:text-white"
+                          >
+                            <option value="">-- Tất cả nguyên liệu --</option>
+                            {rawMaterials.map(m => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Operation Type Filter */}
+                        <div className="md:col-span-3">
+                          <select
+                            value={fluctTypeFilter}
+                            onChange={(e) => setFluctTypeFilter(e.target.value as any)}
+                            className="w-full text-xs font-bold p-2 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-xs dark:text-white"
+                          >
+                            <option value="all">Tất cả biến động</option>
+                            <option value="nhap">Nhập kho (+)</option>
+                            <option value="xuat">Xuất kho (-)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ledger History List Table */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+                      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                        <h4 className="font-extrabold text-sm text-slate-800 dark:text-slate-200 uppercase tracking-tight">SỔ NHẬT KÝ CHI TIẾT BIẾN ĐỘNG (NHẬP/XUẤT)</h4>
+                      </div>
+
+                      {filteredLogs.length === 0 ? (
+                        <div className="text-center py-16 text-slate-400 dark:text-slate-500 text-xs">
+                          <AlertCircle className="w-10 h-10 mx-auto text-slate-350 dark:text-slate-650 mb-2" />
+                          <p>Không có dữ liệu biến động kho nào khớp với điều kiện lọc.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 dark:bg-zinc-900/60 text-slate-400 border-b border-slate-150 dark:border-slate-800 uppercase font-black text-[9.5px] tracking-wider">
+                                <th className="py-3 px-4">Thời gian</th>
+                                <th className="py-3 px-4">Nguyên liệu</th>
+                                <th className="py-3 px-4 text-center">Giao dịch</th>
+                                <th className="py-3 px-4 text-right">Lượng biến động</th>
+                                <th className="py-3 px-4 text-right">Tồn kho cũ → mới</th>
+                                <th className="py-3 px-4">Người thực hiện</th>
+                                <th className="py-3 px-4">Chi tiết ghi chú</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold text-slate-700 dark:text-slate-300">
+                              {filteredLogs.map(log => {
+                                const isNhap = log.type === 'nhap';
+                                return (
+                                  <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-800/10 transition">
+                                    <td className="py-3 px-4 text-slate-450 dark:text-slate-500 font-mono whitespace-nowrap text-[11px]">
+                                      {formatVietnameseDate(log.date)}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <span className="font-extrabold text-slate-900 dark:text-white block">{log.materialName}</span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center text-nowrap">
+                                      {isNhap ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/50 text-emerald-650 dark:text-emerald-450 uppercase border border-emerald-200/50 dark:border-emerald-900/30">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                          Nhập kho
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-50 dark:bg-rose-950/50 text-rose-650 dark:text-rose-450 uppercase border border-rose-200/50 dark:border-rose-900/30">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                          Xuất kho
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className={`py-3 px-4 text-right font-black font-mono text-sm whitespace-nowrap ${isNhap ? 'text-emerald-650 dark:text-emerald-450' : 'text-rose-650 dark:text-rose-450'}`}>
+                                      {isNhap ? '+' : '-'}{(log.quantity || 0).toLocaleString()}
+                                    </td>
+                                    <td className="py-3 px-4 text-right font-mono text-slate-450 dark:text-slate-500 whitespace-nowrap">
+                                      {(log.balanceBefore || 0).toLocaleString()} → <span className="font-black text-slate-800 dark:text-indigo-300">{(log.balanceAfter || 0).toLocaleString()}</span>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <span className="px-2 py-1 bg-slate-50 dark:bg-zinc-800 rounded-md text-[11px] text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-zinc-700 font-bold whitespace-nowrap">
+                                        {log.operator}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-[11px] font-medium text-slate-500 dark:text-slate-400 max-w-[220px] truncate" title={log.note || ''}>
+                                      {log.note || '--'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="sub-materials-tab"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
@@ -2985,6 +3357,7 @@ export default function ProductionTab({
               </div>
             </div>
           </motion.div>
+          )
         )}
       </AnimatePresence>
 

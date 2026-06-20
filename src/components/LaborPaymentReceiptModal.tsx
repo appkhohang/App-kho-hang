@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Image as ImageIcon, X, Printer, CheckCircle2 } from 'lucide-react';
+import { Download, X, Printer, CheckCircle2 } from 'lucide-react';
 import { ImportItem, LaborPayment } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
@@ -82,9 +82,10 @@ export default function LaborPaymentReceiptModal({
               onClick={handleCaptureReceipt}
               disabled={isExporting}
               className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white font-extrabold text-[11px] py-1.5 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition select-none shadow"
+              title="Lưu hình ảnh thanh toán về máy"
             >
-              <ImageIcon className="w-4 h-4" />
-              <span>{isExporting ? "Đang xuất..." : "Chụp hình / Gửi thợ"}</span>
+              <Download className="w-4 h-4" />
+              <span>{isExporting ? "Đang lưu..." : "Lưu hình về máy"}</span>
             </button>
             <button
               onClick={onClose}

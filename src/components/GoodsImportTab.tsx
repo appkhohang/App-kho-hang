@@ -282,6 +282,7 @@ export default function GoodsImportTab({
   // File Upload Ref for Restoration
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+
   // Add Item Submit
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -775,6 +776,7 @@ export default function GoodsImportTab({
                   </div>
                 </div>
 
+
                 {activeFormType === 'goods' ? (
                   /* FORM 1: STANDARD GOODS IMPORT */
                   <form onSubmit={(e) => { handleAddItem(e); setIsFormExpanded(false); }} className="p-5 space-y-4">
@@ -812,7 +814,9 @@ export default function GoodsImportTab({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Mẫu mã sản phẩm</label>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-xs font-medium text-slate-450 dark:text-slate-400">Mẫu mã sản phẩm</label>
+                        </div>
                         <input
                           type="text"
                           required
@@ -2432,6 +2436,8 @@ export default function GoodsImportTab({
           </motion.div>
         )}
       </AnimatePresence>
+
+
     </div>
   );
 }

@@ -7,6 +7,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ArrowUpCircle, Info, Download, AlertTriangle, X, CheckCircle } from 'lucide-react';
 import { AppUpdateInfo, CURRENT_VERSION } from '../types';
+import { isNewerVersion } from '../utils/updateService';
 
 interface AppUpdateModalProps {
   updateInfo: AppUpdateInfo;
@@ -58,14 +59,17 @@ export default function AppUpdateModal({ updateInfo, onClose }: AppUpdateModalPr
             <ArrowUpCircle className="w-7 h-7 animate-bounce-slow" />
           </div>
           <div className="space-y-1">
-            <span className="text-[9.5px] font-black uppercase tracking-widest text-indigo-620 dark:text-indigo-400 font-mono flex items-center gap-1.5">
-              <span>Đã có phiên bản mới</span>
-              {updateInfo.critical && (
+            <span className="text-[9.5px] font-black uppercase tracking-widest text-indigo-620 dark:text-indigo-400 font-mono flex items-center gap-1.5 flex-wrap">
+              <span>{isNewerVersion(updateInfo.version, localStorage.getItem('capgo_active_version') || CURRENT_VERSION) ? 'Đã có phiên bản mới' : 'Bạn đang chạy bản mới nhất'}</span>
+              {!isNewerVersion(updateInfo.version, localStorage.getItem('capgo_active_version') || CURRENT_VERSION) && (
+                <span className="bg-emerald-500 text-white px-1.5 py-0.5 rounded text-[8.5px] font-extrabold uppercase tracking-normal">Mới nhất ✅</span>
+              )}
+              {updateInfo.critical && isNewerVersion(updateInfo.version, localStorage.getItem('capgo_active_version') || CURRENT_VERSION) && (
                 <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-normal animate-pulse">Bản bắt buộc</span>
               )}
             </span>
             <h3 className="text-lg font-black text-slate-850 dark:text-slate-50 uppercase tracking-wide">
-              Cập nhật hệ thống
+              {isNewerVersion(updateInfo.version, localStorage.getItem('capgo_active_version') || CURRENT_VERSION) ? 'Cập nhật hệ thống' : 'Thông tin phiên bản'}
             </h3>
           </div>
         </div>
@@ -122,24 +126,36 @@ export default function AppUpdateModal({ updateInfo, onClose }: AppUpdateModalPr
 
         {/* Action Controls */}
         <div className="flex gap-2 pt-1">
-          {!updateInfo.critical && (
+          {!isNewerVersion(updateInfo.version, localStorage.getItem('capgo_active_version') || CURRENT_VERSION) ? (
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 text-xs font-black text-slate-500 bg-slate-100 hover:bg-slate-205 dark:bg-slate-800 dark:hover:bg-slate-755 rounded-2xl transition cursor-pointer active:scale-98"
+              className="flex-1 py-3 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl transition cursor-pointer active:scale-98 shadow-md"
             >
-              Để sau (Skip)
+              Đồng ý & Đóng
             </button>
-          )}
+          ) : (
+            <>
+              {!updateInfo.critical && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-3 text-xs font-black text-slate-500 bg-slate-100 hover:bg-slate-205 dark:bg-slate-800 dark:hover:bg-slate-755 rounded-2xl transition cursor-pointer active:scale-98"
+                >
+                  Để sau (Skip)
+                </button>
+              )}
 
-          <button
-            type="button"
-            onClick={handleDownloadUpdate}
-            className="flex-2 py-3 px-4 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-98 shadow-md hover:shadow-lg shadow-indigo-600/10 hover:ring-2 hover:ring-indigo-500/20"
-          >
-            <Download className="w-4 h-4" />
-            <span>Tải & Cập nhật ngay</span>
-          </button>
+              <button
+                type="button"
+                onClick={handleDownloadUpdate}
+                className="flex-2 py-3 px-4 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-98 shadow-md hover:shadow-lg shadow-indigo-600/10 hover:ring-2 hover:ring-indigo-500/20"
+              >
+                <Download className="w-4 h-4" />
+                <span>Tải & Cập nhật ngay</span>
+              </button>
+            </>
+          )}
         </div>
       </motion.div>
     </div>

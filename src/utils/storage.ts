@@ -114,6 +114,7 @@ export interface DatabasePackage {
   materialRecipes?: ModelMaterialRecipe[];
   productionBatches?: ProductionBatch[];
   materialReimports?: MaterialReimport[];
+  materialLogs?: any[];
   settings: AppSettings;
   version: string;
   exportedAt: string;
@@ -134,6 +135,7 @@ export function exportDatabasePackage(): void {
     materialRecipes: getSavedState("xuongan_material_recipes", []),
     productionBatches: getSavedState("xuongan_production_batches", []),
     materialReimports: getSavedState("xuongan_material_reimports", []),
+    materialLogs: getSavedState("xuongan_material_logs", []),
     settings: getSavedState("xuongan_settings", { theme: 'light', currencySymbol: 'đ', exportFormat: 'xlsx' }),
     version: "1.2",
     exportedAt: new Date().toISOString()
@@ -189,6 +191,7 @@ export function importDatabasePackage(jsonContent: string): boolean {
     saveState("xuongan_material_recipes", data.materialRecipes || []);
     saveState("xuongan_production_batches", data.productionBatches || []);
     saveState("xuongan_material_reimports", data.materialReimports || []);
+    saveState("xuongan_material_logs", data.materialLogs || []);
 
     if (data.settings) {
       saveState("xuongan_settings", data.settings);

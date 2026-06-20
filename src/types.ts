@@ -198,6 +198,20 @@ export interface MaterialReimport {
   createdAt: number;
 }
 
+export interface MaterialLog {
+  id: string;
+  materialId: string;
+  materialName: string;
+  type: 'nhap' | 'xuat';
+  quantity: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  operator: string;
+  date: string;
+  note: string;
+  createdAt: number;
+}
+
 export interface UserProfile {
   id: string; // Document ID (typically user email or generated)
   email: string;
@@ -212,7 +226,7 @@ export interface UserProfile {
   lastLocationTime?: string; // Thời gian cập nhật vị trí gần nhất
 }
 
-export const CURRENT_VERSION = '1.0.22';
+export const CURRENT_VERSION = '1.0.36';
 
 export interface AppUpdateInfo {
   version: string;

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Statically imported child components/tabs to prevent hook errors and version mismatch bugs
@@ -180,6 +180,7 @@ export default function App() {
   const [materialRecipes, setMaterialRecipes] = useState<ModelMaterialRecipe[]>(() => getSavedArray("xuongan_material_recipes", []));
   const [productionBatches, setProductionBatches] = useState<ProductionBatch[]>(() => getSavedArray("xuongan_production_batches", []));
   const [materialReimports, setMaterialReimports] = useState<MaterialReimport[]>(() => getSavedArray("xuongan_material_reimports", []));
+  const [materialLogs, setMaterialLogs] = useState<any[]>(() => getSavedArray("xuongan_material_logs", []));
   const [productionSubTab, setProductionSubTab] = useState<'breakdown' | 'materials'>('breakdown');
   const [invoiceSelectedCustomerId, setInvoiceSelectedCustomerId] = useState<string>('');
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => getSavedArray("xuongan_user_profiles", []));
@@ -610,6 +611,7 @@ export default function App() {
     materialRecipes, setMaterialRecipes,
     productionBatches, setProductionBatches,
     materialReimports, setMaterialReimports,
+    materialLogs, setMaterialLogs,
     tasks, setTasks,
     userProfiles, setUserProfiles,
     settings, setSettings,
@@ -689,6 +691,10 @@ export default function App() {
           setMaterialReimports(cloudData.materialReimports);
           saveState("xuongan_material_reimports", cloudData.materialReimports);
         }
+        if (cloudData.materialLogs && cloudData.materialLogs.length > 0) {
+          setMaterialLogs(cloudData.materialLogs);
+          saveState("xuongan_material_logs", cloudData.materialLogs);
+        }
         if (cloudData.tasks && cloudData.tasks.length > 0) {
           setTasks(cloudData.tasks);
           saveState("xuongan_tasks", cloudData.tasks);
@@ -766,6 +772,7 @@ export default function App() {
         materialRecipes,
         productionBatches,
         materialReimports,
+        materialLogs,
         loginNotifications: authState.loginNotifications || [],
         tasks,
         userProfiles,
@@ -1106,6 +1113,10 @@ export default function App() {
   useEffect(() => {
     saveState("xuongan_material_reimports", materialReimports);
   }, [materialReimports]);
+
+  useEffect(() => {
+    saveState("xuongan_material_logs", materialLogs);
+  }, [materialLogs]);
 
   useEffect(() => {
     saveState("xuongan_user_profiles", userProfiles);
@@ -1597,6 +1608,37 @@ export default function App() {
       : (rawRevenue > 0 ? (rawRevenue / 1000000).toFixed(1) + "M" : "48.5M");
 
     const runningBatchesCount = isUserDbActive ? (productionBatches || []).length : ((productionBatches || []).length || 12);
+
+    // Compute low stock count on the fly
+    const lowStockModelsCount = (() => {
+      const modelImports: Record<string, number> = {};
+      (items || []).forEach(item => {
+        if (!item.mẫu) return;
+        const name = item.mẫu.trim();
+        modelImports[name] = (modelImports[name] || 0) + (item.sốLượng || 0);
+      });
+
+      const modelSales: Record<string, number> = {};
+      (bills || []).forEach(bill => {
+        (bill.items || []).forEach(bitem => {
+          if (!bitem.mẫuMã) return;
+          const name = bitem.mẫuMã.trim();
+          modelSales[name] = (modelSales[name] || 0) + (bitem.sốLượng || 0);
+        });
+      });
+
+      const allModelNames = Array.from(new Set([...Object.keys(modelImports), ...Object.keys(modelSales)]));
+      let lowCount = 0;
+      allModelNames.forEach(m => {
+        const stock = (modelImports[m] || 0) - (modelSales[m] || 0);
+        if (stock <= 15) {
+          lowCount++;
+        }
+      });
+      return lowCount;
+    })();
+
+    const lowStockMaterialsCount = (rawMaterials || []).filter(m => m.currentStock <= m.minAlertLevel).length;
 
     return (
       <div className="space-y-6 font-sans select-none" id="dashboard_home_screen">
@@ -2093,32 +2135,33 @@ export default function App() {
                   <div className="w-11 h-11 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
                     <Image className="w-5 h-5 text-white" />
                   </div>
-                  <div className="truncate min-w-0 pr-1">
+                  <div className="truncate min-w-0 pr-1 text-left">
                     <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">Thư viện ảnh</h3>
                     <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Chụp hình trực tiếp & đính kèm</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-purple-400 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
               </div>
 
               {/* Mobile/Tablet mini description line */}
-              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5">
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5 text-left">
                 Xem toàn bộ kho hình chụp sản phẩm
               </p>
 
               <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
 
               <div className="flex justify-between items-end">
-                <div>
+                <div className="text-left">
                   <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white font-mono leading-none">
-                    {items.filter(i => i.photo).length + bills.filter(b => b.photo).length} <span className="text-[10px] font-bold text-slate-400 font-sans">tấm</span>
+                    {items.filter(i => i.photo).length + (bills ? bills.filter(b => b.photo).length : 0)} <span className="text-[10px] font-bold text-slate-450 dark:text-slate-400 font-sans">tấm</span>
                   </p>
-                  <p className="text-[9.5px]/none font-extrabold text-purple-600 dark:text-purple-400 mt-1 uppercase tracker-wider text-[9px]">Hình đính kèm</p>
+                  <p className="text-[9.5px]/none font-extrabold text-purple-650 dark:text-purple-400 mt-1 uppercase tracking-wider">Hình đính kèm</p>
                 </div>
                 
                 {/* View Details Button with Icon */}
-                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-100 dark:border-purple-500/25 transition-all duration-300 group-hover:bg-purple-100 dark:group-hover:bg-purple-500/20 group-hover:border-purple-250 dark:group-hover:border-purple-500/40 text-[9px] md:text-[10px] font-black uppercase tracking-wider shrink-0">
-                  <Image className="w-3.5 h-3.5" />
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-100 dark:border-purple-500/25 transition-all duration-300 group-hover:bg-purple-100 dark:group-hover:bg-purple-500/20 group-hover:border-purple-250 dark:group-hover:border-purple-500/40 text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                  <span className="hidden sm:inline">Chi tiết</span>
+                  <Image className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
                 </div>
               </div>
             </motion.div>
@@ -3043,9 +3086,50 @@ export default function App() {
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">{authState.displayName || 'Kế toán viên'} (Admin)</span>
                       </div>
-                      <span className="text-[10px] font-bold font-mono text-slate-500 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200/20">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setIsMobileMenuOpen(false); // Close drawer
+                          try {
+                            const res = await fetch('/version.json?t=' + Date.now());
+                            if (res.ok) {
+                              const data = await res.json() as AppUpdateInfo;
+                              setUpdateInfo(data);
+                            } else {
+                              // Fallback static structure matching current version
+                              setUpdateInfo({
+                                version: CURRENT_VERSION,
+                                releaseDate: "20/06/2026",
+                                critical: false,
+                                changelog: [
+                                  "Cải tiến cơ cấu nén ảnh hóa đơn gốc giúp chạy mượt khi mạng yếu",
+                                  "Sửa lỗi đồng bộ dữ liệu ngoại tuyến (Offline) khi mất kết nối mạng bất ngờ",
+                                  "Tối ưu độ chính xác của cảm biến định vị vệ tinh GPS trên các thiết bị Android từ phiên bản 11 trở lên",
+                                  "Hiển thị bảng chi tiết dung lượng lưu trữ đệm sạch sẽ trong cài đặt xưởng"
+                                ],
+                                apkUrl: "https://app-kho-an.web.app/app-release.apk"
+                              });
+                            }
+                          } catch (e) {
+                            setUpdateInfo({
+                              version: CURRENT_VERSION,
+                              releaseDate: "20/06/2026",
+                              critical: false,
+                              changelog: [
+                                "Cải tiến cơ cấu nén ảnh hóa đơn gốc giúp chạy mượt khi mạng yếu",
+                                "Sửa lỗi đồng bộ dữ liệu ngoại tuyến (Offline) khi mất kết nối mạng bất ngờ",
+                                "Tối ưu độ chính xác của cảm biến định vị vệ tinh GPS trên các thiết bị Android từ phiên bản 11 trở lên",
+                                "Hiển thị bảng chi tiết dung lượng lưu trữ đệm sạch sẽ trong cài đặt xưởng"
+                              ],
+                              apkUrl: "https://app-kho-an.web.app/app-release.apk"
+                            });
+                          }
+                        }}
+                        className="text-[10px] font-bold font-mono text-slate-500 bg-slate-200/50 hover:bg-slate-300/60 dark:bg-slate-800 dark:hover:bg-slate-700/80 px-2 py-0.5 rounded-full border border-slate-200/20 cursor-pointer transition active:scale-95 leading-normal"
+                        title="Xem chi tiết phiên bản mới nhất"
+                      >
                         v{localStorage.getItem('capgo_active_version') || CURRENT_VERSION}
-                      </span>
+                      </button>
                     </div>
                     <button
                       onClick={() => {
@@ -3070,160 +3154,232 @@ export default function App() {
             
             {/* Display page logs / tab view */}
             <div className={activeTab === 'home' ? '' : 'hidden'}>
-              {renderHomeContent()}
+              <motion.div
+                animate={activeTab === 'home' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                {renderHomeContent()}
+              </motion.div>
             </div>
             
             <div className={activeTab === 'import' ? '' : 'hidden'}>
-              <Suspense fallback={<TabLoadingFallback />}>
-                <GoodsImportTab
-                  items={items}
-                  setItems={setItems}
-                  laborPayments={laborPayments}
-                  setLaborPayments={setLaborPayments}
-                  tpDtShippings={tpDtShippings || []}
-                  setTpDtShippings={setTpDtShippings}
-                  settings={settings}
-                  setSettings={setSettings}
-                  onImportBackup={handleImportBackup}
-                  selectedWeekFilter={selectedWeekFilter}
-                  setSelectedWeekFilter={setSelectedWeekFilter}
-                  userRole={userRole}
-                  autoExpandForm={autoExpandImportForm}
-                  onAutoExpandFormReset={() => setAutoExpandImportForm(false)}
-                />
-              </Suspense>
+              <motion.div
+                animate={activeTab === 'import' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <GoodsImportTab
+                    items={items}
+                    setItems={setItems}
+                    laborPayments={laborPayments}
+                    setLaborPayments={setLaborPayments}
+                    tpDtShippings={tpDtShippings || []}
+                    setTpDtShippings={setTpDtShippings}
+                    settings={settings}
+                    setSettings={setSettings}
+                    onImportBackup={handleImportBackup}
+                    selectedWeekFilter={selectedWeekFilter}
+                    setSelectedWeekFilter={setSelectedWeekFilter}
+                    userRole={userRole}
+                    autoExpandForm={autoExpandImportForm}
+                    onAutoExpandFormReset={() => setAutoExpandImportForm(false)}
+                  />
+                </Suspense>
+              </motion.div>
             </div>
 
             <div className={activeTab === 'invoices' ? '' : 'hidden'}>
-              <Suspense fallback={<TabLoadingFallback />}>
-                <InvoicesTab
-                  customers={customers}
-                  setCustomers={setCustomers}
-                  bills={bills}
-                  setBills={setBills}
-                  payments={payments}
-                  setPayments={setPayments}
-                  userRole={userRole}
-                  resolvedTheme={resolvedTheme}
-                  autoOpenCreateBill={autoOpenCreateBill}
-                  onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
-                  selectedCustomerId={invoiceSelectedCustomerId}
-                  setSelectedCustomerId={setInvoiceSelectedCustomerId}
-                  items={items}
-                />
-              </Suspense>
+              <motion.div
+                animate={activeTab === 'invoices' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <InvoicesTab
+                    customers={customers}
+                    setCustomers={setCustomers}
+                    bills={bills}
+                    setBills={setBills}
+                    payments={payments}
+                    setPayments={setPayments}
+                    userRole={userRole}
+                    resolvedTheme={resolvedTheme}
+                    autoOpenCreateBill={autoOpenCreateBill}
+                    onAutoOpenCreateBillReset={() => setAutoOpenCreateBill(false)}
+                    selectedCustomerId={invoiceSelectedCustomerId}
+                    setSelectedCustomerId={setInvoiceSelectedCustomerId}
+                    items={items}
+                  />
+                </Suspense>
+              </motion.div>
             </div>
 
             <div className={activeTab === 'production' ? '' : 'hidden'}>
-              <Suspense fallback={<TabLoadingFallback />}>
-                <ProductionTab
-                  operationBreakdowns={operationBreakdowns}
-                  setOperationBreakdowns={setOperationBreakdowns}
-                  workers={workers}
-                  setWorkers={setWorkers}
-                  tasks={tasks}
-                  setTasks={setTasks}
-                  workerJobs={workerJobs}
-                  setWorkerJobs={setWorkerJobs}
-                  rawMaterials={rawMaterials}
-                  setRawMaterials={setRawMaterials}
-                  materialRecipes={materialRecipes}
-                  setMaterialRecipes={setMaterialRecipes}
-                  productionBatches={productionBatches}
-                  setProductionBatches={setProductionBatches}
-                  materialReimports={materialReimports}
-                  setMaterialReimports={setMaterialReimports}
-                  laborPayments={laborPayments}
-                  setLaborPayments={setLaborPayments}
-                  settings={settings}
-                  userRole={userRole}
-                  initialSubTab={productionSubTab}
-                  onSubTabChange={setProductionSubTab}
-                />
-              </Suspense>
+              <motion.div
+                animate={activeTab === 'production' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <ProductionTab
+                    operationBreakdowns={operationBreakdowns}
+                    setOperationBreakdowns={setOperationBreakdowns}
+                    workers={workers}
+                    setWorkers={setWorkers}
+                    tasks={tasks}
+                    setTasks={setTasks}
+                    workerJobs={workerJobs}
+                    setWorkerJobs={setWorkerJobs}
+                    rawMaterials={rawMaterials}
+                    setRawMaterials={setRawMaterials}
+                    materialRecipes={materialRecipes}
+                    setMaterialRecipes={setMaterialRecipes}
+                    productionBatches={productionBatches}
+                    setProductionBatches={setProductionBatches}
+                    materialReimports={materialReimports}
+                    setMaterialReimports={setMaterialReimports}
+                    materialLogs={materialLogs}
+                    setMaterialLogs={setMaterialLogs}
+                    authState={authState}
+                    laborPayments={laborPayments}
+                    setLaborPayments={setLaborPayments}
+                    settings={settings}
+                    userRole={userRole}
+                    initialSubTab={productionSubTab}
+                    onSubTabChange={setProductionSubTab}
+                  />
+                </Suspense>
+              </motion.div>
             </div>
 
             <div className={activeTab === 'profit_estimator' ? '' : 'hidden'}>
-              <ProfitEstimatorTab
-                materialRecipes={materialRecipes}
-                rawMaterials={rawMaterials}
-                operationBreakdowns={operationBreakdowns}
-                fastEditMode={fastEditMode}
-                defaultLaborCost={quickDefaultLabor}
-                defaultProfitMarginPercent={quickDefaultMargin}
-              />
+              <motion.div
+                animate={activeTab === 'profit_estimator' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <ProfitEstimatorTab
+                    materialRecipes={materialRecipes}
+                    rawMaterials={rawMaterials}
+                    operationBreakdowns={operationBreakdowns}
+                    fastEditMode={fastEditMode}
+                    defaultLaborCost={quickDefaultLabor}
+                    defaultProfitMarginPercent={quickDefaultMargin}
+                  />
+                </Suspense>
+              </motion.div>
             </div>
 
             <div className={activeTab === 'inventory' ? '' : 'hidden'}>
-              <div className="bg-white dark:bg-[#0c101d] rounded-2xl border border-slate-200/50 dark:border-slate-800 p-6 shadow-xs max-w-7xl mx-auto">
-                <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800/80 mb-6 text-left">
-                  <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450">
-                    <Boxes className="w-5 h-5" />
+              <motion.div
+                animate={activeTab === 'inventory' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <div className="bg-white dark:bg-[#0c101d] rounded-2xl border border-slate-200/50 dark:border-slate-800 p-6 shadow-xs max-w-7xl mx-auto">
+                  <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800/80 mb-6 text-left">
+                    <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450">
+                      <Boxes className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h1 className="text-lg font-black text-slate-850 dark:text-slate-200 uppercase tracking-wider font-mono">
+                        Kho Hàng & Thành Phẩm
+                      </h1>
+                      <p className="text-[11px] text-slate-455 dark:text-slate-400 mt-0.5 font-sans">
+                        Tự động kiểm đếm, đối soát hàng hoá nhập xuất chi tiết theo thời gian thực.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h1 className="text-lg font-black text-slate-850 dark:text-slate-200 uppercase tracking-wider font-mono">
-                      Kho Hàng & Thành Phẩm
-                    </h1>
-                    <p className="text-[11px] text-slate-455 dark:text-slate-400 mt-0.5 font-sans">
-                      Tự động kiểm đếm, đối soát hàng hoá nhập xuất chi tiết theo thời gian thực.
-                    </p>
-                  </div>
+                  <Suspense fallback={<TabLoadingFallback />}>
+                    <ReportInventoryDetail
+                      items={items}
+                      bills={bills}
+                      customers={customers}
+                      setActiveTab={setActiveTab}
+                    />
+                  </Suspense>
                 </div>
-                <ReportInventoryDetail
-                  items={items}
-                  bills={bills}
-                  customers={customers}
-                  setActiveTab={setActiveTab}
-                />
-              </div>
+              </motion.div>
             </div>
 
             <div className={activeTab === 'report' ? '' : 'hidden'}>
-              <ReportTab
-                items={items}
-                bills={bills}
-                productionBatches={productionBatches}
-                workers={workers}
-                workerJobs={workerJobs}
-                setActiveTab={setActiveTab}
-                payments={payments}
-                laborPayments={laborPayments}
-                customers={customers}
-              />
+              <motion.div
+                animate={activeTab === 'report' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <ReportTab
+                    items={items}
+                    bills={bills}
+                    productionBatches={productionBatches}
+                    workers={workers}
+                    workerJobs={workerJobs}
+                    setActiveTab={setActiveTab}
+                    payments={payments}
+                    laborPayments={laborPayments}
+                    customers={customers}
+                  />
+                </Suspense>
+              </motion.div>
             </div>
 
             <div className={activeTab === 'settings' ? '' : 'hidden'}>
-              <SettingsTab
-                settings={settings}
-                setSettings={setSettings}
-                exportDatabasePackage={exportDatabasePackage}
-                onImportBackup={handleImportBackup}
-                items={items}
-                bills={bills}
-                customers={customers}
-                syncStatus={syncStatus}
-                lastSyncTime={lastSyncTime}
-                handleCloudPull={handleCloudPull}
-                handleCloudPush={handleCloudPush}
-                userRole={userRole}
-                userProfiles={userProfiles}
-                setUserProfiles={setUserProfiles}
-              />
+              <motion.div
+                animate={activeTab === 'settings' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <SettingsTab
+                    settings={settings}
+                    setSettings={setSettings}
+                    exportDatabasePackage={exportDatabasePackage}
+                    onImportBackup={handleImportBackup}
+                    items={items}
+                    bills={bills}
+                    customers={customers}
+                    syncStatus={syncStatus}
+                    lastSyncTime={lastSyncTime}
+                    handleCloudPull={handleCloudPull}
+                    handleCloudPush={handleCloudPush}
+                    userRole={userRole}
+                    userProfiles={userProfiles}
+                    setUserProfiles={setUserProfiles}
+                  />
+                </Suspense>
+              </motion.div>
             </div>
 
             <div className={activeTab === 'gallery' ? '' : 'hidden'}>
-              <GalleryTab
-                items={items}
-                setItems={setItems}
-                bills={bills}
-                setBills={setBills}
-                customers={customers}
-                setActiveTab={setActiveTab}
-                resolvedTheme={resolvedTheme}
-              />
+              <motion.div
+                animate={activeTab === 'gallery' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <GalleryTab
+                    items={items}
+                    setItems={setItems}
+                    bills={bills}
+                    setBills={setBills}
+                    customers={customers}
+                    setActiveTab={setActiveTab}
+                    resolvedTheme={resolvedTheme}
+                  />
+                </Suspense>
+              </motion.div>
             </div>
 
             <div className={activeTab === 'notifications' ? 'space-y-4 max-w-2xl mx-auto font-sans pb-12' : 'hidden'}>
+              <motion.div
+                animate={activeTab === 'notifications' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
                   {/* Title & Selection controls in Card */}
                   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -3515,7 +3671,8 @@ export default function App() {
                       ))
                     )}
                   </div>
-                </div>
+                </motion.div>
+              </div>
 
             {/* Floating stats is now placed inside ReportTab as a dedicated tab icon button */}
 

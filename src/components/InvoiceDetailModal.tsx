@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Image, X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
@@ -87,9 +87,10 @@ export default function InvoiceDetailModal({
               onClick={handleCapturePastInvoice}
               disabled={isExportingModalImage}
               className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 text-white font-bold text-[11px] py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition select-none"
+              title="Lưu hình ảnh hóa đơn về máy"
             >
-              <Image className="w-3.5 h-3.5" />
-              <span>{isExportingModalImage ? "Đang chụp..." : "Chụp gửi khách"}</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>{isExportingModalImage ? "Đang lưu..." : "Lưu hình về máy"}</span>
             </button>
             <button
               onClick={onClose}

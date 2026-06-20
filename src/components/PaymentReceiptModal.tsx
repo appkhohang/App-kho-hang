@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Image, X, Printer, CheckCircle2 } from 'lucide-react';
+import { Download, X, Printer, CheckCircle2 } from 'lucide-react';
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
@@ -69,9 +69,10 @@ export default function PaymentReceiptModal({
               onClick={handleCaptureReceipt}
               disabled={isExporting}
               className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 text-white font-extrabold text-[11px] py-2 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition select-none shadow"
+              title="Lưu hình ảnh biên nhận về máy"
             >
-              <Image className="w-4 h-4" />
-              <span>{isExporting ? "Đang xuất..." : "Chụp gửi khách"}</span>
+              <Download className="w-4 h-4" />
+              <span>{isExporting ? "Đang lưu..." : "Lưu hình về máy"}</span>
             </button>
             <button
               onClick={onClose}

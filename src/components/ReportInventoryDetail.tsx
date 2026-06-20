@@ -27,7 +27,11 @@ import {
   Image as ImageIcon,
   ShoppingCart,
   Factory,
-  FileText
+  FileText,
+  Sparkles,
+  TrendingUp,
+  ChevronUp,
+  AlertTriangle
 } from 'lucide-react';
 import { ImportItem, Bill, Customer } from '../types';
 
@@ -169,6 +173,7 @@ export default function ReportInventoryDetail({
   });
 
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isForecastOpen, setIsForecastOpen] = useState(true);
   const [newRuleTarget, setNewRuleTarget] = useState('');
   const [newRuleSourcesInput, setNewRuleSourcesInput] = useState('');
 
@@ -426,6 +431,119 @@ export default function ReportInventoryDetail({
     });
   }, [allModels, items, bills, manualAdjustments, getUnifiedName]);
 
+  // Compute stock low indicators & fabric reorder estimations
+  const forecastingSummary = useMemo(() => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+
+    // Sum sales within the last 30 days per model
+    const soldInLast30ModelMap: Record<string, number> = {};
+    bills.forEach(bill => {
+      if (!bill.date) return;
+      const billDate = new Date(bill.date);
+      if (billDate >= thirtyDaysAgo) {
+        (bill.items || []).forEach(bItem => {
+          if (!bItem.mẫuMã) return;
+          const uName = getUnifiedName(bItem.mẫuMã);
+          soldInLast30ModelMap[uName] = (soldInLast30ModelMap[uName] || 0) + (bItem.sốLượng || 0);
+        });
+      }
+    });
+
+    // Load recipes from local storage to calculate fabric reorders
+    let recipes: any[] = [];
+    try {
+      const savedRecipes = localStorage.getItem('xuongan_material_recipes');
+      if (savedRecipes) {
+        recipes = JSON.parse(savedRecipes);
+      }
+    } catch (e) {
+      console.error("Failed to load recipes in Inventory forecast widget", e);
+    }
+
+    const alerts: Array<{
+      modelName: string;
+      sku: string;
+      currentStock: number;
+      salesRate30Days: number; // units/day
+      daysRemaining: number;
+      reorderRecommendation: number;
+      fabricNeededText?: string;
+      severity: 'high' | 'medium' | 'safe';
+    }> = [];
+
+    inventoryList.forEach(item => {
+      const uName = getUnifiedName(item.modelName);
+      const sold30 = soldInLast30ModelMap[uName] || 0;
+      const salesRate = sold30 / 30; // Daily default rate
+
+      let daysRemaining = Infinity;
+      if (salesRate > 0) {
+        daysRemaining = item.currentStock / salesRate;
+      }
+
+      // Check low stock condition (e.g. stock is 0, or daysRemaining < 14)
+      const thresholdSet = lowStockThresholds[item.modelName] || 15; // default 15 items
+      const isLowStock = item.currentStock <= thresholdSet || (salesRate > 0 && daysRemaining < 14);
+
+      if (isLowStock) {
+        const severity = (item.currentStock <= 5 || daysRemaining < 7) ? 'high' : 'medium';
+        
+        // Recommended Order Quantity to cover 30 days of sales
+        const targetCoverage = Math.ceil(salesRate * 30);
+        const diff = targetCoverage - item.currentStock;
+        const reorderRecommendation = Math.max(50, diff > 0 ? Math.ceil(diff / 10) * 10 : 50);
+
+        // Calculate fabric needs if a recipe exists
+        const matchedRecipe = recipes.find(r => r.modelName && getUnifiedName(r.modelName) === uName);
+        let fabricNeededText = '';
+
+        if (matchedRecipe && matchedRecipe.items && matchedRecipe.items.length > 0) {
+          const parts = matchedRecipe.items.map((ing: any) => {
+            const rawNeeded = parseFloat((ing.quantity * reorderRecommendation).toFixed(1));
+            let matName = ing.materialId;
+            try {
+              const savedMats = localStorage.getItem('xuongan_raw_materials');
+              if (savedMats) {
+                const parsedMats = JSON.parse(savedMats);
+                const matchedMat = parsedMats.find((m: any) => m.id === ing.materialId || m.name === ing.materialId);
+                if (matchedMat) matName = matchedMat.name;
+              }
+            } catch(ex) {}
+            return `${rawNeeded}m/cuộn ${matName}`;
+          });
+          fabricNeededText = "Đặt dệt: " + parts.join(", ");
+        } else {
+          const fallbackFabric = parseFloat((1.5 * reorderRecommendation).toFixed(1));
+          fabricNeededText = `Bổ sung khoảng ${fallbackFabric} mét vải (định mức: 1.5m/bộ)`;
+        }
+
+        alerts.push({
+          modelName: item.modelName,
+          sku: item.sku,
+          currentStock: item.currentStock,
+          salesRate30Days: parseFloat(salesRate.toFixed(2)),
+          daysRemaining: daysRemaining === Infinity ? 999 : parseFloat(daysRemaining.toFixed(1)),
+          reorderRecommendation,
+          fabricNeededText,
+          severity
+        });
+      }
+    });
+
+    // Save warnings to local storage so other components (e.g. Home tab) can access them instantly
+    try {
+      localStorage.setItem('xuongan_inventory_forecast_alerts', JSON.stringify(alerts));
+    } catch (e) {}
+
+    return {
+      alerts: alerts.sort((a, b) => b.reorderRecommendation - a.reorderRecommendation),
+      totalAlerts: alerts.length,
+      highSeverityCount: alerts.filter(a => a.severity === 'high').length
+    };
+  }, [inventoryList, bills, getUnifiedName, lowStockThresholds]);
+
   // Synchronize editing variables whenever selectedModelForTrace opens
   useEffect(() => {
     if (selectedModelForTrace) {
@@ -678,14 +796,8 @@ export default function ReportInventoryDetail({
               placeholder="Tìm tên, mã SKU, ..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-sm pl-9.5 pr-10 py-2 bg-slate-100 dark:bg-slate-900 border border-transparent dark:border-slate-800 focus:border-emerald-500 focus:bg-white dark:focus:bg-[#0c101d] rounded-xl outline-none transition font-medium text-slate-800 dark:text-white"
+              className="w-full text-sm pl-9.5 pr-4 py-2 bg-slate-100 dark:bg-slate-900 border border-transparent dark:border-slate-800 focus:border-emerald-500 focus:bg-white dark:focus:bg-[#0c101d] rounded-xl outline-none transition font-medium text-slate-800 dark:text-white"
             />
-            {/* Barcode / Scan Icon inside right of search bar */}
-            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 cursor-pointer hover:text-slate-600">
-              <svg className="w-5 h-5 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 7V4h3M17 4h3v3M4 17v3h3M20 17v3h-3M8 8V16M11 9v6M13 8v8M16 9v6" />
-              </svg>
-            </div>
           </div>
 
           <button
@@ -821,6 +933,119 @@ export default function ReportInventoryDetail({
           <span className="block text-slate-400 text-[10px] uppercase font-bold mb-0.5">Lãi dự phóng</span>
           <span className="text-indigo-600 dark:text-indigo-400 font-extrabold font-mono text-[13px]">{summaryStats.totalProfit.toLocaleString()}đ</span>
         </div>
+      </div>
+
+      {/* 4.2. MODEL FORECAST & FABRIC PROCUREMENT PLANNING */}
+      <div className="bg-white dark:bg-[#0f1224] border border-slate-200 dark:border-slate-800/80 rounded-xl p-4.5 mb-3 select-none text-left shadow-xs">
+        <div className="flex items-center justify-between">
+          <div onClick={() => setIsForecastOpen(!isForecastOpen)} className="flex items-center gap-2 cursor-pointer select-none">
+            <span className="p-1.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400">
+              <Sparkles className="w-4 h-4 animate-bounce" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 tracking-tight">Mô hình Dự báo tồn kho & Đặt vải thêm</h4>
+                {forecastingSummary.totalAlerts > 0 && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-md bg-rose-500 text-white font-extrabold animate-pulse">
+                    ⚠️ {forecastingSummary.totalAlerts} mẫu nguy cấp
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400 leading-normal">Tự động ước lượng định mức vải theo tốc độ bán hàng của xưởng</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsForecastOpen(!isForecastOpen)}
+            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-pointer"
+          >
+            {isForecastOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {isForecastOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-805/40 mt-3.5 space-y-3">
+                {forecastingSummary.totalAlerts === 0 ? (
+                  <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/15 text-center">
+                    <p className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 leading-relaxed">
+                      ✓ Không có mẫu hàng nào đang ở mức báo động!
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">Lượng tồn và tốc độ bán ổn định phủ sóng trên 14 ngày làm việc.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-slate-500 leading-relaxed font-sans">
+                      Dựa trên lịch sử xuất hóa đơn <b>30 ngày qua</b>, xưởng có <b>{forecastingSummary.totalAlerts} mẫu</b> cần bổ sung vải dệt gấp. Hệ thống khuyến nghị đặt dệt bù lượng tối thiểu để đảm bảo sản xuất liên tục:
+                    </p>
+
+                    <div className="max-h-[280px] overflow-y-auto space-y-2 pr-1.5 scrollbar-thin scrollbar-thumb-slate-350 scrollbar-track-transparent">
+                      {forecastingSummary.alerts.map((alt) => (
+                        <div
+                          key={alt.sku}
+                          className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all ${
+                            alt.severity === 'high'
+                              ? 'bg-rose-500/5 border-rose-500/20 hover:bg-rose-500/10'
+                              : 'bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/10'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            {/* SKU tag and model name */}
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200/50 dark:bg-slate-800 text-slate-500">
+                                {alt.sku}
+                              </span>
+                              <span className="text-xs font-black text-slate-800 dark:text-slate-200">
+                                {alt.modelName}
+                              </span>
+                              {alt.currentStock === 0 ? (
+                                <span className="text-[8px] font-black px-1 rounded-sm bg-rose-600 text-white leading-tight uppercase font-mono">
+                                  Hết hàng
+                                </span>
+                              ) : (
+                                <span className="text-[8px] font-black px-1 rounded-sm bg-amber-500 text-slate-900 leading-tight font-mono">
+                                  Runway: {alt.daysRemaining} ngày
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Velocity statistics */}
+                            <div className="flex items-center gap-3 text-[10px] text-slate-450 dark:text-slate-400 font-mono">
+                              <span>Tồn hiện tại: <b className="font-bold text-slate-650 dark:text-slate-300">{alt.currentStock} bộ</b></span>
+                              <span>•</span>
+                              <span>Tốc độ bán: <b className="font-bold text-slate-650 dark:text-slate-300">{alt.salesRate30Days} bộ/ngày</b></span>
+                            </div>
+
+                            {/* Raw materials recommendation summary */}
+                            {alt.fabricNeededText && (
+                              <div className="text-[9.5px] bg-[#0c101d]/15 dark:bg-[#0c101d]/55 p-1.5 rounded-lg border border-indigo-500/5 text-indigo-755 dark:text-indigo-300 font-bold flex items-center gap-1">
+                                <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+                                <span>{alt.fabricNeededText}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Order Action Button recommendation code widget */}
+                          <div className="shrink-0 text-left sm:text-right">
+                            <span className="block text-[9.5px] font-bold text-slate-400">Đặt thêm tối thiểu</span>
+                            <span className="text-base font-black font-mono text-indigo-600 dark:text-indigo-400">
+                              +{alt.reorderRecommendation} <span className="text-[10px] font-sans font-medium text-slate-450">bộ</span>
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* 4.5. SMART GROUPING & UNIFICATION CONFIGURATION (Chế độ gộp thông minh & Cấu hình đồng nhất) */}
