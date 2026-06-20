@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, UserPlus, Receipt, DollarSign, Image, Save, Plus, 
   Trash2, Calendar, ChevronRight, Search, X, ArrowLeft, 
-  TrendingUp, Activity, Download, Camera, Edit, Tag
+  TrendingUp, Activity, Download, Camera, Edit, Tag, Share2
 } from 'lucide-react';
 import { Customer, Bill, BillItem, PaymentRecord, ImportItem } from '../types';
 import { getCurrentDateStr } from '../utils/dateUtils';
@@ -194,6 +194,7 @@ export default function InvoicesTab({
   const [modalHasPaid, setModalHasPaid] = useState<boolean>(false);
   const [invoicePhoto, setInvoicePhoto] = useState<string | null>(null);
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
+  const [viewingPhotoBill, setViewingPhotoBill] = useState<Bill | null>(null);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
 
   const [focusedItemIdx, setFocusedItemIdx] = useState<number | null>(null);
@@ -1920,6 +1921,7 @@ export default function InvoicesTab({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setViewingPhotoUrl(bill.photo || null);
+                                setViewingPhotoBill(bill);
                               }}
                               className="px-1.5 py-0.5 rounded text-[7.5px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-550/10 hover:bg-emerald-500/15 border border-emerald-500/15 hover:border-emerald-500/35 uppercase font-mono flex items-center gap-1 cursor-pointer transition select-none"
                               title="Xem ảnh chụp đính kèm của hóa đơn sỉ này"
@@ -2278,35 +2280,154 @@ export default function InvoicesTab({
       {/* Lightbox photo viewer for Invoice */}
       <AnimatePresence>
         {viewingPhotoUrl && (
-          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-            <div className="absolute inset-0" onClick={() => setViewingPhotoUrl(null)} />
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-3 sm:p-4 bg-slate-950/95 backdrop-blur-md overflow-y-auto">
+            <div className="absolute inset-0" onClick={() => {
+              setViewingPhotoUrl(null);
+              setViewingPhotoBill(null);
+            }} />
+            
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-2xl w-full p-5 rounded-2xl shadow-2xl z-10 flex flex-col border relative uppercase font-mono bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27]"
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="max-w-lg w-full bg-white dark:bg-[#0e1714] border border-slate-200 dark:border-[#1e2f2a] rounded-3xl shadow-2xl z-10 flex flex-col relative overflow-hidden font-sans mx-auto"
             >
-              <button
-                type="button"
-                onClick={() => setViewingPhotoUrl(null)}
-                className="absolute top-4 right-4 p-1.5 rounded-full transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
-                title="Đóng xem ảnh"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <div className="pb-3 border-b border-slate-105 dark:border-slate-800/60 w-full flex items-center gap-2">
-                <Camera className="w-4 h-4 text-emerald-555" />
-                <span className="text-[11px] font-bold tracking-wider text-slate-800 dark:text-white">Ảnh chụp mặt hàng sỉ / Biên nhận sỉ đính kèm</span>
+              {/* Header Title with Close */}
+              <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-[#1e2f2a]/60 bg-slate-50/50 dark:bg-[#0b1210]/50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0">
+                    <Camera className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">Chi Tiết Ảnh Hóa Đơn</h3>
+                    <p className="text-[14px] font-extrabold text-slate-800 dark:text-white flex items-center gap-1.5 mt-0.5">
+                      <span>Số: </span>
+                      <span className="font-mono text-indigo-600 dark:text-indigo-400 font-extrabold bg-indigo-500/10 dark:bg-indigo-500/20 px-2 py-0.5 rounded text-xs select-all">
+                        {viewingPhotoBill?.billNumber || 'Hóa đơn chưa đánh số'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewingPhotoUrl(null);
+                    setViewingPhotoBill(null);
+                  }}
+                  className="w-9 h-9 flex items-center justify-center rounded-full transition cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800/80 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white shrink-0"
+                  title="Đóng"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Invoice Metadata and details */}
+              <div className="px-4 sm:px-5 py-3.5 bg-slate-50/30 dark:bg-[#0b1210]/20 border-b border-slate-100 dark:border-[#1e2f2a]/40 grid grid-cols-2 gap-3 text-xs">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-tight">Khách sỉ nhận bill</span>
+                  <span className="font-extrabold text-slate-700 dark:text-slate-350 block truncate">
+                    {customers.find(c => c.id === viewingPhotoBill?.customerId)?.name || "Khách hàng mua sỉ"}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-tight">Ngày lập hóa đơn</span>
+                  <span className="font-extrabold text-slate-700 dark:text-slate-350 block font-mono">
+                    {viewingPhotoBill?.date || "Chưa ghi ngày"}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-tight">Thành tiền hàng</span>
+                  <span className="font-black text-rose-500 block">
+                    {(viewingPhotoBill?.subtotal || 0).toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-tight">Trạng thái số sách</span>
+                  <span className="block mt-0.5">
+                    {((viewingPhotoBill?.grandTotal || 0) > 0) ? (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-black text-amber-600 bg-amber-500/10 border border-amber-500/20 uppercase font-mono tracking-wider">CÒN NỢ</span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-black text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 uppercase font-mono tracking-wider">ĐÃ TRẢ ĐỦ</span>
+                    )}
+                  </span>
+                </div>
               </div>
               
-              <div className="mt-4 w-full aspect-[4/3] max-h-[60vh] bg-black/5 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100 dark:border-slate-805/40">
-                <LazyImage
-                  src={viewingPhotoUrl || ''}
-                  alt="Ảnh phóng to hoá đơn"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-contain"
-                />
+              {/* Image Preview Window (Interactive with referrerPolicy & zoomed responsive content) */}
+              <div className="p-4 bg-slate-900 flex flex-col items-center justify-center relative group min-h-[250px]">
+                <div className="w-full max-h-[50vh] sm:max-h-[55vh] flex items-center justify-center overflow-auto rounded-xl">
+                  <img
+                    src={viewingPhotoUrl || ''}
+                    alt="Ảnh phóng to hóa đơn sỉ"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-auto object-contain rounded-lg max-h-[50vh] transition-transform duration-300 group-hover:scale-[1.02]"
+                  />
+                </div>
+                
+                {/* Long-press instruction badge */}
+                <div className="mt-3.5 px-3 py-1.5 bg-slate-950/80 rounded-full border border-slate-800 text-center max-w-[90%] pointer-events-none">
+                  <p className="text-[10px] text-slate-300 font-semibold leading-tight">
+                    💡 Mẹo di động: Nhấn & Giữ ngón tay lên ảnh để hiển thị menu lưu ảnh gốc của điện thoại.
+                  </p>
+                </div>
+              </div>
+
+              {/* Mobile Action buttons */}
+              <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-[#1e2f2a]/60 bg-slate-50/50 dark:bg-[#0b1210]/50 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!viewingPhotoUrl) return;
+                    const link = document.createElement('a');
+                    link.href = viewingPhotoUrl;
+                    const docNum = viewingPhotoBill?.billNumber ? viewingPhotoBill.billNumber.replace(/[^a-zA-Z0-9]/g, '_') : 'BIEN_NHAN';
+                    link.download = `HOA_DON_${docNum}_${viewingPhotoBill?.date || ''}.jpg`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-2xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-600/10 hover:shadow-lg hover:ring-2 hover:ring-indigo-500/20"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Tải ảnh về máy</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!viewingPhotoUrl) return;
+                    try {
+                      if (navigator.share) {
+                        const res = await fetch(viewingPhotoUrl);
+                        const blob = await res.blob();
+                        const file = new File([blob], `hoa_don_${viewingPhotoBill?.billNumber || 'bill'}.jpg`, { type: 'image/jpeg' });
+                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                          await navigator.share({
+                            files: [file],
+                            title: `Hóa đơn ${viewingPhotoBill?.billNumber || 'mới'}`,
+                            text: `Ảnh chụp hóa đơn số ${viewingPhotoBill?.billNumber || ''} - Ngày lập ${viewingPhotoBill?.date || ''}`
+                          });
+                        } else {
+                          await navigator.share({
+                            title: `Hóa đơn số ${viewingPhotoBill?.billNumber || ''}`,
+                            text: `Hóa đơn sỉ trị giá ${(viewingPhotoBill?.subtotal || 0).toLocaleString()} đ - Ngày ${viewingPhotoBill?.date || ''}`,
+                            url: window.location.href
+                          });
+                        }
+                      } else {
+                        alert("Không hỗ trợ Chia Sẻ hệ thống trên trình duyệt này. Hãy nhấn giữ im lên ảnh để sử dụng công cụ Chia Sẻ sẵn có!");
+                      }
+                    } catch (e) {
+                      alert("Không thể mở trình chia sẻ trên thiết bị này. Bạn có thể nhấn giữ ảnh để Lưu hoặc gửi nhanh chóng!");
+                    }
+                  }}
+                  className="py-3 px-4 bg-slate-200 dark:bg-slate-800 hover:bg-slate-250 dark:hover:bg-slate-755 active:scale-98 text-slate-755 dark:text-slate-200 rounded-2xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Chia sẻ</span>
+                </button>
               </div>
             </motion.div>
           </div>
