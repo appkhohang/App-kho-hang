@@ -35,4 +35,15 @@ jobs:
           fi
           VERSION=$(node -p "require('./package.json').version")
           echo "Uploading bundle version $VERSION to Capgo..."
-          npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -c production -b "$VERSION" com.xuongan.quanlykho
+          EXIT_CODE=0
+          OUTPUT=$(npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -c production -b "$VERSION" com.xuongan.quanlykho 2>&1) || EXIT_CODE=$?
+          echo "$OUTPUT"
+          if [ $EXIT_CODE -ne 0 ]; then
+            if echo "$OUTPUT" | grep -q "already exists"; then
+              echo "::warning::Version $VERSION already exists on Capgo Cloud. Skipping upload as this bundle has already been successfully deployed."
+              exit 0
+            else
+              echo "::error::Capgo bundle upload failed with exit code $EXIT_CODE."
+              exit $EXIT_CODE
+            fi
+          fi
