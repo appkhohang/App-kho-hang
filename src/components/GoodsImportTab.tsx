@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera, ChevronRight, Info, Calendar, CheckSquare } from 'lucide-react';
 import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
@@ -13,8 +13,8 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 import { LazyImage } from './LazyImage';
 import * as XLSX from 'xlsx';
 
-const LaborPaymentReceiptModal = lazy(() => import('./LaborPaymentReceiptModal'));
-const CameraCapture = lazy(() => import('./CameraCapture'));
+import LaborPaymentReceiptModal from './LaborPaymentReceiptModal';
+import CameraCapture from './CameraCapture';
 
 interface GoodsImportTabProps {
   items: ImportItem[];

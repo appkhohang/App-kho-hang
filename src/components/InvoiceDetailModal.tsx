@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Image, X } from 'lucide-react';
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
-import html2canvas from 'html2canvas';
+import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
 
 interface InvoiceDetailModalProps {
   bill: Bill;
@@ -50,7 +50,7 @@ export default function InvoiceDetailModal({
     setIsExportingModalImage(true);
     await new Promise((resolve) => setTimeout(resolve, 300));
     try {
-      const canvasObj = await html2canvas(detailInvoicePaperRef.current, {
+      const canvasObj = await safeHtml2Canvas(detailInvoicePaperRef.current, {
         scale: 3, // Ultra crisp resolution
         useCORS: true,
         backgroundColor: '#ffffff',

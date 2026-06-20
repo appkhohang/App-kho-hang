@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Image as ImageIcon, X, Printer, CheckCircle2 } from 'lucide-react';
 import { ImportItem, LaborPayment } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
-import html2canvas from 'html2canvas';
+import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
 
 interface LaborPaymentReceiptModalProps {
   payment: LaborPayment;
@@ -44,7 +44,7 @@ export default function LaborPaymentReceiptModal({
     // Short wait to allow modal layout to form cleanly
     await new Promise((resolve) => setTimeout(resolve, 300));
     try {
-      const canvasObj = await html2canvas(paperRef.current, {
+      const canvasObj = await safeHtml2Canvas(paperRef.current, {
         scale: 3, // Ultra crisp HD capture for sharing
         useCORS: true,
         backgroundColor: '#ffffff',

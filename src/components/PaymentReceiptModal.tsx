@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Image, X, Printer, CheckCircle2 } from 'lucide-react';
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
-import html2canvas from 'html2canvas';
+import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
 
 interface PaymentReceiptModalProps {
   payment: PaymentRecord;
@@ -31,7 +31,7 @@ export default function PaymentReceiptModal({
     // Brief timeout to ensure animations are settled and state is stable
     await new Promise((resolve) => setTimeout(resolve, 350));
     try {
-      const canvasObj = await html2canvas(paperRef.current, {
+      const canvasObj = await safeHtml2Canvas(paperRef.current, {
         scale: 3, // Premium ultra-high definition render scale
         useCORS: true,
         backgroundColor: '#ffffff',

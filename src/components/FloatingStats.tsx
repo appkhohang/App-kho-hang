@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, X, Move, Sparkles, TrendingUp, Calendar, CalendarCheck, Package, Ship, DollarSign, Download, ChevronRight } from 'lucide-react';
 import { ImportItem } from '../types';
 import { getVietnameseWeekKey, getVietnameseMonthKey, formatVietnameseDate } from '../utils/dateUtils';
-import html2canvas from 'html2canvas';
+import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
 
 interface FloatingStatsProps {
   items: ImportItem[];
@@ -57,7 +57,7 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
     // short delay for transitions
     await new Promise((resolve) => setTimeout(resolve, 300));
     try {
-      const canvas = await html2canvas(printAreaRef.current, {
+      const canvas = await safeHtml2Canvas(printAreaRef.current, {
         scale: 2.2,
         useCORS: true,
         backgroundColor: '#0f172a', // Slate dark background representation

@@ -1,16 +1,16 @@
-import React, { useState, useRef, useEffect, lazy, Suspense, useMemo } from 'react';
+import React, { useState, useRef, useEffect, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, UserPlus, Receipt, DollarSign, Image, Save, Plus, 
   Trash2, Calendar, ChevronRight, Search, X, ArrowLeft, 
-  TrendingUp, Activity, Download, Camera, Edit
+  TrendingUp, Activity, Download, Camera, Edit, Tag
 } from 'lucide-react';
 import { Customer, Bill, BillItem, PaymentRecord, ImportItem } from '../types';
 import { getCurrentDateStr } from '../utils/dateUtils';
 
-const InvoiceDetailModal = lazy(() => import('./InvoiceDetailModal'));
-const PaymentReceiptModal = lazy(() => import('./PaymentReceiptModal'));
-const CameraCapture = lazy(() => import('./CameraCapture'));
+import InvoiceDetailModal from './InvoiceDetailModal';
+import PaymentReceiptModal from './PaymentReceiptModal';
+import CameraCapture from './CameraCapture';
 
 import { useAndroidBack } from '../hooks/useAndroidBack';
 import { LazyImage } from './LazyImage';
@@ -63,6 +63,78 @@ function cleansAndSortsWords(name: string): string {
 function isModelNameMatch(nameA: string, nameB: string): boolean {
   if (!nameA || !nameB) return false;
   return cleansAndSortsWords(nameA) === cleansAndSortsWords(nameB);
+}
+
+function docSoThanhChu(so: number): string {
+  if (so === 0) return 'Không đồng';
+  if (so < 0) return 'Số âm ' + docSoThanhChu(Math.abs(so));
+  
+  const units = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ'];
+  const chuSo = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+
+  function readThreeDigits(n: number, showZeroHundred: boolean): string {
+    let hundred = Math.floor(n / 100);
+    let ten = Math.floor((n % 100) / 10);
+    let unit = n % 10;
+    let res = '';
+
+    if (hundred > 0 || showZeroHundred) {
+      res += chuSo[hundred] + ' trăm ';
+    }
+
+    if (ten > 1) {
+      res += chuSo[ten] + ' mươi ';
+    } else if (ten === 1) {
+      res += 'mười ';
+    } else if ((hundred > 0 || showZeroHundred) && unit > 0) {
+      res += 'lẻ ';
+    }
+
+    if (unit > 0) {
+      if (unit === 1 && ten > 1) {
+        res += 'mốt';
+      } else if (unit === 5 && ten > 0) {
+        res += 'lăm';
+      } else {
+        res += chuSo[unit];
+      }
+    }
+    return res.trim();
+  }
+
+  let text = '';
+  let str = Math.floor(so).toString();
+  let groups: number[] = [];
+
+  while (str.length > 0) {
+    let chunk = str.slice(-3);
+    groups.push(parseInt(chunk, 10));
+    str = str.slice(0, -3);
+  }
+
+  for (let i = groups.length - 1; i >= 0; i--) {
+    let g = groups[i];
+    if (g > 0) {
+      let showZeroHundred = i < groups.length - 1;
+      let gText = readThreeDigits(g, showZeroHundred);
+      text += gText + ' ' + units[i] + ' ';
+    }
+  }
+
+  text = text.trim();
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1) + ' đồng';
+}
+
+function getCustomPriceForCustomer(customer: Customer | undefined, modelName: string): number | null {
+  if (!customer || !customer.customPrices || !modelName) return null;
+  const targetKey = cleansAndSortsWords(modelName);
+  for (const [key, price] of Object.entries(customer.customPrices)) {
+    if (cleansAndSortsWords(key) === targetKey) {
+      return price;
+    }
+  }
+  return null;
 }
 
 export default function InvoicesTab({
@@ -233,7 +305,9 @@ export default function InvoicesTab({
 
   const handleSelectModel = (idx: number, modelName: string) => {
     const matched = warehouseCatalog.find(w => w.modelName === modelName);
-    const price = matched ? matched.defaultSalePrice : 125000;
+    const targetCust = customers.find(c => c.id === selectedCustomerId);
+    const customPrice = getCustomPriceForCustomer(targetCust, modelName);
+    const price = customPrice !== null ? customPrice : (matched ? matched.defaultSalePrice : 125000);
     
     setModalDraftItems(prev => {
       const updated = [...prev];
@@ -506,6 +580,12 @@ export default function InvoicesTab({
   const [quickPayDate, setQuickPayDate] = useState(getCurrentDateStr());
   const [quickPayNote, setQuickPayNote] = useState('');
 
+  // Custom wholesale/selling prices per customer
+  const [isManagingCustomPrices, setIsManagingCustomPrices] = useState(false);
+  const [customerForCustomPrices, setCustomerForCustomPrices] = useState<Customer | null>(null);
+  const [customPriceModel, setCustomPriceModel] = useState('');
+  const [customPriceValue, setCustomPriceValue] = useState<number | ''>('');
+
   // Selected Customer reference
   const currentCustomer = customers.find(c => c.id === selectedCustomerId);
 
@@ -520,6 +600,7 @@ export default function InvoicesTab({
   useAndroidBack(isQuickPaymentOpen, () => setIsQuickPaymentOpen(false));
   useAndroidBack(selectedInvoiceForModal !== null, () => setSelectedInvoiceForModal(null));
   useAndroidBack(selectedPaymentForModal !== null, () => setSelectedPaymentForModal(null));
+  useAndroidBack(isManagingCustomPrices, () => setIsManagingCustomPrices(false));
 
   // Clear current row builder inputs when switching customer
   useEffect(() => {
@@ -527,6 +608,90 @@ export default function InvoicesTab({
     setItemSốLượng('');
     setItemĐơnGiá('');
   }, [selectedCustomerId]);
+
+  // CUSTOM PRICE HANDLERS
+  const [customPriceModelFocus, setCustomPriceModelFocus] = useState(false);
+
+  const handleAddOrUpdateCustomPrice = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isViewer || userRole === 'viewer') {
+      alert("⚠️ Tài khoản của bạn là CHỈ XEM, không có quyền thay đổi bảng giá!");
+      return;
+    }
+    if (!customerForCustomPrices) return;
+    if (!customPriceModel.trim()) {
+      alert("Vui lòng nhập hoặc chọn tên mẫu mã!");
+      return;
+    }
+    
+    // Check if the price input is valid
+    const cleanValue = String(customPriceValue).trim();
+    if (!cleanValue) {
+      alert("Vui lòng nhập giá trị bán sỉ!");
+      return;
+    }
+
+    const priceNum = Number(cleanValue);
+    
+    // Rule 1: Positive number only
+    if (isNaN(priceNum) || priceNum <= 0) {
+      alert("⚠️ Lỗi dữ liệu: Giá bán sỉ bộ đồ phải là một số ĐƯƠNG (lớn hơn 0)!");
+      return;
+    }
+
+    // Rule 2: Non-decimal (integer) because VND is an integer currency
+    if (!Number.isInteger(priceNum)) {
+      alert("⚠️ Định dạng sai: Tiền tệ Việt Nam Đồng (đ/VND) phải là số nguyên, không được chứ phần thập phân lẻ!");
+      return;
+    }
+
+    // Rule 3: Avoid realistic typos (e.g. Typing 130đ instead of 130,000đ)
+    if (priceNum < 1000) {
+      alert(`⚠️ Cảnh báo giá quá thấp: Bạn đang thiết lập giá bán chỉ có ${priceNum.toLocaleString()}đ. Giá bán sỉ tối thiểu phải từ 1,000đ trở lên để tránh sai sót công nợ!`);
+      return;
+    }
+
+    // Rule 4: Avoid unrealistic high inputs (e.g. Typing extra zeros)
+    if (priceNum > 50000000) {
+      alert(`⚠️ Cảnh báo giá quá cao: Bạn đang thiết lập giá bán sỉ là ${priceNum.toLocaleString()}đ (> 50 triệu đồng). Vui lòng kiểm tra lại xem có bị dư số 0 hay không!`);
+      return;
+    }
+
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerForCustomPrices.id) {
+        const prices = { ...(c.customPrices || {}) };
+        prices[customPriceModel.trim()] = priceNum;
+        
+        // Update local state reference in the current popup immediately
+        setCustomerForCustomPrices(prevCust => prevCust ? { ...prevCust, customPrices: prices } : null);
+        return { ...c, customPrices: prices };
+      }
+      return c;
+    }));
+
+    setCustomPriceModel('');
+    setCustomPriceValue('');
+  };
+
+  const handleRemoveCustomPrice = (modelName: string) => {
+    if (isViewer || userRole === 'viewer') {
+      alert("⚠️ Tài khoản của bạn là CHỈ XEM, không có quyền thay đổi bảng giá!");
+      return;
+    }
+    if (!customerForCustomPrices) return;
+    
+    setCustomers(prev => prev.map(c => {
+      if (c.id === customerForCustomPrices.id) {
+        const prices = { ...(c.customPrices || {}) };
+        delete prices[modelName];
+        
+        // Update local state reference in the current popup immediately
+        setCustomerForCustomPrices(prevCust => prevCust ? { ...prevCust, customPrices: prices } : null);
+        return { ...c, customPrices: prices };
+      }
+      return c;
+    }));
+  };
 
   // ADD NEW CUSTOMER
   const handleAddCustomer = (e: React.FormEvent) => {
@@ -997,6 +1162,19 @@ export default function InvoicesTab({
                             >
                               <TrendingUp className="w-3.5 h-3.5" />
                             </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCustomerForCustomPrices(cust);
+                                setCustomPriceModel('');
+                                setCustomPriceValue('');
+                                setIsManagingCustomPrices(true);
+                              }}
+                              className="p-1 rounded text-indigo-500 hover:text-indigo-400 transition hover:bg-slate-100 dark:hover:bg-[#152720]"
+                              title="Cấu hình bảng giá bán sỉ riêng cho khách hàng này ⭐"
+                            >
+                              <Tag className="w-3.5 h-3.5 text-indigo-505 dark:text-indigo-400" />
+                            </button>
                           </div>
                           <span className="text-[10px] block mt-0.5 text-slate-450 dark:text-[#657f76]">{invoiceCount} hoá đơn</span>
                         </div>
@@ -1152,6 +1330,255 @@ export default function InvoicesTab({
             )}
           </AnimatePresence>
 
+          {/* Custom Individual Prices Management Dialog */}
+          <AnimatePresence>
+            {isManagingCustomPrices && customerForCustomPrices && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+                <div className="absolute inset-0" onClick={() => setIsManagingCustomPrices(false)} />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="max-w-md w-full p-5 shadow-2xl rounded-2xl z-10 space-y-4 border bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1b2f27] max-h-[90vh] overflow-y-auto"
+                >
+                  <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1b2f27]">
+                    <div>
+                      <h3 className="text-xs font-bold tracking-widest uppercase font-mono text-slate-900 dark:text-white flex items-center gap-1">
+                        ⭐ Giá Sỉ Riêng Biệt
+                      </h3>
+                      <p className="text-[10px] mt-0.5 text-slate-450 dark:text-[#657f76]">
+                        Đối tác: <span className="font-extrabold text-indigo-650 dark:text-indigo-400">{customerForCustomPrices.name}</span>
+                      </p>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsManagingCustomPrices(false)} 
+                      className="transition p-1 text-slate-400 hover:text-slate-700 dark:text-[#657f76] dark:hover:text-white"
+                    >
+                      <X className="w-4.5 h-4.5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleAddOrUpdateCustomPrice} className="space-y-3.5 bg-slate-50 dark:bg-slate-900/30 p-3.5 rounded-xl border border-slate-150 dark:border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-[#657f76] uppercase tracking-wider block">
+                      Thêm hoặc Chỉnh sửa giá sỉ riêng
+                    </span>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-sans">
+                      <div className="relative">
+                        <label className="block text-[9px] uppercase font-extrabold tracking-wide mb-1 font-mono text-slate-450 dark:text-[#657f76]">Tên mẫu sản phẩm</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="VD: Yếm dài, Đầm xòe..."
+                          value={customPriceModel}
+                          onChange={e => {
+                            setCustomPriceModel(e.target.value);
+                            setCustomPriceModelFocus(true);
+                          }}
+                          onFocus={() => setCustomPriceModelFocus(true)}
+                          className="w-full border rounded-xl py-1.5 px-2.5 outline-none font-semibold bg-white dark:bg-[#111c18] border-slate-200 dark:border-[#1c2d27] text-slate-800 dark:text-white placeholder-slate-450"
+                        />
+                        
+                        {customPriceModelFocus && (
+                          <>
+                            <div className="fixed inset-0 z-30" onClick={() => setCustomPriceModelFocus(false)} />
+                            <div className="absolute left-0 right-0 mt-1 max-h-40 overflow-y-auto rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl z-40 p-1 divide-y divide-slate-100 dark:divide-slate-800/40">
+                              {(() => {
+                                const q = customPriceModel.trim().toLowerCase();
+                                const filtered = warehouseCatalog.filter(w => !q || w.modelName.toLowerCase().includes(q));
+                                
+                                if (filtered.length === 0) {
+                                  return <div className="p-2 text-[10px] text-slate-404 text-center">Không tìm thấy mẫu nào</div>;
+                                }
+                                
+                                return filtered.map((w, index) => (
+                                  <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => {
+                                      setCustomPriceModel(w.modelName);
+                                      setCustomPriceValue(w.defaultSalePrice);
+                                      setCustomPriceModelFocus(false);
+                                    }}
+                                    className="w-full text-left px-2.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg flex items-center justify-between text-[11px] transition text-slate-700 dark:text-slate-200 cursor-pointer"
+                                  >
+                                    <span>👕 {w.modelName}</span>
+                                    <span className="font-mono text-[10px] text-indigo-500 font-bold">{w.defaultSalePrice.toLocaleString()}đ</span>
+                                  </button>
+                                ));
+                              })()}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] uppercase font-extrabold tracking-wide mb-1 font-mono text-slate-450 dark:text-[#657f76]">Giá bán sỉ mới (đ)</label>
+                        <input
+                          type="number"
+                          required
+                          min={0}
+                          placeholder="VD: 125000"
+                          value={customPriceValue}
+                          onChange={e => setCustomPriceValue(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full border rounded-xl py-1.5 px-2.5 outline-none font-mono focus:border-indigo-500 transition font-bold bg-white dark:bg-[#111c18] border-slate-200 dark:border-[#1c2d27] text-slate-800 dark:text-white placeholder-slate-455"
+                        />
+                      </div>
+                    </div>
+
+                    {customPriceValue !== '' && (
+                      <div className="p-3.5 rounded-xl border space-y-1.5 text-xs bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 transition">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-[#657f76] uppercase tracking-wider">Định dạng tiền tệ:</span>
+                          <span className="font-mono text-indigo-600 dark:text-indigo-400 font-extrabold text-sm px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg">
+                            {Number(customPriceValue).toLocaleString('vi-VN')} VNĐ
+                          </span>
+                        </div>
+                        
+                        <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-white dark:bg-[#0e1613] p-2.5 rounded-lg border border-slate-150 dark:border-[#213a2d]/50 leading-relaxed">
+                          <span className="font-mono font-bold text-indigo-500 dark:text-indigo-400">Bằng chữ: </span>
+                          <span className="font-semibold italic text-slate-850 dark:text-slate-200">{docSoThanhChu(Number(customPriceValue))}</span>
+                        </div>
+
+                        {/* Validations warnings list */}
+                        <div className="space-y-1.5 text-[11px]">
+                          {Number(customPriceValue) <= 0 && (
+                            <div className="text-rose-500 font-bold bg-rose-50 dark:bg-rose-950/20 px-2 py-1.5 rounded-lg flex items-center gap-1.5 border border-rose-100 dark:border-rose-900/30">
+                              <span>❌ Lỗi: Giá sỉ bộ đồ phải là số dương lớn hơn 0!</span>
+                            </div>
+                          )}
+
+                          {Number(customPriceValue) > 0 && !Number.isInteger(Number(customPriceValue)) && (
+                            <div className="text-rose-500 font-bold bg-rose-50 dark:bg-rose-950/20 px-2 py-1.5 rounded-lg flex items-center gap-1.5 border border-rose-100 dark:border-rose-900/30">
+                              <span>❌ Lỗi: Giá phải là số nguyên tròn (Không thể chứa phần lẻ thập phân)!</span>
+                            </div>
+                          )}
+
+                          {Number(customPriceValue) > 0 && Number(customPriceValue) < 1000 && (
+                            <div className="text-rose-500 font-bold bg-rose-50 dark:bg-rose-950/20 px-2 py-1.5 rounded-lg flex items-center gap-1.5 border border-rose-100 dark:border-rose-900/30">
+                              <span>❌ Lỗi: Giá sỉ quá nhỏ (tối thiểu phải từ 1.000đ trở lên)!</span>
+                            </div>
+                          )}
+
+                          {Number(customPriceValue) >= 1000 && Number(customPriceValue) < 15000 && (
+                            <div className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/20 px-2 py-1.5 rounded-lg flex items-center gap-1.5 border border-amber-100 dark:border-amber-900/30">
+                              <span>⚠️ Cảnh báo: Giá sỉ khá thấp ({Number(customPriceValue).toLocaleString()}đ). Bạn có chắc chắn không bị thiếu chữ số 0 không?</span>
+                            </div>
+                          )}
+
+                          {Number(customPriceValue) > 5000000 && Number(customPriceValue) <= 50000000 && (
+                            <div className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/20 px-2 py-1.5 rounded-lg flex items-center gap-1.5 border border-amber-100 dark:border-amber-900/30">
+                              <span>⚠️ Cảnh báo: Giá sỉ cao ({Number(customPriceValue).toLocaleString()}đ). Vui lòng kiểm tra kỹ xem có bị gõ dư số 0 không!</span>
+                            </div>
+                          )}
+
+                          {Number(customPriceValue) > 50000000 && (
+                            <div className="text-rose-500 font-bold bg-rose-50 dark:bg-rose-950/20 px-2 py-1.5 rounded-lg flex items-center gap-1.5 border border-rose-100 dark:border-rose-900/30">
+                              <span>❌ Lỗi: Vượt quá định giới tối đa cho phép (không quá 50,000,000đ)!</span>
+                            </div>
+                          )}
+
+                          {Number(customPriceValue) >= 15000 && Number(customPriceValue) <= 5000000 && Number.isInteger(Number(customPriceValue)) && (
+                            <div className="text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/10 px-2 py-1.5 rounded-lg flex items-center gap-1.5 border border-emerald-100 dark:border-emerald-900/10">
+                              <span>✅ Giá hợp lệ & đã chuẩn hóa định dạng</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="submit"
+                        className="bg-indigo-600 hover:bg-indigo-505 text-white rounded-xl px-4 py-1.5 text-[11px] font-black tracking-wide uppercase transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Áp dụng giá này</span>
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="space-y-2 font-sans text-xs">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-[#657f76] uppercase tracking-wider block">
+                      Danh sách giá riêng hiện có ({Object.keys(customerForCustomPrices.customPrices || {}).length})
+                    </span>
+
+                    <div className="border border-slate-150 dark:border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-850/40 max-h-60 overflow-y-auto">
+                      {!customerForCustomPrices.customPrices || Object.keys(customerForCustomPrices.customPrices).length === 0 ? (
+                        <div className="p-5 text-center text-xs italic text-slate-400 bg-slate-50/50 dark:bg-slate-905/10">
+                          Chuyên biệt chưa cài đặt. Đối tác đang chạy theo biểu giá chung mặc định.
+                        </div>
+                      ) : (
+                        Object.entries(customerForCustomPrices.customPrices).map(([model, price]) => {
+                          const matchedWarehouse = warehouseCatalog.find(w => cleansAndSortsWords(w.modelName) === cleansAndSortsWords(model));
+                          const defPrice = matchedWarehouse ? matchedWarehouse.defaultSalePrice : null;
+
+                          return (
+                            <div 
+                              key={model}
+                              className="px-3.5 py-2.5 flex items-center justify-between transition hover:bg-slate-50/70 dark:hover:bg-slate-900/45 text-xs"
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">👕 {model}</span>
+                                {defPrice !== null && (
+                                  <span className="text-[9px] text-slate-400 font-medium">
+                                    Giá sỉ gốc: {defPrice.toLocaleString()}đ
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono font-black text-indigo-600 dark:text-indigo-400">
+                                  {price.toLocaleString()}đ
+                                </span>
+                                
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCustomPriceModel(model);
+                                      setCustomPriceValue(price);
+                                    }}
+                                    className="p-1 text-slate-450 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                                    title="Chỉnh sửa giá"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (confirm(`Bạn có chắc muốn xoá giá gối riêng cho mẫu "${model}"?`)) {
+                                        handleRemoveCustomPrice(model);
+                                      }
+                                    }}
+                                    className="p-1 text-slate-450 hover:text-rose-600 dark:hover:text-[#f87171] rounded transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                                    title="Xoá giá sỉ"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsManagingCustomPrices(false)}
+                      className="w-full bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-705 dark:text-white py-2 rounded-xl text-xs font-bold transition active:scale-[0.98] cursor-pointer"
+                    >
+                      Xong & Đóng lại
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
 
 
           {/* Elegant speed dial backdrop */}
@@ -1294,20 +1721,36 @@ export default function InvoicesTab({
               </button>
 
               {currentCustomer && (
-                <button
-                  onClick={() => {
-                    setEditingCustomerId(currentCustomer.id);
-                    setEditCustomerName(currentCustomer.name);
-                    setEditCustomerPhone(currentCustomer.phone || '');
-                    setEditCustomerInitialDebt(currentCustomer.initialDebt || 0);
-                    setEditCustomerPhoto(currentCustomer.photo || null);
-                    setIsEditingCustomer(true);
-                  }}
-                  className="p-1.5 border border-indigo-500/20 rounded-xl text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/10 transition cursor-pointer bg-white dark:bg-[#0e1613]"
-                  title="Chỉnh sửa thông tin khách"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setCustomerForCustomPrices(currentCustomer);
+                      setCustomPriceModel('');
+                      setCustomPriceValue('');
+                      setIsManagingCustomPrices(true);
+                    }}
+                    className="p-1.5 border border-amber-500/20 rounded-xl text-amber-500 dark:text-amber-400 hover:bg-amber-500/10 transition cursor-pointer bg-white dark:bg-[#0e1613] flex items-center gap-1 font-bold text-xs"
+                    title="Cấu hình bảng giá bán sỉ riêng của khách ⭐"
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Giá sỉ riêng</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setEditingCustomerId(currentCustomer.id);
+                      setEditCustomerName(currentCustomer.name);
+                      setEditCustomerPhone(currentCustomer.phone || '');
+                      setEditCustomerInitialDebt(currentCustomer.initialDebt || 0);
+                      setEditCustomerPhoto(currentCustomer.photo || null);
+                      setIsEditingCustomer(true);
+                    }}
+                    className="p-1.5 border border-indigo-500/20 rounded-xl text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/10 transition cursor-pointer bg-white dark:bg-[#0e1613]"
+                    title="Chỉnh sửa thông tin khách"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+                </>
               )}
               
               <button
@@ -2141,33 +2584,49 @@ export default function InvoicesTab({
                                       );
                                     }
 
-                                    return filtered.map((w, wIdx) => (
-                                      <button
-                                        key={wIdx}
-                                        type="button"
-                                        onClick={() => {
-                                          handleSelectModel(idx, w.modelName);
-                                          setFocusedItemIdx(null);
-                                        }}
-                                        className="w-full text-left px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-lg flex items-center justify-between text-xs transition cursor-pointer"
-                                      >
-                                        <div className="font-semibold text-slate-850 dark:text-slate-100">
-                                          👕 {w.modelName}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-[10px]">
-                                          <span className={`px-1.5 py-0.5 rounded font-bold ${
-                                            w.currentStock > 0 
-                                              ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400' 
-                                              : 'bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-450'
-                                          }`}>
-                                            Tồn: {w.currentStock.toLocaleString()}
-                                          </span>
-                                          <span className="font-mono font-bold text-slate-500 dark:text-slate-400">
-                                            {w.defaultSalePrice.toLocaleString()}đ
-                                          </span>
-                                        </div>
-                                      </button>
-                                    ));
+                                    return filtered.map((w, wIdx) => {
+                                      const targetCust = customers.find(c => c.id === selectedCustomerId);
+                                      const customPrice = getCustomPriceForCustomer(targetCust, w.modelName);
+
+                                      return (
+                                        <button
+                                          key={wIdx}
+                                          type="button"
+                                          onClick={() => {
+                                            handleSelectModel(idx, w.modelName);
+                                            setFocusedItemIdx(null);
+                                          }}
+                                          className="w-full text-left px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-900 rounded-lg flex items-center justify-between text-xs transition cursor-pointer"
+                                        >
+                                          <div className="font-semibold text-slate-850 dark:text-slate-100">
+                                            👕 {w.modelName}
+                                          </div>
+                                          <div className="flex items-center gap-2 text-[10px]">
+                                            <span className={`px-1.5 py-0.5 rounded font-bold ${
+                                              w.currentStock > 0 
+                                                ? 'bg-emerald-550/10 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400' 
+                                                : 'bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-450'
+                                            }`}>
+                                              Tồn: {w.currentStock.toLocaleString()}
+                                            </span>
+                                            {customPrice !== null ? (
+                                              <div className="flex flex-col items-end leading-none">
+                                                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-0.5" title="Giá bán sỉ riêng của khách">
+                                                  ⭐ {customPrice.toLocaleString()}đ
+                                                </span>
+                                                <span className="text-[8px] text-slate-400 line-through">
+                                                  {w.defaultSalePrice.toLocaleString()}đ
+                                                </span>
+                                              </div>
+                                            ) : (
+                                              <span className="font-mono font-bold text-slate-500 dark:text-slate-400">
+                                                {w.defaultSalePrice.toLocaleString()}đ
+                                              </span>
+                                            )}
+                                          </div>
+                                        </button>
+                                      );
+                                    });
                                   })()}
                                 </div>
                               </>

@@ -64,6 +64,7 @@ export interface Customer {
   initialDebt: number; // Số nợ ban đầu
   createdAt: number;
   photo?: string; // Ảnh đại diện của khách hàng
+  customPrices?: Record<string, number>; // Bảng giá riêng theo từng mẫu mã (mẫu mã -> giá tiền)
 }
 
 export interface PaymentRecord {
@@ -211,7 +212,7 @@ export interface UserProfile {
   lastLocationTime?: string; // Thời gian cập nhật vị trí gần nhất
 }
 
-export const CURRENT_VERSION = '1.0.21';
+export const CURRENT_VERSION = '1.0.22';
 
 export interface AppUpdateInfo {
   version: string;
