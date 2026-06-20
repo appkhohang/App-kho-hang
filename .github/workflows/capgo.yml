@@ -33,30 +33,36 @@ jobs:
           NEW_VERSION="${BASE_VERSION}.${PATCH_VERSION}"
           echo "Setting dynamic build version to: $NEW_VERSION"
           
-          # 3. Write this version back to package.json, src/types.ts, and public/version.json in runner workspace
-          node -e "
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          pkg.version = '$NEW_VERSION';
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+          # 3. Export to environment for node process to access securely without shell interpolation issues
+          export NEW_VERSION
+          node -e '
+          const fs = require("fs");
+          const nv = process.env.NEW_VERSION;
+          
+          // Update package.json
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          pkg.version = nv;
+          fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n", "utf8");
 
-          if (fs.existsSync('src/types.ts')) {
-            let types = fs.readFileSync('src/types.ts', 'utf8');
-            types = types.replace(/(export\s+const\s+CURRENT_VERSION\s*=\s*)(['\"])[^'\"]+(['\"])/, '$1$2$NEW_VERSION$3');
-            fs.writeFileSync('src/types.ts', types, 'utf8');
+          // Update src/types.ts safely using standard regex or simple replace
+          if (fs.existsSync("src/types.ts")) {
+            let types = fs.readFileSync("src/types.ts", "utf8");
+            types = types.replace(/export\s+const\s+CURRENT_VERSION\s*=\s*(["\x27])[^"\x27]+(["\x27])/, `export const CURRENT_VERSION = \x27${nv}\x27`);
+            fs.writeFileSync("src/types.ts", types, "utf8");
           }
 
-          if (fs.existsSync('public/version.json')) {
-            const v = JSON.parse(fs.readFileSync('public/version.json', 'utf8'));
-            v.version = '$NEW_VERSION';
+          // Update public/version.json
+          if (fs.existsSync("public/version.json")) {
+            const v = JSON.parse(fs.readFileSync("public/version.json", "utf8"));
+            v.version = nv;
             const d = new Date();
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, "0");
+            const month = String(d.getMonth() + 1).padStart(2, "0");
             const year = d.getFullYear();
-            v.releaseDate = day + '/' + month + '/' + year;
-            fs.writeFileSync('public/version.json', JSON.stringify(v, null, 2) + '\n', 'utf8');
+            v.releaseDate = day + "/" + month + "/" + year;
+            fs.writeFileSync("public/version.json", JSON.stringify(v, null, 2) + "\n", "utf8");
           }
-          "
+          '
 
       - name: Build production app
         run: npx vite build
