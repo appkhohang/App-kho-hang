@@ -70,7 +70,7 @@ export default function SettingsTab({
 
   // OTA App Update States
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
-  const [isChangelogOpen, setIsChangelogOpen] = useState(true); // Open by default for prominence
+  const [isChangelogOpen, setIsChangelogOpen] = useState(false); // Collapsed by default to prevent clutter
   const [selectedChangelogVersion, setSelectedChangelogVersion] = useState<{
     version: string;
     date: string;
@@ -1623,9 +1623,9 @@ export default function SettingsTab({
       </AnimatePresence>
 
       {/* CƠ CHẾ CẤP QUYỀN HỆ THỐNG & ĐỊNH VỊ LIÊN KẾT NHÓM */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs hover:shadow-md transition duration-205">
         <div 
-          onClick={() => setIsGpsOpen(!isGpsOpen)}
+          onClick={() => setIsGpsOpen(true)}
           className="flex items-center justify-between cursor-pointer select-none group"
         >
           <div className="flex items-center gap-3">
@@ -1633,218 +1633,268 @@ export default function SettingsTab({
               <MapPin className="w-5 h-5 animate-bounce-slow" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide">
-                Quản lý Quyền Hệ Thống & Bản đồ Nội bộ Xưởng
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide">
+                  Quản lý Quyền Hệ Thống & Bản đồ Nội bộ Xưởng
+                </h3>
+                <span className="px-2 py-0.5 rounded text-[8.5px] font-extrabold text-indigo-600 bg-indigo-500/10 dark:text-indigo-400 dark:bg-indigo-500/20 font-mono tracking-wider uppercase shrink-0">HỘP THOẠI</span>
+              </div>
               <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
                 Yêu cầu quyền ứng dụng (Máy ảnh, Định vị, Album ảnh) và theo dõi tọa độ thành viên trong cùng nhóm liên kết.
               </p>
             </div>
           </div>
-          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-indigo-400 transition ml-2 shrink-0">
-            {isGpsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 text-slate-400 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/55 group-hover:text-indigo-600 transition ml-2 shrink-0">
+            <ChevronRight className="w-4 h-4 text-slate-400" />
           </div>
         </div>
+      </div>
 
-        <AnimatePresence initial={false}>
-          {isGpsOpen && (
+      {/* GPS AND PERMISSIONS MODAL DIALOG */}
+      <AnimatePresence>
+        {isGpsOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto font-sans">
+            <div className="absolute inset-0" onClick={() => setIsGpsOpen(false)}></div>
+            
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800"
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="relative w-full max-w-4xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl z-10 flex flex-col overflow-hidden max-h-[90vh] text-left"
             >
-              {/* Part 1: Permission Management Board */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                
-                {/* 1. Camera permission */}
-                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Camera className="w-4 h-4 text-indigo-500" />
-                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Quyền máy ảnh</span>
-                    </div>
-                    <p className="text-[11.5px] text-slate-500 leading-normal">
-                      Kích hoạt camera điện thoại để scan trực tiếp hóa đơn nhập mộc, biên nhận vải và hàng hóa lên đám mây.
-                    </p>
+              {/* Modal Header */}
+              <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-slate-805 text-indigo-600 dark:text-indigo-400 shrink-0">
+                    <MapPin className="w-5 h-5 animate-bounce-slow" />
                   </div>
-
-                  <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
-                    <button
-                      type="button"
-                      onClick={handleTestCamera}
-                      className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>{cameraStatus === 'active' ? 'Thao tác tốt' : 'Yêu cầu quyền'}</span>
-                    </button>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${cameraStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">
-                        {cameraStatus === 'active' ? 'Bật tốt' : 'Yêu cầu'}
-                      </span>
-                    </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 uppercase tracking-wide">
+                      Quản lý Quyền Hệ Thống & Bản đồ Nội bộ Xưởng
+                    </h3>
+                    <p className="text-xs text-slate-450 dark:text-slate-500 mt-0.5 leading-none">
+                      Định cấu hình phần cứng thiết bị & theo dõi GPS sơ đồ xưởng hàng ngày
+                    </p>
                   </div>
                 </div>
 
-                {/* 2. Geolocation permission */}
-                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-indigo-500" />
-                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Quyền định vị GPS</span>
-                    </div>
-                    <p className="text-[11.5px] text-slate-500 leading-normal">
-                      Cấp quyền truy cập GPS để hiển thị bản đồ nội bộ, định mức chi phí ship tùy theo hành trình thực tế.
-                    </p>
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
-                    <button
-                      type="button"
-                      onClick={handleShareMyLocationOnMap}
-                      className="py-1.5 px-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <MapPin className="w-3.5 h-3.5" />
-                      <span>Chia sẻ vị trí</span>
-                    </button>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${gpsData.latitude !== null ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">
-                        {gpsData.latitude !== null ? 'Đồng bộ' : 'Yêu cầu'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Photo library permission */}
-                <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="w-4 h-4 text-indigo-500" />
-                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Thư viện điện thoại</span>
-                    </div>
-                    <p className="text-[11.5px] text-slate-500 leading-normal">
-                      Trình liên kết album máy để tải lên ảnh biên lai khố vải, rập cắt may thiết kế lưu trữ sẵn trên thiết bị di động.
-                    </p>
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
-                    <button
-                      type="button"
-                      onClick={handleRequestPhotoLibrary}
-                      className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <Smartphone className="w-3.5 h-3.5" />
-                      <span>{photoLibraryStatus === 'active' ? 'Đã cho phép' : 'Mở Thư viện'}</span>
-                    </button>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${photoLibraryStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">
-                        {photoLibraryStatus === 'active' ? 'Đồng bộ' : 'Yêu cầu'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
+                <button
+                  type="button"
+                  onClick={() => setIsGpsOpen(false)}
+                  className="w-9 h-9 flex items-center justify-center rounded-full transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/70 text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white shrink-0"
+                  title="Đóng hộp thoại"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              {/* Part 2: Interactive Accurate Map & List of Linked devices */}
-              <div className="space-y-3.5 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/80">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
-                      <span className="block h-2 w-2 rounded-full bg-indigo-600 animate-ping" />
-                      <span>BẢN ĐỒ VỊ TRÍ LIÊN KẾT NHÓM XƯỞNG MAY (LIVE INSTANT MAP)</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Hiển thị định vị chính xác và lộ trình công việc của các thiết bị có tài khoản đã liên kết trong cùng nhóm.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={gpsLoading}
-                      onClick={handleShareMyLocationOnMap}
-                      className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
-                      <span>{gpsLoading ? 'Đang cập nhật GPS...' : 'Chia sẻ Vị trí của tôi'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* List of active location members */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                  {userProfiles.filter(u => u.latitude && u.longitude).length === 0 ? (
-                    <div className="col-span-full py-2 px-3 bg-amber-500/[0.04] text-amber-700 dark:text-amber-400 border border-amber-200/30 rounded-lg text-[11px] text-center italic">
-                      Chưa có thành viên nào chia sẻ vị trí của họ lên bản đồ nhóm xưởng. Hãy click "Chia sẻ Vị trí của tôi" để mở đầu!
-                    </div>
-                  ) : (
-                    userProfiles.filter(u => u.latitude && u.longitude).map((user) => {
-                      const isMe = user.email?.toLowerCase().trim() === currentUser?.email?.toLowerCase().trim();
-                      return (
-                        <div 
-                          key={user.id} 
-                          className={`p-2.5 rounded-lg border bg-white dark:bg-slate-900 flex items-center gap-2.5 shadow-3xs ${
-                            isMe 
-                              ? 'border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/10 dark:bg-indigo-950/10' 
-                              : 'border-slate-150 dark:border-slate-850'
-                          }`}
-                        >
-                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 font-black text-xs uppercase ${
-                            isMe ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200' : 'bg-emerald-100 text-emerald-800'
-                          }`}>
-                            {user.displayName ? user.displayName.substring(0, 2) : 'TV'}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <span className="font-bold text-[#111827] dark:text-slate-200 truncate block">
-                              {user.displayName || user.email}
-                              {isMe && <span className="ml-1 text-[8.5px] bg-indigo-600 text-white px-1 py-0.2 rounded">Tôi</span>}
-                            </span>
-                            <span className="text-[10px] text-slate-400 block truncate font-mono">
-                              Cập nhật: {user.lastLocationTime || 'vừa xong'}
-                            </span>
-                            <span className="text-[9px] text-[#22c55e] font-mono block">
-                              📍 {user.latitude?.toFixed(5)}, {user.longitude?.toFixed(5)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Osm Map view container */}
-                <div className="relative">
-                  <div 
-                    id="xuongan-live-leaflet-map"
-                    className="h-[380px] w-full bg-slate-100 dark:bg-slate-950 rounded-xl relative z-0 overflow-hidden shadow-xs border border-slate-250 dark:border-slate-800"
-                  />
+              {/* Scrollable Content Body */}
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
+                
+                {/* Part 1: Permission Management Board */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   
-                  {/* Static Map loading overlay or helper display */}
-                  {userProfiles.filter(u => u.latitude && u.longitude).length === 0 && (
-                    <div className="absolute inset-0 bg-slate-900/10 dark:bg-slate-950/40 pointer-events-none flex items-center justify-center p-4">
-                      <div className="bg-white/95 dark:bg-slate-900/95 max-w-sm border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center shadow-lg space-y-2 pointer-events-auto">
-                        <MapPin className="w-8 h-8 text-indigo-500 mx-auto animate-bounce" />
-                        <h5 className="font-bold text-xs uppercase text-slate-800 dark:text-slate-200">Đang chờ tín hiệu map</h5>
-                        <p className="text-[11px] text-slate-500 leading-normal">
-                          Hãy click nút <strong>"Chia sẻ Vị trí của tôi"</strong> phía trên để chia sẻ và cập nhật vị trí của bạn lên bản đồ nhóm chung.
-                        </p>
+                  {/* 1. Camera permission */}
+                  <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Camera className="w-4 h-4 text-indigo-505" />
+                        <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Quyền máy ảnh</span>
+                      </div>
+                      <p className="text-[11.5px] text-slate-500 leading-normal">
+                        Kích hoạt camera điện thoại để scan trực tiếp hóa đơn nhập mộc, biên nhận vải và hàng hóa lên đám mây.
+                      </p>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
+                      <button
+                        type="button"
+                        onClick={handleTestCamera}
+                        className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{cameraStatus === 'active' ? 'Thao tác tốt' : 'Yêu cầu quyền'}</span>
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${cameraStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                        <span className="text-[10px] font-bold text-slate-505 uppercase font-mono">
+                          {cameraStatus === 'active' ? 'Bật tốt' : 'Yêu cầu'}
+                        </span>
                       </div>
                     </div>
-                  )}
+                  </div>
+
+                  {/* 2. Geolocation permission */}
+                  <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-indigo-505" />
+                        <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Quyền định vị GPS</span>
+                      </div>
+                      <p className="text-[11.5px] text-slate-500 leading-normal">
+                        Cấp quyền truy cập GPS để hiển thị bản đồ nội bộ, định mức chi phí ship tùy theo hành trình thực tế.
+                      </p>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
+                      <button
+                        type="button"
+                        onClick={handleShareMyLocationOnMap}
+                        className="py-1.5 px-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span>Chia sẻ vị trí</span>
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${gpsData.latitude !== null ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                        <span className="text-[10px] font-bold text-slate-505 uppercase font-mono">
+                          {gpsData.latitude !== null ? 'Đồng bộ' : 'Yêu cầu'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Photo library permission */}
+                  <div className="p-4 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-150 dark:border-slate-850/60 space-y-3 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="w-4 h-4 text-indigo-505" />
+                        <span className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">Thư viện điện thoại</span>
+                      </div>
+                      <p className="text-[11.5px] text-slate-500 leading-normal">
+                        Trình liên kết album máy để tải lên ảnh biên lai khố vải, rập cắt may thiết kế lưu trữ sẵn trên thiết bị di động.
+                      </p>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between border-t border-slate-150/50 dark:border-slate-850/40">
+                      <button
+                        type="button"
+                        onClick={handleRequestPhotoLibrary}
+                        className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold tracking-wide transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>{photoLibraryStatus === 'active' ? 'Đã cho phép' : 'Mở Thư viện'}</span>
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${photoLibraryStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                        <span className="text-[10px] font-bold text-slate-505 uppercase font-mono">
+                          {photoLibraryStatus === 'active' ? 'Đồng bộ' : 'Yêu cầu'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
+
+                {/* Part 2: Interactive Accurate Map & List of Linked devices */}
+                <div className="space-y-3.5 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
+                        <span className="block h-2 w-2 rounded-full bg-indigo-600 animate-ping" />
+                        <span>BẢN ĐỒ VỊ TRÍ LIÊN KẾT NHÓM XƯỞNG MAY (LIVE INSTANT MAP)</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Hiển thị định vị chính xác và lộ trình công việc của các thiết bị có tài khoản đã liên kết trong cùng nhóm.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={gpsLoading}
+                        onClick={handleShareMyLocationOnMap}
+                        className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
+                        <span>{gpsLoading ? 'Đang cập nhật GPS...' : 'Chia sẻ Vị trí của tôi'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* List of active location members */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                    {userProfiles.filter(u => u.latitude && u.longitude).length === 0 ? (
+                      <div className="col-span-full py-2 px-3 bg-amber-500/[0.04] text-amber-700 dark:text-amber-400 border border-amber-200/30 rounded-lg text-[11px] text-center italic">
+                        Chưa có thành viên nào chia sẻ vị trí của họ lên bản đồ nhóm xưởng. Hãy click "Chia sẻ Vị trí của tôi" để mở đầu!
+                      </div>
+                    ) : (
+                      userProfiles.filter(u => u.latitude && u.longitude).map((user) => {
+                        const isMe = user.email?.toLowerCase().trim() === currentUser?.email?.toLowerCase().trim();
+                        return (
+                          <div 
+                            key={user.id} 
+                            className={`p-2.5 rounded-lg border bg-white dark:bg-slate-900 flex items-center gap-2.5 shadow-3xs ${
+                              isMe 
+                                ? 'border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/10 dark:bg-indigo-950/10' 
+                                : 'border-slate-150 dark:border-slate-850'
+                            }`}
+                          >
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 font-black text-xs uppercase ${
+                              isMe ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {user.displayName ? user.displayName.substring(0, 2) : 'TV'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="font-bold text-[#111827] dark:text-slate-200 truncate block">
+                                {user.displayName || user.email}
+                                {isMe && <span className="ml-1 text-[8.5px] bg-indigo-600 text-white px-1 py-0.2 rounded">Tôi</span>}
+                              </span>
+                              <span className="text-[10px] text-slate-400 block truncate font-mono">
+                                Cập nhật: {user.lastLocationTime || 'vừa xong'}
+                              </span>
+                              <span className="text-[9px] text-[#22c55e] font-mono block">
+                                📍 {user.latitude?.toFixed(5)}, {user.longitude?.toFixed(5)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Osm Map view container */}
+                  <div className="relative">
+                    <div 
+                      id="xuongan-live-leaflet-map"
+                      className="h-[320px] sm:h-[380px] w-full bg-slate-100 dark:bg-slate-950 rounded-xl relative z-0 overflow-hidden shadow-xs border border-slate-250 dark:border-slate-800"
+                    />
+                    
+                    {/* Static Map loading overlay or helper display */}
+                    {userProfiles.filter(u => u.latitude && u.longitude).length === 0 && (
+                      <div className="absolute inset-0 bg-slate-900/10 dark:bg-slate-950/40 pointer-events-none flex items-center justify-center p-4">
+                        <div className="bg-white/95 dark:bg-slate-900/95 max-w-sm border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center shadow-lg space-y-2 pointer-events-auto">
+                          <MapPin className="w-8 h-8 text-indigo-505 mx-auto animate-bounce" />
+                          <h5 className="font-bold text-xs uppercase text-slate-805 dark:text-slate-200">Đang chờ tín hiệu map</h5>
+                          <p className="text-[11px] text-slate-500 leading-normal">
+                            Hãy click nút <strong>"Chia sẻ Vị trí của tôi"</strong> phía trên để chia sẻ và cập nhật vị trí của bạn lên bản đồ nhóm chung.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
 
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-slate-100 dark:border-[#1e2f2a]/60 bg-slate-50/50 dark:bg-[#0b1210]/50 flex justify-end shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGpsOpen(false)}
+                  className="px-5 py-2.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer select-none"
+                >
+                  Đóng lại
+                </button>
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* 🚀 BẢN CẬP NHẬT HỆ THỐNG OTA (ONLINE / OFFLINE HYBRID UPDATE) */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">

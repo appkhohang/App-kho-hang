@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode, FolderPlus, ExternalLink, Sparkles } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Statically imported child components/tabs to prevent hook errors and version mismatch bugs
@@ -301,6 +301,104 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('xuongan_enabled_home_features', JSON.stringify(enabledHomeFeatures));
   }, [enabledHomeFeatures]);
+
+  // Custom Home Categories state
+  interface CustomHomeFeature {
+    id: string;
+    label: string;
+    desc: string;
+    color: string;
+    items: string[];
+  }
+
+  const [customHomeFeatures, setCustomHomeFeatures] = useState<CustomHomeFeature[]>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_custom_home_features');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('xuongan_custom_home_features', JSON.stringify(customHomeFeatures));
+  }, [customHomeFeatures]);
+
+  const [isAddingCustomFeature, setIsAddingCustomFeature] = useState(false);
+  const [newFeatureName, setNewFeatureName] = useState('');
+  const [newFeatureDesc, setNewFeatureDesc] = useState('');
+  const [newFeatureColor, setNewFeatureColor] = useState('text-indigo-500');
+
+  // Currently viewing custom feature detail modal
+  const [activeCustomFeatureDetail, setActiveCustomFeatureDetail] = useState<CustomHomeFeature | null>(null);
+  const [newItemText, setNewItemText] = useState('');
+
+  const handleAddCustomFeature = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFeatureName.trim()) return;
+
+    const newId = 'custom_' + Date.now();
+    const newFeat: CustomHomeFeature = {
+      id: newId,
+      label: newFeatureName.trim(),
+      desc: newFeatureDesc.trim() || 'Nhóm/danh mục tính năng tuỳ chỉnh',
+      color: newFeatureColor,
+      items: []
+    };
+
+    setCustomHomeFeatures(prev => [...prev, newFeat]);
+    setEnabledHomeFeatures(prev => [...prev, newId]);
+
+    // reset fields
+    setNewFeatureName('');
+    setNewFeatureDesc('');
+    setIsAddingCustomFeature(false);
+  };
+
+  const handleDeleteCustomFeature = (id: string) => {
+    setCustomHomeFeatures(prev => prev.filter(f => f.id !== id));
+    setEnabledHomeFeatures(prev => prev.filter(p => p !== id));
+    if (activeCustomFeatureDetail?.id === id) {
+      setActiveCustomFeatureDetail(null);
+    }
+  };
+
+  const handleAddSubItem = (featId: string) => {
+    if (!newItemText.trim()) return;
+    setCustomHomeFeatures(prev => prev.map(f => {
+      if (f.id === featId) {
+        return { ...f, items: [...(f.items || []), newItemText.trim()] };
+      }
+      return f;
+    }));
+    // update detail state as well
+    setActiveCustomFeatureDetail(prev => {
+      if (prev && prev.id === featId) {
+        return { ...prev, items: [...(prev.items || []), newItemText.trim()] };
+      }
+      return prev;
+    });
+    setNewItemText('');
+  };
+
+  const handleDeleteSubItem = (featId: string, index: number) => {
+    setCustomHomeFeatures(prev => prev.map(f => {
+      if (f.id === featId) {
+        const updated = [...(f.items || [])];
+        updated.splice(index, 1);
+        return { ...f, items: updated };
+      }
+      return f;
+    }));
+    setActiveCustomFeatureDetail(prev => {
+      if (prev && prev.id === featId) {
+        const updated = [...(prev.items || [])];
+        updated.splice(index, 1);
+        return { ...prev, items: updated };
+      }
+      return prev;
+    });
+  };
 
   // File input reference for database restoration upload
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -2166,6 +2264,106 @@ export default function App() {
               </div>
             </motion.div>
           )}
+
+          {/* Custom Feature Categories dynamically created by user */}
+          {customHomeFeatures.map((feat) => {
+            const isChecked = enabledHomeFeatures.includes(feat.id);
+            if (!isChecked) return null;
+            
+            // Map common color class names for high quality visual aesthetics
+            const colorClass = feat.color || 'text-indigo-500';
+            const hoverBorderClass = colorClass.includes('emerald') ? 'hover:border-emerald-500/50 dark:hover:border-[#10b981]/40' :
+                                    colorClass.includes('blue') ? 'hover:border-blue-500/50 dark:hover:border-[#3b82f6]/40' :
+                                    colorClass.includes('amber') ? 'hover:border-amber-500/50 dark:hover:border-[#f59e0b]/40' :
+                                    colorClass.includes('purple') ? 'hover:border-purple-500/50 dark:hover:border-[#8b5cf6]/40' :
+                                    colorClass.includes('pink') ? 'hover:border-pink-500/50 dark:hover:border-[#ec4899]/40' :
+                                    colorClass.includes('teal') ? 'hover:border-teal-500/50 dark:hover:border-[#14b8a6]/40' :
+                                    'hover:border-indigo-500/50 dark:hover:border-[#6366f1]/40';
+                                    
+            const bgBadgeClass = colorClass.includes('emerald') ? 'bg-emerald-500' :
+                                colorClass.includes('blue') ? 'bg-blue-500' :
+                                colorClass.includes('amber') ? 'bg-amber-500' :
+                                colorClass.includes('purple') ? 'bg-purple-650' :
+                                colorClass.includes('pink') ? 'bg-pink-500' :
+                                colorClass.includes('teal') ? 'bg-teal-500' :
+                                'bg-indigo-600';
+
+            const lightBgClass = colorClass.includes('emerald') ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/25 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-500/20' :
+                                colorClass.includes('blue') ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-500/25 group-hover:bg-blue-100 dark:group-hover:bg-blue-500/20' :
+                                colorClass.includes('amber') ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-500/25 group-hover:bg-amber-100 dark:group-hover:bg-amber-500/20' :
+                                colorClass.includes('purple') ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-500/25 group-hover:bg-purple-100 dark:group-hover:bg-purple-500/20' :
+                                colorClass.includes('pink') ? 'bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-100 dark:border-pink-500/25 group-hover:bg-pink-100 dark:group-hover:bg-pink-500/20' :
+                                colorClass.includes('teal') ? 'bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-100 dark:border-teal-500/25 group-hover:bg-teal-100 dark:group-hover:bg-teal-500/20' :
+                                'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/25 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/20';
+
+            return (
+              <motion.div 
+                key={feat.id}
+                id={`home_card_custom_${feat.id}`}
+                onClick={() => setActiveCustomFeatureDetail(feat)}
+                whileHover={{ 
+                  scale: 1.015,
+                  y: -5,
+                  boxShadow: "0 20px 25px -5px rgba(99, 102, 241, 0.12), 0 8px 10px -6px rgba(99, 102, 241, 0.12)"
+                }}
+                whileTap={{ scale: 0.98 }}
+                layout
+                className={`group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 ${hoverBorderClass} transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-3 w-full min-w-0">
+                    <div className={`w-11 h-11 rounded-xl ${bgBadgeClass} text-white flex items-center justify-center shrink-0 shadow-md`}>
+                      <FolderPlus className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="truncate min-w-0 pr-1 text-left">
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">
+                          {feat.label}
+                        </h3>
+                      </div>
+                      <p className="text-[9.5px]/tight md:text-[10.5px]/tight text-slate-500 dark:text-slate-400 mt-0.5 truncate hidden sm:block">
+                        {feat.desc}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm(`Bạn có chắc chắn muốn xóa danh mục tùy chỉnh "${feat.label}" này không?`)) {
+                        handleDeleteCustomFeature(feat.id);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-950/35 text-slate-400 hover:text-red-500 transition cursor-pointer self-start -mt-1 -mr-1"
+                    title="Xóa danh mục tùy chỉnh"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5 text-left">
+                  {feat.desc}
+                </p>
+
+                <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
+
+                <div className="flex justify-between items-end">
+                  <div className="text-left">
+                    <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white font-mono leading-none">
+                      {feat.items ? feat.items.length : 0} <span className="text-[10px] font-bold text-slate-450 dark:text-slate-400 font-sans">mục</span>
+                    </p>
+                    <p className="text-[9px] font-extrabold text-slate-450 dark:text-slate-500 uppercase tracking-widest mt-1 block">LƯU TRỮ RIÊNG</p>
+                  </div>
+                  
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0 transition-all duration-300 ${lightBgClass}`}>
+                    <span className="hidden sm:inline">Quản lý</span>
+                    <ExternalLink className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
 
         {/* If no feature is enabled, show an instructive alert card */}
@@ -2934,9 +3132,16 @@ export default function App() {
                       <div className="bg-slate-100/60 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-3">
                         {settingsActiveTab === 'features' && (
                           <div className="space-y-3" id="settings_panel_features">
-                            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-350 leading-tight">
-                              Bật/Tắt hiển thị ngoài trang chủ:
-                            </p>
+                            <div className="flex justify-between items-center">
+                              <p className="text-[11px] font-bold text-slate-700 dark:text-slate-350 leading-tight">
+                                Bật/Tắt hiển thị ngoài trang chủ:
+                              </p>
+                              {customHomeFeatures.length > 0 && (
+                                <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/45 px-1.5 py-0.5 rounded font-mono">
+                                  +{customHomeFeatures.length} TÙY CHỈNH
+                                </span>
+                              )}
+                            </div>
                             
                             <div className="space-y-1 bg-white dark:bg-slate-950 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-800 select-none max-h-56 overflow-y-auto">
                               {[
@@ -2947,13 +3152,25 @@ export default function App() {
                                 { id: 'inventory', label: '5. Kho thành phẩm', desc: 'Kiểm đếm xưởng tự động', color: 'text-emerald-500' },
                                 { id: 'profit_estimator', label: '6. Giá thành & lợi nhuận', desc: 'Dự phóng chi phí & biên lãi sỉ', color: 'text-indigo-500' },
                                 { id: 'materials', label: '7. Định mức', desc: 'Định mức nhiên liệu vật tư', color: 'text-teal-500' },
-                                { id: 'gallery', label: '8. Thư viện ảnh', desc: 'Hình ảnh đính kèm sản phẩm', color: 'text-indigo-500' }
+                                { id: 'gallery', label: '8. Thư viện ảnh', desc: 'Hình ảnh đính kèm sản phẩm', color: 'text-indigo-500' },
+                                ...customHomeFeatures.map((cf, index) => ({
+                                  id: cf.id,
+                                  label: `${9 + index}. ${cf.label}`,
+                                  desc: cf.desc,
+                                  color: cf.color || 'text-indigo-500',
+                                  isCustom: true
+                                }))
                               ].map(feat => {
                                 const isChecked = enabledHomeFeatures.includes(feat.id);
                                 return (
-                                  <label 
-                                    key={feat.id} 
-                                    className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 cursor-pointer transition"
+                                  <motion.label 
+                                    key={feat.id}
+                                    layout
+                                    className={`flex items-start justify-between gap-2.5 p-2 rounded-lg cursor-pointer transition-all duration-300 border ${
+                                      isChecked 
+                                        ? 'bg-indigo-50/20 dark:bg-indigo-950/20 border-indigo-500/20 dark:border-indigo-500/15' 
+                                        : 'hover:bg-slate-50 dark:hover:bg-slate-900/50 border-transparent'
+                                    }`}
                                   >
                                     <input 
                                       type="checkbox"
@@ -2965,20 +3182,161 @@ export default function App() {
                                           setEnabledHomeFeatures(prev => [...prev, feat.id]);
                                         }
                                       }}
-                                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                                      className="sr-only"
                                     />
-                                    <div className="min-w-0 flex-1 ml-1.5">
-                                      <span className={`text-[11px] font-extrabold ${feat.color} block leading-normal`}>
-                                        {feat.label}
-                                      </span>
-                                      <span className="text-[8.5px] text-slate-400 block mt-0.5 leading-none truncate">
-                                        {feat.desc}
-                                      </span>
+                                    
+                                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                      <motion.div
+                                        animate={{
+                                          backgroundColor: isChecked ? 'rgba(79, 70, 229, 1)' : 'rgba(0, 0, 0, 0)',
+                                          borderColor: isChecked ? 'rgba(79, 70, 229, 1)' : 'rgba(148, 163, 184, 0.5)',
+                                          scale: isChecked ? [1, 1.15, 1] : 1
+                                        }}
+                                        transition={{ duration: 0.25, ease: "easeInOut" }}
+                                        className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
+                                      >
+                                        {isChecked && (
+                                          <motion.svg
+                                            initial={{ scale: 0, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            transition={{ delay: 0.05, duration: 0.15 }}
+                                            className="w-2.5 h-2.5 text-white"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="3.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          >
+                                            <polyline points="20 6 9 17 4 12" />
+                                          </motion.svg>
+                                        )}
+                                      </motion.div>
+                                      
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className={`text-[11px] font-extrabold ${feat.color} block leading-normal truncate`}>
+                                            {feat.label}
+                                          </span>
+                                          {'isCustom' in feat && (
+                                            <span className="px-1 py-0.2 rounded text-[7.5px] font-black text-amber-600 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-500/20 tracking-wide uppercase">
+                                              Tùy tạo
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span className="text-[8.5px] text-slate-400 dark:text-slate-500 block mt-0.5 leading-none truncate pr-1">
+                                          {feat.desc}
+                                        </span>
+                                      </div>
                                     </div>
-                                  </label>
+
+                                    {'isCustom' in feat && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          handleDeleteCustomFeature(feat.id);
+                                        }}
+                                        className="p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-950/35 text-slate-405 hover:text-red-500 shrink-0 cursor-pointer transition self-center"
+                                        title="Xóa danh mục tùy chỉnh"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </motion.label>
                                 );
                               })}
                             </div>
+
+                            {!isAddingCustomFeature ? (
+                              <button
+                                type="button"
+                                onClick={() => setIsAddingCustomFeature(true)}
+                                className="w-full py-2 bg-indigo-50 hover:bg-indigo-100/80 dark:bg-indigo-950/35 dark:hover:bg-indigo-950/60 border border-indigo-200/50 dark:border-indigo-900/40 text-indigo-650 dark:text-indigo-400 font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 mt-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Thêm danh mục mới</span>
+                              </button>
+                            ) : (
+                              <motion.form
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                onSubmit={handleAddCustomFeature}
+                                className="p-3 bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-850 rounded-xl space-y-2.5 mt-1 text-left"
+                              >
+                                <div>
+                                  <label className="block text-[8px] uppercase font-bold text-slate-400 mb-1 tracking-wider">Tên danh mục *</label>
+                                  <input 
+                                    type="text"
+                                    required
+                                    placeholder="VD: In thêu gia công, Thợ phụ..."
+                                    value={newFeatureName}
+                                    onChange={e => setNewFeatureName(e.target.value)}
+                                    className="w-full text-xs border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2.5 outline-none focus:border-indigo-500 dark:focus:border-indigo-500 bg-slate-50 dark:bg-slate-900/40"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[8px] uppercase font-bold text-slate-400 mb-1 tracking-wider">Mô tả ngắn</label>
+                                  <input 
+                                    type="text"
+                                    placeholder="VD: Kiểm soát sản lượng thêu rời..."
+                                    value={newFeatureDesc}
+                                    onChange={e => setNewFeatureDesc(e.target.value)}
+                                    className="w-full text-xs border border-slate-200 dark:border-slate-800 rounded-lg py-1.5 px-2.5 outline-none focus:border-indigo-500 dark:focus:border-indigo-500 bg-slate-50 dark:bg-slate-900/40"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[8px] uppercase font-bold text-slate-400 mb-1 tracking-wider font-mono">Tông màu nhận diện</label>
+                                  <div className="flex flex-wrap gap-1.5 mt-0.5">
+                                    {[
+                                      { color: 'text-indigo-500', name: 'Indigo' },
+                                      { color: 'text-emerald-500', name: 'Emerald' },
+                                      { color: 'text-blue-555', colorName: 'text-blue-500', name: 'Blue' },
+                                      { color: 'text-amber-500', name: 'Amber' },
+                                      { color: 'text-pink-500', name: 'Pink' },
+                                      { color: 'text-teal-500', name: 'Teal' },
+                                      { color: 'text-purple-500', name: 'Purple' }
+                                    ].map(item => {
+                                      const activeColor = item.colorName || item.color;
+                                      return (
+                                        <button
+                                          key={item.color}
+                                          type="button"
+                                          onClick={() => setNewFeatureColor(activeColor)}
+                                          className={`py-1 px-2.5 rounded-md text-[9px] font-extrabold capitalize transition border cursor-pointer ${
+                                            newFeatureColor === activeColor
+                                              ? 'bg-slate-105 dark:bg-slate-800 border-indigo-500 scale-105'
+                                              : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 opacity-75'
+                                          } ${item.color}`}
+                                        >
+                                          {item.name}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-1 border-t border-slate-100 dark:border-slate-900/60">
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsAddingCustomFeature(false)}
+                                    className="flex-1 py-1 px-2 bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider rounded-lg transition hover:bg-slate-200 dark:hover:bg-slate-850 cursor-pointer"
+                                  >
+                                    Hủy
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    className="flex-1 py-1 px-2 bg-indigo-600 text-white text-[10px] font-extrabold uppercase tracking-wider rounded-lg transition hover:bg-indigo-750 cursor-pointer"
+                                  >
+                                    Tạo mới
+                                  </button>
+                                </div>
+                              </motion.form>
+                            )}
                           </div>
                         )}
 
@@ -3981,6 +4339,126 @@ export default function App() {
                 </button>
               </div>
             </motion.form>
+          </div>
+        )}
+
+        {/* Beautiful Custom Feature Category Detail Manager Modal */}
+        {activeCustomFeatureDetail && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+            <div className="absolute inset-0" onClick={() => setActiveCustomFeatureDetail(null)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className={`max-w-md w-full p-6 shadow-2xl rounded-3xl z-20 space-y-4 border text-left flex flex-col max-h-[90vh] ${
+                resolvedTheme === 'dark' 
+                  ? 'bg-[#101424] border-slate-850 text-white' 
+                  : 'bg-white border-slate-200 text-slate-800'
+              }`}
+            >
+              {/* Header */}
+              <div className={`pb-3.5 flex justify-between items-center border-b shrink-0 ${resolvedTheme === 'dark' ? 'border-slate-850' : 'border-slate-150'}`}>
+                <div className="min-w-0 pr-2">
+                  <span className="text-[9px] font-black tracking-widest uppercase text-indigo-500 block mb-1">DANH MỤC LƯU TRỮ</span>
+                  <h3 className="text-sm font-black tracking-wider uppercase font-sans truncate flex items-center gap-2">
+                    <FolderPlus className="w-4.5 h-4.5 shrink-0 text-indigo-500" />
+                    <span>{activeCustomFeatureDetail.label}</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-400 mt-1 truncate">
+                    {activeCustomFeatureDetail.desc}
+                  </p>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setActiveCustomFeatureDetail(null)} 
+                  className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Add Custom Item Input bar */}
+              <div className="space-y-1 shrink-0">
+                <label className="block text-[8.5px] uppercase font-bold text-slate-400 mb-1 tracking-wider">Thêm nội dung/Công việc mới</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    placeholder="VD: Nhận 200 bộ thêu bông, hoàn tất..."
+                    value={newItemText}
+                    onChange={e => setNewItemText(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddSubItem(activeCustomFeatureDetail.id);
+                      }
+                    }}
+                    className={`flex-1 text-xs border rounded-xl py-2 px-3 outline-none focus:border-indigo-505 transition font-sans ${
+                      resolvedTheme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddSubItem(activeCustomFeatureDetail.id)}
+                    className="px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4 animate-pulse" />
+                    <span>Thêm</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Items List container */}
+              <div className="font-sans text-xs flex-1 overflow-y-auto space-y-1.5 pr-1 max-h-[40vh] min-h-[150px]">
+                {(!activeCustomFeatureDetail.items || activeCustomFeatureDetail.items.length === 0) ? (
+                  <div className="h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 space-y-1">
+                    <Sparkles className="w-6 h-6 text-slate-300 dark:text-slate-700 animate-pulse" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-450 dark:text-slate-500">Chưa có lưu trữ nào</span>
+                    <p className="text-[9.5px]/normal text-slate-450 dark:text-slate-550 max-w-xs">
+                      Hãy nhập công việc, ghi chú hoặc mốc sản xuất của danh mục này vào ô phía trên để bắt đầu theo dõi.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {activeCustomFeatureDetail.items.map((item, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: -5 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border text-xs gap-3 font-sans leading-relaxed ${
+                          resolvedTheme === 'dark' 
+                            ? 'bg-slate-900/60 border-slate-850 text-slate-100' 
+                            : 'bg-slate-50 border-slate-150 text-slate-750'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <span className="font-medium break-all select-all">{item}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSubItem(activeCustomFeatureDetail.id, index)}
+                          className="p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-450 hover:text-red-500 transition cursor-pointer shrink-0"
+                          title="Xóa mục này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Close footer */}
+              <div className={`pt-3 border-t flex justify-end shrink-0 ${resolvedTheme === 'dark' ? 'border-slate-850' : 'border-slate-150'}`}>
+                <button
+                  type="button"
+                  onClick={() => setActiveCustomFeatureDetail(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Đóng cửa sổ
+                </button>
+              </div>
+            </motion.div>
           </div>
         )}
 
