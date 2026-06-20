@@ -22,6 +22,42 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set dynamic build version
+        run: |
+          # 1. Read major.minor version and current patch from package.json
+          BASE_VERSION=$(node -p "const v = require('./package.json').version.split('.'); v[0] + '.' + v[1]")
+          FILE_PATCH=$(node -p "require('./package.json').version.split('.')[2] || 0")
+          
+          # 2. Add GITHUB_RUN_NUMBER to the patch to ensure uniqueness and strictly increasing progression
+          PATCH_VERSION=$((FILE_PATCH + ${{ github.run_number }}))
+          NEW_VERSION="${BASE_VERSION}.${PATCH_VERSION}"
+          echo "Setting dynamic build version to: $NEW_VERSION"
+          
+          # 3. Write this version back to package.json, src/types.ts, and public/version.json in runner workspace
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.version = '$NEW_VERSION';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+
+          if (fs.existsSync('src/types.ts')) {
+            let types = fs.readFileSync('src/types.ts', 'utf8');
+            types = types.replace(/(export\s+const\s+CURRENT_VERSION\s*=\s*)(['\"])[^'\"]+(['\"])/, '$1$2$NEW_VERSION$3');
+            fs.writeFileSync('src/types.ts', types, 'utf8');
+          }
+
+          if (fs.existsSync('public/version.json')) {
+            const v = JSON.parse(fs.readFileSync('public/version.json', 'utf8'));
+            v.version = '$NEW_VERSION';
+            const d = new Date();
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            v.releaseDate = day + '/' + month + '/' + year;
+            fs.writeFileSync('public/version.json', JSON.stringify(v, null, 2) + '\n', 'utf8');
+          }
+          "
+
       - name: Build production app
         run: npx vite build
 
