@@ -5,6 +5,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 /**
  * Helper to convert a Blob to base64 Data URL
@@ -16,6 +17,57 @@ function blobToBase64(blob: Blob): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+}
+
+/**
+ * Download/Save base64 image file on native platform (Android/iOS)
+ */
+export async function downloadImageNative(base64UrlOrData: string, fileName: string): Promise<string> {
+  const isApp = Capacitor.isNativePlatform();
+  if (!isApp) {
+    throw new Error("Chỉ hỗ trợ trên ứng dụng di động (native app).");
+  }
+
+  let base64Data = base64UrlOrData;
+  if (base64UrlOrData.includes(',')) {
+    base64Data = base64UrlOrData.split(',')[1];
+  }
+
+  let finalFileName = fileName;
+  if (!finalFileName.endsWith('.png') && !finalFileName.endsWith('.jpg') && !finalFileName.endsWith('.jpeg')) {
+    finalFileName += '.png';
+  }
+
+  // Request storage permission
+  try {
+    const perm = await Filesystem.checkPermissions();
+    if (perm.publicStorage !== 'granted') {
+      await Filesystem.requestPermissions();
+    }
+  } catch (err) {
+    console.warn("Storage permission check/request failed", err);
+  }
+
+  // Attempt writing to Directory.Documents
+  try {
+    const result = await Filesystem.writeFile({
+      path: finalFileName,
+      data: base64Data,
+      directory: Directory.Documents,
+      recursive: true
+    });
+    return result.uri;
+  } catch (error) {
+    console.warn("Direct write to Documents failed, trying fallback Directory.Library/Cache", error);
+    // iOS/Android fallback to local cache/data space
+    const result = await Filesystem.writeFile({
+      path: finalFileName,
+      data: base64Data,
+      directory: Directory.Data,
+      recursive: true
+    });
+    return result.uri;
+  }
 }
 
 /**

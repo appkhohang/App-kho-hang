@@ -4,7 +4,8 @@ import { Download, X, Camera, CheckCircle, FileText, User, Calendar, Receipt, Do
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
-import { convertCanvasToPngBlob, shareImageFile } from '../utils/imageUtils';
+import { convertCanvasToPngBlob, shareImageFile, downloadImageNative } from '../utils/imageUtils';
+import { Capacitor } from '@capacitor/core';
 
 const dataURLtoBlob = (dataurl: string) => {
   try {
@@ -47,25 +48,46 @@ export default function InvoiceDetailModal({
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied-img' | 'copied-text' | 'downloaded' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleDownloadImage = () => {
+  const handleDownloadImage = async () => {
     if (!exportedImgUrl) return;
     try {
+      const pName = customer.name.replace(/\s+/g, "_");
+      const fileName = `HOA_DON_${bill.billNumber}_${pName}.png`;
+
+      // 1. If running in Capacitor native container (Android APK/iOS App)
+      if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+        try {
+          const savedPath = await downloadImageNative(exportedImgUrl, fileName);
+          alert(
+            "✅ Tải ảnh hóa đơn thành công!\n\n" +
+            "📂 Hình ảnh đã được lưu vào thư mục 'Tài liệu' (Documents) của thiết bị.\n" +
+            "Bạn có thể mở Album ảnh hoặc ứng dụng quản lý tệp trên máy để xem nhé."
+          );
+          setCopyStatus('downloaded');
+          setTimeout(() => setCopyStatus('idle'), 3000);
+          return;
+        } catch (nativeErr) {
+          console.warn("Failsafe native saving failed, offering fallback alert", nativeErr);
+        }
+      }
+
+      // 2. Mobile brownsers / webviews (Zalo / Facebook) standard alert
       const isWebView = /FBAN|FBAV|Zalo|Instagram/i.test(navigator.userAgent || '');
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '') && !(window as any).MSStream;
       const isAndroid = /Android/i.test(navigator.userAgent || '');
 
       if (isWebView || isIOS || isAndroid) {
         alert(
-          "👉 Trên điện thoại di động (hoặc WebView Zalo/Facebook), trình duyệt không hỗ trợ tải tệp tự động.\n\n" +
-          "💡 Giải pháp: Vui lòng NHẤN GIỮ (long-press) vào hình ảnh hóa đơn hiển thị ở phía dưới, rồi chọn 'Lưu hình ảnh' hoặc 'Lưu vào Album' nhé!"
+          "👉 Trên trình duyệt di động hoặc WebView (Zalo/Facebook), tệp không tự động tải xuống trực tiếp.\n\n" +
+          "💡 Giải pháp: Vui lòng NHẤN GIỮ (long-press) vào hình ảnh hóa đơn hiển thị ở phía dưới, rồi chọn 'Lưu hình ảnh' hoặc 'Lưu vào Album' để lưu về máy nhé!"
         );
         return;
       }
 
+      // 3. Desktop standard browser download
       const link = document.createElement('a');
       link.href = exportedImgUrl;
-      const pName = customer.name.replace(/\s+/g, "_");
-      link.download = `HOA_DON_${bill.billNumber}_${pName}.png`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
