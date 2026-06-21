@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Download, X, Camera, CheckCircle, FileText, User, Calendar, Receipt, DollarSign, Sparkles, Plus, Share2, AlertCircle } from 'lucide-react';
+import { Download, X, Camera, CheckCircle, FileText, User, Calendar, Receipt, DollarSign, Sparkles, Plus, Share2, AlertCircle, Copy } from 'lucide-react';
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
@@ -24,6 +24,55 @@ export default function InvoiceDetailModal({
   const [isExportingModalImage, setIsExportingModalImage] = useState(false);
   const [exportedImgUrl, setExportedImgUrl] = useState<string | null>(null);
   const [showExportSuccessModal, setShowExportSuccessModal] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied-img' | 'copied-text' | 'error'>('idle');
+
+  const handleCopyImageToClipboard = async () => {
+    if (!exportedImgUrl) return;
+    try {
+      const response = await fetch(exportedImgUrl);
+      const blob = await response.blob();
+      
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            [blob.type]: blob
+          })
+        ]);
+        setCopyStatus('copied-img');
+        setTimeout(() => setCopyStatus('idle'), 3000);
+      } else {
+        throw new Error("Trình duyệt không hỗ trợ ClipboardItem");
+      }
+    } catch (err) {
+      console.warn("Failed to copy image to clipboard", err);
+      setCopyStatus('error');
+      setTimeout(() => setCopyStatus('idle'), 3000);
+    }
+  };
+
+  const handleCopyTextToClipboard = async () => {
+    try {
+      const text = `SỔ SÁCH XƯỞNG AN - HOÁ ĐƠN BÁN HÀNG\n` +
+                   `Đại lý: ${customer.name}\n` +
+                   `Mã đơn: ${bill.billNumber || "HD-0000"}\n` +
+                   `Ngày lập: ${bill.date}\n` +
+                   `--------------------------------\n` +
+                   `1. Nợ cũ dồn lại gối đầu: ${bill.previousDebt.toLocaleString()}đ\n` +
+                   `2. Tổng cộng cộng tiền hàng lô mới: ${bill.subtotal.toLocaleString()}đ\n` +
+                   (bill.paymentAmount > 0 ? `3. Khách đã thanh toán trực tiếp: -${bill.paymentAmount.toLocaleString()}đ\n` : '') +
+                   `--------------------------------\n` +
+                   `Tổng nợ: ${bill.grandTotal.toLocaleString()}đ\n` +
+                   `--------------------------------\n` +
+                   `🍀 Kính chúc Đại Lý buôn may bán đắt, thuận buồm xuôi gió!`;
+      await navigator.clipboard.writeText(text);
+      setCopyStatus('copied-text');
+      setTimeout(() => setCopyStatus('idle'), 3000);
+    } catch (err) {
+      console.warn("Failed to copy text", err);
+      setCopyStatus('error');
+      setTimeout(() => setCopyStatus('idle'), 3000);
+    }
+  };
 
   // Sort all bills of this customer to find the previous one and isolate cycle payments
   const customerBills = bills
@@ -60,46 +109,19 @@ export default function InvoiceDetailModal({
       const dataUrl = canvasObj.toDataURL("image/png");
       setExportedImgUrl(dataUrl);
 
-      // Attempt web-native share (which allows immediate direct sharing via Zalo/Viber on mobile devices!)
-      let sharedNatively = false;
+      // 1. Try a standard anchor link download in background (great for desktop)
       try {
-        if (navigator.share && navigator.canShare) {
-          const response = await fetch(dataUrl);
-          const blob = await response.blob();
-          const file = new File(
-            [blob], 
-            `HOA_DON_${bill.billNumber}_${customer.name.replace(/\s+/g, "_")}.png`, 
-            { type: "image/png" }
-          );
-          
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: `Hóa đơn ${bill.billNumber}`,
-              text: `Hóa đơn ${bill.billNumber} từ Sổ sách Xưởng An gửi Đại Lý ${customer.name}`
-            });
-            sharedNatively = true;
-          }
-        }
-      } catch (shareErr) {
-        console.warn("Native file sharing failed or canceled:", shareErr);
+        const link = document.createElement("a");
+        link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
+        link.href = dataUrl;
+        link.click();
+      } catch (downloadErr) {
+        console.warn("Direct link download blocked or failed, this is normal inside in-app webviews like Zalo", downloadErr);
       }
-
-      if (!sharedNatively) {
-        // Fallback for desktop & browsers blocking direct programmatic file saves:
-        // 1. Attempt standard anchor link download trigger
-        try {
-          const link = document.createElement("a");
-          link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
-          link.href = dataUrl;
-          link.click();
-        } catch (downloadErr) {
-          console.warn("Direct link download failed, displaying visual save assistant instead:", downloadErr);
-        }
-        
-        // 2. Open the modern Interactive Saved Popup (essential for Zalo, Safari, Facebook browser overlay)
-        setShowExportSuccessModal(true);
-      }
+      
+      // 2. Always show the elegant Export Success Modal (vital for Zalo, Safari, Facebook browser over-lay, iOS)
+      // This allows users to hold-to-save on mobile, copy text details, or copy image directly.
+      setShowExportSuccessModal(true);
     } catch (e) {
       console.error("Export past invoice failed", e);
     } finally {
@@ -310,32 +332,72 @@ export default function InvoiceDetailModal({
 
       {/* Modern instructions overlay popup for iPhone/in-app Zalo browsers to save and share */}
       {showExportSuccessModal && exportedImgUrl && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md">
           <div className="absolute inset-0" onClick={() => setShowExportSuccessModal(false)} />
           <motion.div
             initial={{ scale: 0.95, opacity: 0, y: 10 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="relative bg-white text-slate-800 border border-slate-200 rounded-3xl p-5 max-w-sm w-full text-center space-y-4 z-10 shadow-2xl"
+            className="relative bg-white text-slate-800 border border-slate-200 rounded-3xl p-5 sm:p-6 max-w-md w-full text-center space-y-4 z-10 shadow-2xl overflow-y-auto max-h-[92vh]"
           >
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle className="w-6 h-6 animate-bounce" />
             </div>
             
             <div className="space-y-1">
-              <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wide">Đã Tạo Hóa Đơn!</h4>
+              <h4 className="font-extrabold text-slate-900 text-base uppercase tracking-wide">Đã Tạo Hóa Đơn Xong!</h4>
               <p className="text-[11px] text-slate-500 leading-normal">
-                Do quy chế bảo mật chặn tải xuống tự động của một số trình duyệt (như Zalo / Facebook / Safari).
+                Cách tốt nhất để gửi hóa đơn này qua Zalo:
               </p>
-              <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-250 text-amber-800 text-[10px] leading-relaxed text-left font-sans mt-2">
-                👉 <strong>Hướng dẫn:</strong> Nhấn giữ (long-press) vào hình ảnh khoảng 2 giây, sau đó chọn <strong>"Lưu vào Ảnh"</strong> hoặc <strong>"Gửi qua Zalo"</strong> là xong!
-              </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-inner max-h-52 overflow-y-auto">
+            {/* Quick Copy Dashboard */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <button
+                type="button"
+                onClick={handleCopyImageToClipboard}
+                className="flex flex-col items-center justify-center gap-2 p-3 bg-emerald-50 hover:bg-emerald-100/80 active:scale-95 text-emerald-800 font-extrabold rounded-2xl transition border border-emerald-150 hover:border-emerald-200 shadow-sm cursor-pointer"
+              >
+                <Copy className="w-5 h-5 text-emerald-600" />
+                <span>Sao Chép Ảnh</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyTextToClipboard}
+                className="flex flex-col items-center justify-center gap-2 p-3 bg-indigo-50 hover:bg-indigo-100/80 active:scale-95 text-indigo-800 font-extrabold rounded-2xl transition border border-indigo-150 hover:border-indigo-200 shadow-sm cursor-pointer"
+              >
+                <FileText className="w-5 h-5 text-indigo-600" />
+                <span>Sao Chép Chữ</span>
+              </button>
+            </div>
+
+            {/* Notification alert states with smooth transition indicators */}
+            {copyStatus !== 'idle' && (
+              <motion.div 
+                initial={{ opacity: 0, y: -5 }} 
+                animate={{ opacity: 1, y: 0 }}
+                className={`text-[11px] font-bold p-2.5 rounded-xl border ${
+                  copyStatus === 'copied-img' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                  copyStatus === 'copied-text' ? 'bg-indigo-50 text-indigo-800 border-indigo-200' :
+                  'bg-rose-50 text-rose-800 border-rose-200'
+                }`}
+              >
+                {copyStatus === 'copied-img' && "✓ Đã copy ảnh! Hãy mở cuộc trò chuyện Zalo và nhấn 'Dán' (Paste) để gửi ngay."}
+                {copyStatus === 'copied-text' && "✓ Đã copy nội dung chữ chi tiết hóa đơn! Hãy mở Zalo và dán."}
+                {copyStatus === 'error' && "⚠️ Trình duyệt/Thiết bị của bạn chặn sao chép nhanh. Vui lòng làm theo hướng dẫn bên dưới."}
+              </motion.div>
+            )}
+
+            {/* Sincere Instruction Banner */}
+            <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-amber-900 text-[10.5px] leading-relaxed text-left font-sans">
+              💡 <strong>Lưu ý tiện lợi:</strong> Nhấn giữ vào hình ảnh hóa đơn bên dưới khoảng 2 giây, rồi chọn <strong>"Gửi qua Zalo"</strong> hoặc <strong>"Lưu vào máy"</strong> để gửi nhanh chóng!
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-inner max-h-56 overflow-y-auto bg-slate-50 p-2">
               <img 
                 src={exportedImgUrl} 
                 alt="Hóa đơn Xưởng An" 
-                className="w-full h-auto select-all pointer-events-auto"
+                className="w-full h-auto select-all pointer-events-auto rounded-lg mx-auto border border-slate-300"
                 referrerPolicy="no-referrer"
               />
             </div>
@@ -354,20 +416,23 @@ export default function InvoiceDetailModal({
                         title: `Hóa đơn ${bill.billNumber}`,
                         text: `Hóa đơn xưởng An - ${customer.name}`
                       });
+                    } else {
+                      setCopyStatus('error');
+                      setTimeout(() => setCopyStatus('idle'), 3500);
                     }
                   } catch (err) {
                     console.error("Manual share error", err);
                   }
                 }}
-                className="flex-1 py-2 bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
+                className="flex-1 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95"
               >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>Gửi qua Zalo</span>
+                <Share2 className="w-4 h-4" />
+                <span>Chia sẻ điện thoại</span>
               </button>
               <button
                 type="button"
                 onClick={() => setShowExportSuccessModal(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer"
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer"
               >
                 Đóng
               </button>

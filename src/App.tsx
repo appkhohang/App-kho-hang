@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode, FolderPlus, ExternalLink, Sparkles } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode, FolderPlus, ExternalLink, Sparkles, Share2 } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Statically imported child components/tabs to prevent hook errors and version mismatch bugs
@@ -34,6 +34,7 @@ import { App as CapApp } from '@capacitor/app';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import AppUpdateModal from './components/AppUpdateModal';
 import AnBrandLogo from './components/AnBrandLogo';
+import InvoiceDetailModal from './components/InvoiceDetailModal';
 
 
 const TabLoadingFallback = () => (
@@ -162,6 +163,11 @@ export default function App() {
       exportFormat: saved.exportFormat || 'xlsx'
     };
   });
+
+  // States helper for Quick Zalo Share on Home Card #home_card_hoa_don
+  const [sharingLatestBill, setSharingLatestBill] = useState<Bill | null>(null);
+  const [invoiceCardShake, setInvoiceCardShake] = useState<boolean>(false);
+  const [invoiceToast, setInvoiceToast] = useState<{ text: string; type: 'loading' | 'success' | 'error' } | null>(null);
 
   // Production Management States
   const [operationBreakdowns, setOperationBreakdowns] = useState<ModelOperationBreakdown[]>(() => getSavedArray("xuongan_operation_breakdowns", []));
@@ -1865,8 +1871,40 @@ export default function App() {
                 boxShadow: "0 20px 25px -5px rgba(59, 130, 246, 0.12), 0 8px 10px -6px rgba(59, 130, 246, 0.12)"
               }}
               whileTap={{ scale: 0.98 }}
+              animate={invoiceCardShake ? { x: [-3, 3, -3, 3, -1.5, 1.5, 0] } : {}}
+              transition={invoiceCardShake ? { duration: 0.35, ease: "easeInOut" } : undefined}
               className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-blue-500/50 dark:hover:border-[#3b82f6]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[170px] shadow-xs hover:shadow-lg hover:shadow-blue-500/5"
             >
+              {/* Local absolute Toast notification floating exactly on top of this card */}
+              <AnimatePresence>
+                {invoiceToast && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20, scale: 0.94 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -12, scale: 0.94 }}
+                    transition={{ type: "spring", stiffness: 350, damping: 22 }}
+                    className={`absolute -top-4 left-1/2 -translate-x-1/2 z-30 px-3.5 py-2 rounded-full text-[10px] md:text-sm font-bold shadow-lg border flex items-center gap-1.5 whitespace-nowrap transition-colors duration-150 ${
+                      invoiceToast.type === 'loading'
+                        ? 'bg-blue-50 dark:bg-blue-950/95 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/80 shadow-md'
+                        : invoiceToast.type === 'success'
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/10'
+                        : 'bg-rose-600 text-white border-rose-500 shadow-rose-500/10'
+                    }`}
+                  >
+                    {invoiceToast.type === 'loading' && (
+                      <span className="w-3 h-3 border-2 border-blue-600 dark:border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                    )}
+                    {invoiceToast.type === 'success' && (
+                      <Check className="w-3.5 h-3.5 text-white shrink-0 font-extrabold animate-bounce" />
+                    )}
+                    {invoiceToast.type === 'error' && (
+                      <AlertCircle className="w-3.5 h-3.5 text-white shrink-0" />
+                    )}
+                    <span>{invoiceToast.text}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3 w-full">
                   <div className="w-11 h-11 rounded-xl bg-[#3b82f6] text-white flex items-center justify-center shrink-0 shadow-md">
@@ -1895,7 +1933,7 @@ export default function App() {
               <div className="flex justify-between items-end">
                 <div>
                   <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">{currentMonthBillCount}</p>
-                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-blue-600 dark:text-blue-400 mt-1.5 font-sans whitespace-nowrap">Hóa đơn tháng này</p>
+                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-blue-600 dark:text-blue-400 mt-1.5 font-sans whitespace-nowrap font-sans">Hóa đơn tháng này</p>
                   {latestBillDate && (
                     <div 
                       title={`Ngày tạo hoá đơn gần nhất: ${latestBillDate}`}
@@ -1906,10 +1944,82 @@ export default function App() {
                   )}
                 </div>
                 
-                {/* View Details Button with Icon */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-500/25 transition-all duration-300 group-hover:bg-blue-150 dark:group-hover:bg-blue-500/20 group-hover:border-blue-250 dark:group-hover:border-blue-500/40 group-hover:shadow-[0_4px_12px_rgba(59,130,246,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
-                  <span className="hidden sm:inline">Xem chi tiết</span>
-                  <FileText className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                {/* Actions container with Share Zalo button & View Details button */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      
+                      // Haptic shake of the card
+                      setInvoiceCardShake(true);
+                      setTimeout(() => setInvoiceCardShake(false), 350);
+
+                      // Web-vibrate physical device if supported
+                      if (navigator.vibrate) {
+                        try {
+                          navigator.vibrate(55);
+                        } catch (err) {
+                          console.warn("Vibration API requires user interaction first", err);
+                        }
+                      }
+
+                      // Fetch the latest bill in chronological order 
+                      const latestBill = [...bills].sort((a, b) => b.createdAt - a.createdAt)[0];
+                      if (!latestBill) {
+                        setInvoiceToast({ text: "Chưa lập hóa đơn nào!", type: "error" });
+                        setTimeout(() => setInvoiceToast(null), 2500);
+                        return;
+                      }
+
+                      // Display local loading transition indicator
+                      setInvoiceToast({ text: "Đang kết xuất hóa đơn gửi Zalo...", type: "loading" });
+                      
+                      setTimeout(() => {
+                        // Deep link check: try launching native Zalo app protocol
+                        const targetScheme = "zalo://";
+                        const checkStart = Date.now();
+                        
+                        try {
+                          window.location.href = targetScheme;
+                        } catch (schemeErr) {
+                          console.warn("Scheme redirection failed directly:", schemeErr);
+                        }
+
+                        // Determine if Zalo native app successfully launched and took focus
+                        setTimeout(() => {
+                          const elapsed = Date.now() - checkStart;
+                          // If elapsed time is short, browser focus did not switch -> Zalo might not be installed
+                          if (elapsed < 1500) {
+                            setInvoiceToast({ 
+                              text: "⚠️ Chưa mở được Zalo. Hãy lưu ảnh rồi gửi thủ công nhé!", 
+                              type: "error" 
+                            });
+                            setSharingLatestBill(latestBill);
+                            setTimeout(() => setInvoiceToast(null), 2500);
+                          } else {
+                            setInvoiceToast({ 
+                              text: "Mở Zalo thành công! Hãy gửi ảnh đã chuẩn bị.", 
+                              type: "success" 
+                            });
+                            setSharingLatestBill(latestBill);
+                            setTimeout(() => setInvoiceToast(null), 2500);
+                          }
+                        }, 1000);
+
+                      }, 750);
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#0068ff] hover:bg-[#005ad9] active:scale-95 text-white rounded-xl transition duration-150 text-[9px] md:text-[10px] font-black uppercase tracking-wider shrink-0 cursor-pointer shadow-md shadow-[#0068ff]/20 hover:shadow-[#0068ff]/35 border border-transparent z-10"
+                    title="Chia sẻ hình ảnh và chi tiết hóa đơn mới nhất qua Zalo"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Chia sẻ Zalo</span>
+                  </button>
+
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-100 dark:border-blue-500/25 transition-all duration-300 group-hover:bg-blue-150 dark:group-hover:bg-blue-500/20 group-hover:border-blue-250 dark:group-hover:border-blue-500/40 group-hover:shadow-[0_4px_12px_rgba(59,130,246,0.15)] text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                    <span className="hidden sm:inline">Xem</span>
+                    <FileText className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -4515,6 +4625,22 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Quick Invoice Zalo Sharing Modal directly launched from Dashboard card */}
+      {sharingLatestBill && (
+        (() => {
+          const lCust = customers.find(c => c.id === sharingLatestBill.customerId);
+          if (!lCust) return null;
+          return (
+            <InvoiceDetailModal
+              bill={sharingLatestBill}
+              customer={lCust}
+              bills={bills}
+              payments={payments}
+              onClose={() => setSharingLatestBill(null)}
+            />
+          );
+        })()
+      )}
 
     </div>
   );
