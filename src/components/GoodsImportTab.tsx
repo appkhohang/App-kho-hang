@@ -290,16 +290,16 @@ export default function GoodsImportTab({
       alert("⚠️ Bạn đang đăng nhập với vai trò CHỈ XEM, không có quyền nhập hàng mới!");
       return;
     }
-    if (!mẫu || !sốLượng || !đơnGiáMay) {
-      alert("Vui lòng nhập đầy đủ Tên mẫu, Số lượng và Đơn giá may!");
+    if (!mẫu && !sốLượng && !đơnGiáMay && !shipĐT_TP && !shipTP_ĐT && !importPhoto) {
+      alert("Vui lòng nhập ít nhất một ô thông tin (Tên mẫu, Số lượng, Đơn giá hoặc Ảnh)!");
       return;
     }
 
     const newItem: ImportItem = {
       id: "imp-" + Date.now(),
-      mẫu,
-      sốLượng: Number(sốLượng),
-      đơnGiáMay: Number(đơnGiáMay),
+      mẫu: mẫu || "Mẫu chưa đặt tên",
+      sốLượng: sốLượng !== '' ? Number(sốLượng) : 0,
+      đơnGiáMay: đơnGiáMay !== '' ? Number(đơnGiáMay) : 0,
       vậnChuyểnĐT_TP: Number(shipĐT_TP || 0),
       vậnChuyểnTP_ĐT: Number(shipTP_ĐT || 0),
       ngày: ngàyNhập,
@@ -425,16 +425,16 @@ export default function GoodsImportTab({
       alert("⚠️ Bạn đang đăng nhập với vai trò CHỈ XEM, không có quyền thêm dòng vận chuyển!");
       return;
     }
-    if (!shipNộiDung || !shipSốTiền) {
-      alert("Vui lòng nhập đầy đủ Nội dung (mẫu/vải) và Số tiền ship!");
+    if (!shipNộiDung && !shipSốTiền) {
+      alert("Vui lòng nhập ít nhất Nội dung hoặc Số tiền ship!");
       return;
     }
 
     const newShip: TpDtShippingItem = {
       id: "ship-" + Date.now(),
-      nộiDung: shipNộiDung,
+      nộiDung: shipNộiDung || "Vận chuyển tự do",
       ngày: shipNgày,
-      sốTiền: Number(shipSốTiền),
+      sốTiền: shipSốTiền !== '' ? Number(shipSốTiền) : 0,
       weekKey: getVietnameseWeekKey(shipNgày),
       createdAt: Date.now()
     };
@@ -819,7 +819,6 @@ export default function GoodsImportTab({
                         </div>
                         <input
                           type="text"
-                          required
                           placeholder="VD: Đầm Hoa Vintage"
                           value={mẫu}
                           onChange={e => setMẫu(e.target.value)}
@@ -828,11 +827,10 @@ export default function GoodsImportTab({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-slate-450 dark:text-slate-400 mb-1.5">Số lượng may (chiếc)</label>
+                        <label className="block text-xs font-medium text-slate-455 dark:text-slate-400 mb-1.5">Số lượng may (chiếc)</label>
                         <input
                           type="number"
-                          required
-                          min={1}
+                          min={0}
                           placeholder="VD: 500"
                           value={sốLượng}
                           onChange={e => setSốLượng(e.target.value === '' ? '' : Number(e.target.value))}
@@ -844,7 +842,6 @@ export default function GoodsImportTab({
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">Đơn giá may (đ / chiếc)</label>
                         <input
                           type="number"
-                          required
                           min={0}
                           placeholder="VD: 15000"
                           value={đơnGiáMay}
@@ -931,7 +928,6 @@ export default function GoodsImportTab({
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">Nội dung chuyến hàng (Vải, mốc mẫu, phụ liệu...)</label>
                         <input
                           type="text"
-                          required
                           placeholder="VD: Nhập 4 cây vải, hàng mẫu thử"
                           value={shipNộiDung}
                           onChange={e => setShipNộiDung(e.target.value)}
@@ -943,7 +939,6 @@ export default function GoodsImportTab({
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">Số tiền thanh toán ship TP ➔ ĐT (đ)</label>
                         <input
                           type="number"
-                          required
                           min={0}
                           placeholder="VD: 250000"
                           value={shipSốTiền}

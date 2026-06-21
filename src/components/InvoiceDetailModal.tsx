@@ -311,6 +311,14 @@ export default function InvoiceDetailModal({
         transition={{ type: "spring", duration: 0.4 }}
         className="relative w-full max-w-lg z-10 flex flex-col gap-3 my-6 mx-auto select-none"
       >
+        {/* Floating Close Button at top-right corner to replace bulky bottom close button */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -top-1 -right-1 z-30 w-8 h-8 rounded-full bg-slate-900/90 text-white border border-slate-700/80 flex items-center justify-center hover:bg-slate-800 transition active:scale-90 cursor-pointer shadow-md"
+        >
+          <X className="w-4 h-4" />
+        </button>
         {/* Scrollable Receipt Body Container (Includes proper top margin to safeguard iOS safe-area/notches) */}
         <div className="border border-slate-200/50 dark:border-slate-800 p-1 bg-slate-50 dark:bg-[#090e0b] rounded-3xl shadow-2xl overflow-hidden max-h-[82vh] overflow-y-auto mt-2">
           
@@ -437,7 +445,7 @@ export default function InvoiceDetailModal({
                   <Receipt className="w-3.5 h-3.5 text-slate-400" />
                   <span>1. Nợ cũ dồn lại gối đầu:</span>
                 </span>
-                <span className="font-extrabold font-mono text-slate-650 bg-slate-50 px-2 py-0.5 rounded whitespace-nowrap flex-shrink-0">
+                <span className="font-extrabold font-mono text-slate-650 bg-slate-50 px-2.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 text-right min-w-[100px] sm:min-w-[120px]">
                   {bill.previousDebt.toLocaleString()}đ
                 </span>
               </div>
@@ -447,19 +455,19 @@ export default function InvoiceDetailModal({
                   <Plus className="w-3.5 h-3.5 text-slate-400" />
                   <span>2. Tổng cộng tiền hàng lô mới:</span>
                 </span>
-                <span className="font-black font-mono text-slate-900 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100/50 whitespace-nowrap flex-shrink-0">
+                <span className="font-black font-mono text-slate-900 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-100/50 whitespace-nowrap flex-shrink-0 text-right min-w-[100px] sm:min-w-[120px]">
                   {bill.subtotal.toLocaleString()}đ
                 </span>
               </div>
  
               {(bill.hasPaid || bill.paymentAmount > 0) && (
                 <>
-                  <div className="flex justify-between items-center text-[11.5px] text-emerald-650 gap-2">
+                  <div className="flex justify-between items-center text-[11px] sm:text-[11.5px] text-emerald-650 gap-2">
                     <span className="font-extrabold uppercase tracking-wider flex items-center gap-1 flex-shrink-0">
                       <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>3. Khách đã thanh toán trực tiếp:</span>
+                      <span>3. Khách thanh toán:</span>
                     </span>
-                    <span className="font-black font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-100 whitespace-nowrap flex-shrink-0">
+                    <span className="font-black font-mono bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-lg border border-emerald-100 whitespace-nowrap flex-shrink-0 text-right min-w-[100px] sm:min-w-[120px]">
                       -{bill.paymentAmount.toLocaleString()}đ
                     </span>
                   </div>
@@ -467,10 +475,10 @@ export default function InvoiceDetailModal({
                   {/* Other payments belonging to the cycle */}
                   {cyclePayments && cyclePayments.map((p) => (
                     <div key={p.id} className="flex justify-between items-center text-emerald-650 text-[10.5px] gap-2">
-                      <span className="italic pl-4 text-slate-450 font-medium truncate max-w-[200px] flex-shrink-0">
+                      <span className="italic pl-4 text-slate-450 font-medium truncate max-w-[160px] sm:max-w-[200px] flex-shrink-0">
                         ↳ Đã nhận ({p.date} - {p.note || "Gối nợ sỉ"}):
                       </span>
-                      <span className="font-bold font-mono bg-emerald-50/50 text-emerald-600 px-1.5 py-0.2 rounded border border-emerald-100/30 whitespace-nowrap flex-shrink-0">
+                      <span className="font-bold font-mono bg-emerald-50/50 text-emerald-600 px-1.5 py-0.5 rounded border border-emerald-100/30 whitespace-nowrap flex-shrink-0 text-right min-w-[100px] sm:min-w-[120px]">
                         -{p.amount.toLocaleString()}đ
                       </span>
                     </div>
@@ -531,26 +539,6 @@ export default function InvoiceDetailModal({
             ⚠️ {errorMessage}
           </div>
         )}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 grid grid-cols-2 gap-2 shadow-xl shrink-0">
-          <button
-            type="button"
-            onClick={handleCapturePastInvoice}
-            disabled={isExportingModalImage}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-500/15"
-          >
-            <Download className="w-4 h-4" />
-            <span>{isExportingModalImage ? "Đang xuất..." : "Lưu Ảnh Về Máy"}</span>
-          </button>
-          
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full py-3 bg-slate-800 hover:bg-slate-750 text-slate-300 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-slate-700"
-          >
-            <X className="w-4 h-4" />
-            <span>Đóng lại</span>
-          </button>
-        </div>
       </motion.div>
     </div>
   );
