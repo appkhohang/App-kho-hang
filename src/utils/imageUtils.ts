@@ -38,35 +38,103 @@ export async function downloadImageNative(base64UrlOrData: string, fileName: str
     finalFileName += '.png';
   }
 
-  let fileUri = '';
+  // Request storage permissions before saving to public directories on Android/iOS
   try {
-    const result = await Filesystem.writeFile({
-      path: finalFileName,
-      data: base64Data,
-      directory: Directory.Cache,
-      recursive: true
-    });
-    fileUri = result.uri;
-  } catch (err) {
-    console.warn("Direct write to Directory.Cache failed, trying fallback Directory.Data", err);
-    const result = await Filesystem.writeFile({
-      path: finalFileName,
-      data: base64Data,
-      directory: Directory.Data,
-      recursive: true
-    });
-    fileUri = result.uri;
+    const permStatus = await Filesystem.checkPermissions();
+    if (permStatus.publicStorage !== 'granted') {
+      await Filesystem.requestPermissions();
+    }
+  } catch (permErr) {
+    console.warn("Truy cập quyền lưu trữ bị lỗi hoặc không được hỗ trợ:", permErr);
   }
 
-  // Open native system share sheet with file uri to allow "Save image" or direct sharing to Zalo
-  try {
-    await Share.share({
-      title: 'Tải Hóa Đơn',
-      text: 'Chọn "Lưu hình ảnh" hoặc gửi trực tiếp qua Zalo',
-      files: [fileUri]
-    });
-  } catch (error) {
-    console.warn("File sharing/saving dialog cancelled or failed", error);
+  let fileUri = '';
+  let savedSuccess = false;
+
+  // 1. Android Specific: Try to write directly to Pictures/ folder on External Storage (standard Gallery path)
+  if (Capacitor.getPlatform() === 'android') {
+    try {
+      const result = await Filesystem.writeFile({
+        path: `Pictures/${finalFileName}`,
+        data: base64Data,
+        directory: Directory.External,
+        recursive: true
+      });
+      fileUri = result.uri;
+      savedSuccess = true;
+      console.log("Đã lưu ảnh trực tiếp vào Thư viện/Pictures:", fileUri);
+    } catch (err) {
+      console.warn("Lưu trực tiếp vào Thư viện/Pictures thất bại, thử lưu vào thư mục Download:", err);
+      try {
+        const result = await Filesystem.writeFile({
+          path: `Download/${finalFileName}`,
+          data: base64Data,
+          directory: Directory.External,
+          recursive: true
+        });
+        fileUri = result.uri;
+        savedSuccess = true;
+        console.log("Đã lưu ảnh trực tiếp vào thư mục Download:", fileUri);
+      } catch (dlErr) {
+        console.warn("Lưu trực tiếp vào Download thất bại:", dlErr);
+      }
+    }
+  }
+
+  // 2. Fallback / iOS: Try standard Documents directory (highly visible to users in Files app)
+  if (!savedSuccess) {
+    try {
+      const result = await Filesystem.writeFile({
+        path: finalFileName,
+        data: base64Data,
+        directory: Directory.Documents,
+        recursive: true
+      });
+      fileUri = result.uri;
+      savedSuccess = true;
+      console.log("Đã lưu ảnh vào thư mục Tài liệu (Documents):", fileUri);
+    } catch (err) {
+      console.warn("Lưu vào thư mục Documents thất bại, chuyển sang Cache/Data", err);
+    }
+  }
+
+  // 3. Absolute Fallback: Save to Cache or Data directory
+  if (!savedSuccess) {
+    try {
+      const result = await Filesystem.writeFile({
+        path: finalFileName,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true
+      });
+      fileUri = result.uri;
+      savedSuccess = true;
+    } catch (err) {
+      console.warn("Ghi đè cache thất bại:", err);
+      const result = await Filesystem.writeFile({
+        path: finalFileName,
+        data: base64Data,
+        directory: Directory.Data,
+        recursive: true
+      });
+      fileUri = result.uri;
+      savedSuccess = true;
+    }
+  }
+
+  // If we ended up in internal app cache/data, use Share.share sheet as a safety fallback,
+  // but for public folders (Pictures, Download, Documents), we notify success and return.
+  const isPublicStorage = fileUri.includes('Pictures') || fileUri.includes('Download') || fileUri.includes('Documents');
+  if (!isPublicStorage) {
+    try {
+      await Share.share({
+        title: 'Lưu Hóa Đơn',
+        text: 'Lưu hóa đơn hình ảnh này',
+        files: [fileUri]
+      });
+    } catch (shareErr) {
+      console.warn("Chia sẻ/Lưu qua hộp thoại thất bại:", shareErr);
+    }
   }
 
   return fileUri;

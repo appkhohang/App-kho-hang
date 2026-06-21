@@ -383,11 +383,11 @@ export default function InvoiceDetailModal({
             <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs text-[11px] select-text bg-white">
               <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse' }}>
                 <colgroup>
-                  <col style={{ width: '7%' }} />
-                  <col style={{ width: '45%' }} />
+                  <col style={{ width: '6%' }} />
+                  <col style={{ width: '40%' }} />
                   <col style={{ width: '8%' }} />
                   <col style={{ width: '18%' }} />
-                  <col style={{ width: '22%' }} />
+                  <col style={{ width: '28%' }} />
                 </colgroup>
                 {/* Table Header */}
                 <thead>
@@ -422,61 +422,69 @@ export default function InvoiceDetailModal({
                         {item.đơnGiá.toLocaleString()}
                       </td>
                       <td className="p-2.5 font-mono text-right font-black text-slate-900 pr-3 whitespace-nowrap align-middle">
-                        {item.thànhTiền.toLocaleString()}đ
+                        <span className="whitespace-nowrap flex-shrink-0">{item.thànhTiền.toLocaleString()}đ</span>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
+ 
             {/* Summary calculations area */}
             <div className="w-full sm:w-11/12 ml-auto space-y-2.5 text-xs border-t border-slate-150 pt-4 text-slate-700">
-              <div className="flex justify-between items-center text-[11px]">
-                <span className="text-slate-450 font-semibold uppercase tracking-wider flex items-center gap-1">
+              <div className="flex justify-between items-center text-[11px] gap-2">
+                <span className="text-slate-450 font-semibold uppercase tracking-wider flex items-center gap-1 flex-shrink-0 animate-pulse-none">
                   <Receipt className="w-3.5 h-3.5 text-slate-400" />
                   <span>1. Nợ cũ dồn lại gối đầu:</span>
                 </span>
-                <span className="font-extrabold font-mono text-slate-650 bg-slate-50 px-2 py-0.5 rounded">{bill.previousDebt.toLocaleString()}đ</span>
+                <span className="font-extrabold font-mono text-slate-650 bg-slate-50 px-2 py-0.5 rounded whitespace-nowrap flex-shrink-0">
+                  {bill.previousDebt.toLocaleString()}đ
+                </span>
               </div>
               
-              <div className="flex justify-between items-center text-[11px] text-slate-850">
-                <span className="font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+              <div className="flex justify-between items-center text-[11px] text-slate-850 gap-2">
+                <span className="font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1 flex-shrink-0">
                   <Plus className="w-3.5 h-3.5 text-slate-400" />
                   <span>2. Tổng cộng tiền hàng lô mới:</span>
                 </span>
-                <span className="font-black font-mono text-slate-900 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100/50">{bill.subtotal.toLocaleString()}đ</span>
+                <span className="font-black font-mono text-slate-900 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100/50 whitespace-nowrap flex-shrink-0">
+                  {bill.subtotal.toLocaleString()}đ
+                </span>
               </div>
-
+ 
               {(bill.hasPaid || bill.paymentAmount > 0) && (
                 <>
-                  <div className="flex justify-between items-center text-[11.5px] text-emerald-650">
-                    <span className="font-extrabold uppercase tracking-wider flex items-center gap-1">
+                  <div className="flex justify-between items-center text-[11.5px] text-emerald-650 gap-2">
+                    <span className="font-extrabold uppercase tracking-wider flex items-center gap-1 flex-shrink-0">
                       <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
                       <span>3. Khách đã thanh toán trực tiếp:</span>
                     </span>
-                    <span className="font-black font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-100">-{bill.paymentAmount.toLocaleString()}đ</span>
+                    <span className="font-black font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-100 whitespace-nowrap flex-shrink-0">
+                      -{bill.paymentAmount.toLocaleString()}đ
+                    </span>
                   </div>
-
+ 
                   {/* Other payments belonging to the cycle */}
                   {cyclePayments && cyclePayments.map((p) => (
-                    <div key={p.id} className="flex justify-between items-center text-emerald-650 text-[10.5px]">
-                      <span className="italic pl-4 text-slate-450 font-medium truncate max-w-[200px]">
+                    <div key={p.id} className="flex justify-between items-center text-emerald-650 text-[10.5px] gap-2">
+                      <span className="italic pl-4 text-slate-450 font-medium truncate max-w-[200px] flex-shrink-0">
                         ↳ Đã nhận ({p.date} - {p.note || "Gối nợ sỉ"}):
                       </span>
-                      <span className="font-bold font-mono bg-emerald-50/50 text-emerald-600 px-1.5 py-0.2 rounded border border-emerald-100/30">-{p.amount.toLocaleString()}đ</span>
+                      <span className="font-bold font-mono bg-emerald-50/50 text-emerald-600 px-1.5 py-0.2 rounded border border-emerald-100/30 whitespace-nowrap flex-shrink-0">
+                        -{p.amount.toLocaleString()}đ
+                      </span>
                     </div>
                   ))}
                 </>
               )}
-
-              {/* Grand Total Debt Display */}
-              <div className="flex justify-between items-center border-t-2 border-dashed border-slate-205 pt-3.5 text-[13px] font-black text-rose-600">
-                <span className="uppercase tracking-widest text-slate-700 flex items-center gap-1.5">
+ 
+              {/* Grand Total Debt Display with specified requirements */}
+              <div id="invoice-amount-container" className="flex justify-between items-center border-t-2 border-dashed border-slate-200 pt-3.5 text-[13px] font-black text-rose-600 gap-2 min-w-0">
+                <span className="uppercase tracking-widest text-slate-700 flex items-center gap-1.5 flex-shrink-0 animate-pulse-none">
                   <CheckCircle className="w-4 h-4 text-rose-500" />
                   <span>{ (bill.hasPaid || bill.paymentAmount > 0) ? "4. Tổng nợ còn lại gác sổ:" : "3. Tổng nợ mới hạch toán:" }</span>
                 </span>
-                <span className="font-black font-mono text-rose-700 bg-rose-50 px-3 py-1 rounded-2xl border-2 border-rose-100/50 text-lg">
+                <span id="total-amount-display" className="font-black font-mono text-rose-700 bg-rose-50 px-3 py-1 rounded-2xl border-2 border-rose-100/50 text-lg whitespace-nowrap flex-shrink-0 min-w-[120px] text-right">
                   {bill.grandTotal.toLocaleString()}đ
                 </span>
               </div>
