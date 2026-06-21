@@ -44,8 +44,27 @@ export default function InvoiceDetailModal({
   const [exportedImgUrl, setExportedImgUrl] = useState<string | null>(null);
   const [exportedBlob, setExportedBlob] = useState<Blob | null>(null);
   const [showExportSuccessModal, setShowExportSuccessModal] = useState(false);
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied-img' | 'copied-text' | 'error'>('idle');
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied-img' | 'copied-text' | 'downloaded' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleDownloadImage = () => {
+    if (!exportedImgUrl) return;
+    try {
+      const link = document.createElement('a');
+      link.href = exportedImgUrl;
+      const pName = customer.name.replace(/\s+/g, "_");
+      link.download = `HOA_DON_${bill.billNumber}_${pName}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setCopyStatus('downloaded');
+      setTimeout(() => setCopyStatus('idle'), 3000);
+    } catch (err) {
+      console.warn("Failed to download image", err);
+      setCopyStatus('error');
+      setTimeout(() => setCopyStatus('idle'), 3000);
+    }
+  };
 
   const handleCopyImageToClipboard = async () => {
     if (!exportedImgUrl) return;
@@ -444,23 +463,32 @@ export default function InvoiceDetailModal({
               </p>
             </div>
 
-            {/* Quick Copy Dashboard */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            {/* Quick Actions Dashboard */}
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
+              <button
+                type="button"
+                onClick={handleDownloadImage}
+                className="flex flex-col items-center justify-center gap-1.5 p-2 sm:p-3 bg-amber-50 hover:bg-amber-100/80 active:scale-95 text-amber-800 font-extrabold rounded-2xl transition border border-amber-150 hover:border-amber-200 shadow-sm cursor-pointer"
+              >
+                <Download className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
+                <span>Tải Hóa Đơn</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleCopyImageToClipboard}
-                className="flex flex-col items-center justify-center gap-2 p-3 bg-emerald-50 hover:bg-emerald-100/80 active:scale-95 text-emerald-800 font-extrabold rounded-2xl transition border border-emerald-150 hover:border-emerald-200 shadow-sm cursor-pointer"
+                className="flex flex-col items-center justify-center gap-1.5 p-2 sm:p-3 bg-emerald-50 hover:bg-emerald-100/80 active:scale-95 text-emerald-800 font-extrabold rounded-2xl transition border border-emerald-150 hover:border-emerald-200 shadow-sm cursor-pointer"
               >
-                <Copy className="w-5 h-5 text-emerald-600" />
+                <Copy className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                 <span>Sao Chép Ảnh</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleCopyTextToClipboard}
-                className="flex flex-col items-center justify-center gap-2 p-3 bg-indigo-50 hover:bg-indigo-100/80 active:scale-95 text-indigo-800 font-extrabold rounded-2xl transition border border-indigo-150 hover:border-indigo-200 shadow-sm cursor-pointer"
+                className="flex flex-col items-center justify-center gap-1.5 p-2 sm:p-3 bg-indigo-50 hover:bg-indigo-100/80 active:scale-95 text-indigo-800 font-extrabold rounded-2xl transition border border-indigo-150 hover:border-indigo-200 shadow-sm cursor-pointer"
               >
-                <FileText className="w-5 h-5 text-indigo-600" />
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
                 <span>Sao Chép Chữ</span>
               </button>
             </div>
@@ -471,14 +499,16 @@ export default function InvoiceDetailModal({
                 initial={{ opacity: 0, y: -5 }} 
                 animate={{ opacity: 1, y: 0 }}
                 className={`text-[11px] font-bold p-2.5 rounded-xl border ${
+                  copyStatus === 'downloaded' ? 'bg-amber-50 text-amber-800 border-amber-200' :
                   copyStatus === 'copied-img' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
                   copyStatus === 'copied-text' ? 'bg-indigo-50 text-indigo-800 border-indigo-200' :
                   'bg-rose-50 text-rose-800 border-rose-200'
                 }`}
               >
+                {copyStatus === 'downloaded' && "✓ Đã tải ảnh hóa đơn về máy thành công!"}
                 {copyStatus === 'copied-img' && "✓ Đã copy ảnh! Hãy mở cuộc trò chuyện Zalo và nhấn 'Dán' (Paste) để gửi ngay."}
                 {copyStatus === 'copied-text' && "✓ Đã copy nội dung chữ chi tiết hóa đơn! Hãy mở Zalo và dán."}
-                {copyStatus === 'error' && "⚠️ Trình duyệt/Thiết bị của bạn chặn sao chép nhanh. Vui lòng làm theo hướng dẫn bên dưới."}
+                {copyStatus === 'error' && "⚠️ Trình duyệt/Thiết bị của bạn chặn thao tác nhanh. Vui lòng làm theo hướng dẫn bên dưới."}
               </motion.div>
             )}
 
