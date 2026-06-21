@@ -383,20 +383,20 @@ export default function InvoiceDetailModal({
             <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs text-[11px] select-text bg-white">
               <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse' }}>
                 <colgroup>
-                  <col style={{ width: '5%' }} />
-                  <col style={{ width: '35%' }} />
                   <col style={{ width: '8%' }} />
+                  <col style={{ width: '38%' }} />
+                  <col style={{ width: '10%' }} />
                   <col style={{ width: '20%' }} />
-                  <col style={{ width: '32%' }} />
+                  <col style={{ width: '24%' }} />
                 </colgroup>
                 {/* Table Header */}
                 <thead>
                   <tr className="bg-slate-50 text-indigo-950 font-extrabold border-b border-slate-200 text-[10px] uppercase tracking-wider text-left">
-                    <th className="p-2.5 border-r border-slate-200 text-center font-mono font-extrabold align-middle">STT</th>
-                    <th className="p-2.5 border-r border-slate-200 text-left font-sans font-extrabold pl-3 align-middle">Phân Phối / Mẫu Mã</th>
-                    <th className="p-2.5 border-r border-slate-200 text-center font-sans font-extrabold align-middle">SL</th>
-                    <th className="p-2.5 border-r border-slate-200 text-right font-sans font-extrabold pr-3 align-middle">Đơn Giá</th>
-                    <th className="p-2.5 text-right font-sans font-extrabold pr-3 align-middle">Thành Tiền</th>
+                    <th className="py-2 px-1 border-r border-slate-200 text-center font-mono font-extrabold align-middle">STT</th>
+                    <th className="py-2 pl-2.5 pr-1.5 border-r border-slate-200 text-left font-sans font-extrabold align-middle">Phân Phối / Mẫu Mã</th>
+                    <th className="py-2 px-1 border-r border-slate-200 text-center font-sans font-extrabold align-middle">SL</th>
+                    <th className="py-2 pl-1.5 pr-2.5 border-r border-slate-200 text-right font-sans font-extrabold align-middle">Đơn Giá</th>
+                    <th className="py-2 pl-1.5 pr-2.5 text-right font-sans font-extrabold align-middle">Thành Tiền</th>
                   </tr>
                 </thead>
                 
@@ -407,21 +407,21 @@ export default function InvoiceDetailModal({
                       key={item.id} 
                       className="even:bg-slate-50/20 odd:bg-white text-slate-800 text-left border-b border-slate-150 last:border-b-0 min-h-[38px] align-middle"
                     >
-                      <td className="p-2.5 border-r border-slate-200 font-mono text-center text-slate-400 font-bold whitespace-nowrap align-middle">
+                      <td className="py-2 px-1 border-r border-slate-200 font-mono text-center text-slate-400 font-bold whitespace-nowrap align-middle">
                         {i + 1}
                       </td>
-                      <td className="p-2.5 border-r border-slate-200 font-sans font-bold text-slate-850 text-left py-1.5 pl-3 align-middle">
+                      <td className="py-2 pl-2.5 pr-1.5 border-r border-slate-200 font-sans font-bold text-slate-850 text-left py-1.5 align-middle">
                         <div className="break-words leading-normal whitespace-normal block w-full py-0.5">
                           {item.mẫuMã}
                         </div>
                       </td>
-                      <td className="p-2.5 border-r border-slate-200 font-mono text-center font-bold text-indigo-650 whitespace-nowrap align-middle">
+                      <td className="py-2 px-1 border-r border-slate-200 font-mono text-center font-bold text-indigo-650 whitespace-nowrap align-middle">
                         {item.sốLượng.toLocaleString()}
                       </td>
-                      <td className="p-2.5 border-r border-slate-200 font-mono text-right text-slate-550 pr-3 whitespace-nowrap align-middle">
+                      <td className="py-2 pl-1.5 pr-2.5 border-r border-slate-200 font-mono text-right text-slate-550 whitespace-nowrap align-middle">
                         {item.đơnGiá.toLocaleString()}
                       </td>
-                      <td className="p-2.5 font-mono text-right font-black text-slate-900 pr-3 whitespace-nowrap align-middle">
+                      <td className="py-2 pl-1.5 pr-2.5 font-mono text-right font-black text-slate-900 whitespace-nowrap align-middle">
                         <span className="whitespace-nowrap flex-shrink-0">{item.thànhTiền.toLocaleString()}đ</span>
                       </td>
                     </tr>
