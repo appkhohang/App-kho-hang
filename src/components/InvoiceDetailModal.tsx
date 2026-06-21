@@ -109,17 +109,46 @@ export default function InvoiceDetailModal({
       const dataUrl = canvasObj.toDataURL("image/png");
       setExportedImgUrl(dataUrl);
 
-      // 1. Try a standard anchor link download in background (great for desktop)
+      // Try automatic native Web Share API with the PNG file first to show system share sheet directly!
+      let sharedNatively = false;
       try {
-        const link = document.createElement("a");
-        link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
-        link.href = dataUrl;
-        link.click();
-      } catch (downloadErr) {
-        console.warn("Direct link download blocked or failed, this is normal inside in-app webviews like Zalo", downloadErr);
+        if (navigator.share) {
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+          const pName = customer.name.replace(/\s+/g, "_");
+          const file = new File(
+            [blob], 
+            `HOA_DON_${bill.billNumber}_${pName}.png`, 
+            { type: "image/png" }
+          );
+          
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: `Hóa đơn ${bill.billNumber}`,
+              text: `Hóa đơn ${bill.billNumber} gửi Đại Lý ${customer.name} - Sổ sách Xưởng An`
+            });
+            sharedNatively = true;
+          }
+        }
+      } catch (shareErr) {
+        console.warn("Native OS level share sheet canceled or not supported on this browser context:", shareErr);
+      }
+
+      // If they didn't share natively, or if they did (for backing it up with a downloader sheet),
+      // we still download the file to their downloads.
+      if (!sharedNatively) {
+        try {
+          const link = document.createElement("a");
+          link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
+          link.href = dataUrl;
+          link.click();
+        } catch (downloadErr) {
+          console.warn("Direct link download blocked or failed, this is normal inside in-app webviews like Zalo", downloadErr);
+        }
       }
       
-      // 2. Always show the elegant Export Success Modal (vital for Zalo, Safari, Facebook browser over-lay, iOS)
+      // Always show the elegant Export Success Modal (vital for Zalo, Safari, Facebook browser over-lay, iOS)
       // This allows users to hold-to-save on mobile, copy text details, or copy image directly.
       setShowExportSuccessModal(true);
     } catch (e) {
@@ -315,8 +344,8 @@ export default function InvoiceDetailModal({
             disabled={isExportingModalImage}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-500/15"
           >
-            <Download className="w-4 h-4" />
-            <span>{isExportingModalImage ? "Đang xuất..." : "Lưu/Chia Sẻ"}</span>
+            <Share2 className="w-4 h-4" />
+            <span>{isExportingModalImage ? "Đang xuất..." : "Chia Sẻ Hóa Đơn"}</span>
           </button>
           
           <button
@@ -409,12 +438,18 @@ export default function InvoiceDetailModal({
                   try {
                     const response = await fetch(exportedImgUrl);
                     const blob = await response.blob();
-                    const file = new File([blob], `HOA_DON_${bill.billNumber}.png`, { type: "image/png" });
+                    const pName = customer.name.replace(/\s+/g, "_");
+                    const file = new File(
+                      [blob], 
+                      `HOA_DON_${bill.billNumber}_${pName}.png`, 
+                      { type: "image/png" }
+                    );
+                    
                     if (navigator.share) {
                       await navigator.share({
                         files: [file],
                         title: `Hóa đơn ${bill.billNumber}`,
-                        text: `Hóa đơn xưởng An - ${customer.name}`
+                        text: `Hóa đơn ${bill.billNumber} gửi Đại Lý ${customer.name} - Sổ sách Xưởng An`
                       });
                     } else {
                       setCopyStatus('error');
@@ -427,7 +462,7 @@ export default function InvoiceDetailModal({
                 className="flex-1 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95"
               >
                 <Share2 className="w-4 h-4" />
-                <span>Chia sẻ điện thoại</span>
+                <span>Chia sẻ qua ứng dụng</span>
               </button>
               <button
                 type="button"
