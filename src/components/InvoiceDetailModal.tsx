@@ -383,11 +383,11 @@ export default function InvoiceDetailModal({
             <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs text-[11px] select-text bg-white">
               <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse' }}>
                 <colgroup>
-                  <col style={{ width: '6%' }} />
-                  <col style={{ width: '40%' }} />
+                  <col style={{ width: '5%' }} />
+                  <col style={{ width: '35%' }} />
                   <col style={{ width: '8%' }} />
-                  <col style={{ width: '18%' }} />
-                  <col style={{ width: '28%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '32%' }} />
                 </colgroup>
                 {/* Table Header */}
                 <thead>
@@ -479,12 +479,12 @@ export default function InvoiceDetailModal({
               )}
  
               {/* Grand Total Debt Display with specified requirements */}
-              <div id="invoice-amount-container" className="flex justify-between items-center border-t-2 border-dashed border-slate-200 pt-3.5 text-[13px] font-black text-rose-600 gap-2 min-w-0">
-                <span className="uppercase tracking-widest text-slate-700 flex items-center gap-1.5 flex-shrink-0 animate-pulse-none">
+              <div id="invoice-amount-container" className="flex justify-between items-center border-t-2 border-dashed border-slate-200 pt-3.5 text-[13px] font-black text-rose-600 gap-2 w-full" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <span className="uppercase tracking-widest text-slate-700 flex items-center gap-1.5 flex-shrink-0 animate-pulse-none" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
                   <CheckCircle className="w-4 h-4 text-rose-500" />
                   <span>{ (bill.hasPaid || bill.paymentAmount > 0) ? "4. Tổng nợ còn lại gác sổ:" : "3. Tổng nợ mới hạch toán:" }</span>
                 </span>
-                <span id="total-amount-display" className="font-black font-mono text-rose-700 bg-rose-50 px-3 py-1 rounded-2xl border-2 border-rose-100/50 text-lg whitespace-nowrap flex-shrink-0 min-w-[120px] text-right">
+                <span id="total-amount-display" className="font-black font-mono text-rose-700 bg-rose-50 px-3 py-1 rounded-2xl border-2 border-rose-100/50 text-lg whitespace-nowrap flex-shrink-0 min-w-[130px] text-right" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {bill.grandTotal.toLocaleString()}đ
                 </span>
               </div>
@@ -520,7 +520,7 @@ export default function InvoiceDetailModal({
               'bg-indigo-50 text-indigo-800 border-indigo-200'
             }`}
           >
-            {copyStatus === 'downloaded' && "✓ Đã tải và lưu ảnh hóa đơn thành công!"}
+            {copyStatus === 'downloaded' && "✓ Đã lưu ảnh hóa đơn vào Bộ sưu tập điện thoại (thư mục Pictures) thành công!"}
             {copyStatus === 'copied-img' && "✓ Đã copy ảnh! Hãy mở Zalo và dán (Paste) để gửi ngay."}
             {copyStatus === 'copied-text' && "✓ Đã copy văn bản chi tiết hóa đơn!"}
           </motion.div>
