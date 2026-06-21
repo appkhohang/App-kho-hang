@@ -4,6 +4,25 @@ import { Download, X, Camera, CheckCircle, FileText, User, Calendar, Receipt, Do
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
+import { compressCanvasToBlob, shareImageFile } from '../utils/imageUtils';
+
+const dataURLtoBlob = (dataurl: string) => {
+  try {
+    const parts = dataurl.split(';base64,');
+    if (parts.length < 2) return null;
+    const contentType = parts[0].split(':')[1];
+    const raw = window.atob(parts[1]);
+    const rawLength = raw.length;
+    const uInt8Array = new Uint8Array(rawLength);
+    for (let i = 0; i < rawLength; ++i) {
+      uInt8Array[i] = raw.charCodeAt(i);
+    }
+    return new Blob([uInt8Array], { type: contentType });
+  } catch (e) {
+    console.error("dataURLtoBlob conversion failed", e);
+    return null;
+  }
+};
 
 interface InvoiceDetailModalProps {
   bill: Bill;
@@ -23,14 +42,24 @@ export default function InvoiceDetailModal({
   const detailInvoicePaperRef = useRef<HTMLDivElement>(null);
   const [isExportingModalImage, setIsExportingModalImage] = useState(false);
   const [exportedImgUrl, setExportedImgUrl] = useState<string | null>(null);
+  const [exportedBlob, setExportedBlob] = useState<Blob | null>(null);
   const [showExportSuccessModal, setShowExportSuccessModal] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied-img' | 'copied-text' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleCopyImageToClipboard = async () => {
     if (!exportedImgUrl) return;
     try {
-      const response = await fetch(exportedImgUrl);
-      const blob = await response.blob();
+      let blob = exportedBlob;
+      if (!blob) {
+        if (exportedImgUrl.startsWith('blob:')) {
+          const response = await fetch(exportedImgUrl);
+          blob = await response.blob();
+        } else {
+          blob = dataURLtoBlob(exportedImgUrl);
+        }
+      }
+      if (!blob) throw new Error("Chuyển đổi ảnh thất bại");
       
       if (navigator.clipboard && window.ClipboardItem) {
         await navigator.clipboard.write([
@@ -74,6 +103,38 @@ export default function InvoiceDetailModal({
     }
   };
 
+  const handleNativeShare = async () => {
+    if (!exportedImgUrl) return;
+    try {
+      let b = exportedBlob;
+      if (!b) {
+        if (exportedImgUrl.startsWith('blob:')) {
+          const res = await fetch(exportedImgUrl);
+          b = await res.blob();
+        } else {
+          b = dataURLtoBlob(exportedImgUrl);
+        }
+      }
+      if (!b) throw new Error("Chuyển đổi ảnh thất bại");
+      const pName = customer.name.replace(/\s+/g, "_");
+      
+      const shared = await shareImageFile(
+        b,
+        `HOA_DON_${bill.billNumber}_${pName}.jpg`,
+        `Hóa đơn ${bill.billNumber}`,
+        `Hóa đơn ${bill.billNumber} gửi Đại Lý ${customer.name} - Sổ sách Xưởng An`
+      );
+      if (!shared) {
+        // Fallback: Copy to clipboard of the image
+        handleCopyImageToClipboard();
+      }
+    } catch (err) {
+      console.error("Lỗi chia sẻ:", err);
+      setCopyStatus('error');
+      setTimeout(() => setCopyStatus('idle'), 3550);
+    }
+  };
+
   // Sort all bills of this customer to find the previous one and isolate cycle payments
   const customerBills = bills
     ? [...bills]
@@ -102,57 +163,39 @@ export default function InvoiceDetailModal({
     await new Promise((resolve) => setTimeout(resolve, 350));
     try {
       const canvasObj = await safeHtml2Canvas(detailInvoicePaperRef.current, {
-        scale: 3, // Ultra crisp high-definition resolution for text
+        scale: 1.7, // 1.7x resolution is highly crisp on text, and has an incredibly lightweight footprint (<250kb)
         useCORS: true,
         backgroundColor: '#ffffff',
       });
-      const dataUrl = canvasObj.toDataURL("image/png");
-      setExportedImgUrl(dataUrl);
-
-      // Try automatic native Web Share API with the PNG file first to show system share sheet directly!
-      let sharedNatively = false;
-      try {
-        if (navigator.share) {
-          const response = await fetch(dataUrl);
-          const blob = await response.blob();
-          const pName = customer.name.replace(/\s+/g, "_");
-          const file = new File(
-            [blob], 
-            `HOA_DON_${bill.billNumber}_${pName}.png`, 
-            { type: "image/png" }
-          );
-          
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: `Hóa đơn ${bill.billNumber}`,
-              text: `Hóa đơn ${bill.billNumber} gửi Đại Lý ${customer.name} - Sổ sách Xưởng An`
-            });
-            sharedNatively = true;
-          }
-        }
-      } catch (shareErr) {
-        console.warn("Native OS level share sheet canceled or not supported on this browser context:", shareErr);
-      }
-
-      // If they didn't share natively, or if they did (for backing it up with a downloader sheet),
-      // we still download the file to their downloads.
-      if (!sharedNatively) {
-        try {
-          const link = document.createElement("a");
-          link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
-          link.href = dataUrl;
-          link.click();
-        } catch (downloadErr) {
-          console.warn("Direct link download blocked or failed, this is normal inside in-app webviews like Zalo", downloadErr);
-        }
+      
+      const jpegBlob = await compressCanvasToBlob(canvasObj, 0.78);
+      const blobUrl = URL.createObjectURL(jpegBlob);
+      
+      // Clean up previous blob URL to avoid memory leak
+      if (exportedImgUrl && exportedImgUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(exportedImgUrl);
       }
       
-      // Always show the elegant Export Success Modal (vital for Zalo, Safari, Facebook browser over-lay, iOS)
-      // This allows users to hold-to-save on mobile, copy text details, or copy image directly.
+      setExportedBlob(jpegBlob);
+      setExportedImgUrl(blobUrl);
+
+      // Trigger standard background download if possible
+      try {
+        const link = document.createElement("a");
+        link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.jpg`;
+        link.href = blobUrl;
+        link.click();
+      } catch (downloadErr) {
+        console.warn("Direct link download blocked or failed, which is normal on mobile inside app containers", downloadErr);
+      }
+      
+      // Immediately open the high-fidelity Export Success Overlay
+      // Here users can tap "Chia sẻ qua ứng dụng" (fresh synchronous user layout gesture)
       setShowExportSuccessModal(true);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Export past invoice failed", e);
+      setErrorMessage(e?.message || "Có lỗi kỹ thuật khi trích xuất hình ảnh. Vui lòng thử lại hoặc chụp ảnh màn hình.");
+      setTimeout(() => setErrorMessage(null), 7000);
     } finally {
       setIsExportingModalImage(false);
     }
@@ -176,7 +219,6 @@ export default function InvoiceDetailModal({
           <div
             ref={detailInvoicePaperRef}
             className="bg-white text-slate-900 p-6 sm:p-8 w-full border border-slate-100 flex flex-col space-y-6 rounded-2xl relative"
-            style={{ contentVisibility: 'auto' }}
           >
             {/* Top design header */}
             <div className="relative border-b-2 border-dashed border-slate-200 pb-5 text-center flex flex-col items-center">
@@ -337,6 +379,11 @@ export default function InvoiceDetailModal({
         </div>
 
         {/* Handy Bottom Action Deck (Excluded from captured image) */}
+        {errorMessage && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold p-3 rounded-2xl text-center shadow-md animate-pulse">
+            ⚠️ {errorMessage}
+          </div>
+        )}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 grid grid-cols-2 gap-2 shadow-xl shrink-0">
           <button
             type="button"
@@ -434,32 +481,8 @@ export default function InvoiceDetailModal({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={async () => {
-                  try {
-                    const response = await fetch(exportedImgUrl);
-                    const blob = await response.blob();
-                    const pName = customer.name.replace(/\s+/g, "_");
-                    const file = new File(
-                      [blob], 
-                      `HOA_DON_${bill.billNumber}_${pName}.png`, 
-                      { type: "image/png" }
-                    );
-                    
-                    if (navigator.share) {
-                      await navigator.share({
-                        files: [file],
-                        title: `Hóa đơn ${bill.billNumber}`,
-                        text: `Hóa đơn ${bill.billNumber} gửi Đại Lý ${customer.name} - Sổ sách Xưởng An`
-                      });
-                    } else {
-                      setCopyStatus('error');
-                      setTimeout(() => setCopyStatus('idle'), 3500);
-                    }
-                  } catch (err) {
-                    console.error("Manual share error", err);
-                  }
-                }}
-                className="flex-1 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95"
+                onClick={handleNativeShare}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95 border border-indigo-550/20"
               >
                 <Share2 className="w-4 h-4" />
                 <span>Chia sẻ qua ứng dụng</span>

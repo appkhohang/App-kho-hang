@@ -4117,7 +4117,6 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             className="fixed top-6 right-6 z-55 w-full max-w-sm bg-slate-900 border border-emerald-500/40 text-slate-100 rounded-2xl shadow-2xl p-4 flex gap-3 backdrop-blur-xl font-sans"
-            style={{ contentVisibility: 'auto' }}
           >
             <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 flex-shrink-0 animate-pulse">
               <ShieldCheck className="w-5 h-5 text-emerald-400" />
@@ -4154,7 +4153,6 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             className="fixed bottom-6 left-6 z-55 w-full max-w-sm bg-zinc-950/95 border border-emerald-500/40 text-emerald-100 rounded-2xl shadow-2xl p-4 flex gap-3 backdrop-blur-xl font-sans"
-            style={{ contentVisibility: 'auto' }}
           >
             <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0 animate-pulse">
               <CheckCircle2 className="w-5 h-5 text-emerald-400" />

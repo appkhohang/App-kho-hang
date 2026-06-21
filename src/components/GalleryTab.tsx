@@ -7,12 +7,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Image as ImageIcon, Search, Filter, Calendar, Tag, ChevronRight, X, 
-  ShoppingBag, User, Receipt, Download, RefreshCw, ZoomIn, ArrowRight, BookOpen, Clock, Layers, Trash2, Maximize2, Minimize2, CheckCircle2, CheckSquare, Check, RotateCw
+  ShoppingBag, User, Receipt, Download, RefreshCw, ZoomIn, ArrowRight, BookOpen, Clock, Layers, Trash2, Maximize2, Minimize2, CheckCircle2, CheckSquare, Check, RotateCw, Zap, Sparkles, Share2
 } from 'lucide-react';
 import { ImportItem, Bill, Customer } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { LazyImage } from './LazyImage';
 import { useAndroidBack } from '../hooks/useAndroidBack';
+import { compressBase64Image, shareImageFile } from '../utils/imageUtils';
 
 interface GalleryTabProps {
   items: ImportItem[];
@@ -72,6 +73,77 @@ export default function GalleryTab({
     setIsSelectMode(false);
     setSelectedIds([]);
   });
+
+  const [compressingId, setCompressingId] = useState<string | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
+
+  const handleCompressPhoto = async (media: GalleryMediaItem) => {
+    try {
+      setCompressingId(media.id);
+      
+      const compressedBase64 = await compressBase64Image(media.photo, 900, 900, 0.70);
+      
+      // Update local states
+      if (media.type === 'import' && media.importData) {
+        setItems(prev => prev.map(item => {
+          if (item.id === media.importData?.id) {
+            return { ...item, photo: compressedBase64 };
+          }
+          return item;
+        }));
+      } else if (media.type === 'bill' && media.billData) {
+        setBills(prev => prev.map(bill => {
+          if (bill.id === media.billData?.id) {
+            return { ...bill, photo: compressedBase64 };
+          }
+          return bill;
+        }));
+      }
+
+      // Update the active selectedMedia copy as well so user sees the change immediately in the lightbox!
+      setSelectedMedia(prev => prev ? { ...prev, photo: compressedBase64 } : null);
+      
+      alert("⚡ Đã nén ảnh thành công! Dung lượng ảnh giảm đáng kể giúp tối ưu bộ nhớ Android.");
+    } catch (error) {
+      console.error(error);
+      alert("⚠️ Không thể nén ảnh.");
+    } finally {
+      setCompressingId(null);
+    }
+  };
+
+  const handleSharePhoto = async (media: GalleryMediaItem) => {
+    try {
+      setSharingId(media.id);
+      
+      let blob: Blob | null = null;
+      if (media.photo.startsWith('data:')) {
+        const res = await fetch(media.photo);
+        blob = await res.blob();
+      } else {
+        throw new Error("Không hỗ trợ định dạng ảnh này");
+      }
+      
+      if (!blob) throw new Error("Chuyển đổi Blob thất bại");
+      
+      const fileName = `${media.type}_${media.id}.jpg`;
+      const shared = await shareImageFile(
+        blob,
+        fileName,
+        media.title,
+        `Chia sẻ ảnh từ kho lưu trữ: ${media.title} (${media.label})`
+      );
+      
+      if (!shared) {
+        alert("⚠️ Trình duyệt/Android của bạn không hỗ trợ tính năng chia sẻ trực tiếp. Bạn hãy bấm Tải ảnh về máy và tự gửi qua Zalo.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("⚠️ Lỗi chia sẻ hình ảnh.");
+    } finally {
+      setSharingId(null);
+    }
+  };
 
   const handleSelectAll = () => {
     setSelectedIds(filteredGallery.map(m => m.id));
@@ -849,6 +921,37 @@ export default function GalleryTab({
 
                 </div>
 
+                {/* Quick text optimization utilities panel */}
+                <div className="mx-4 sm:mx-5 mb-1 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 font-sans space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="text-[10px] font-black tracking-wider uppercase font-mono">Tối ưu & Chia sẻ (Zalo/Android)</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={sharingId === selectedMedia.id}
+                      onClick={() => handleSharePhoto(selectedMedia)}
+                      className="p-2.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 dark:bg-indigo-950/40 dark:hover:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 rounded-xl font-bold text-xs tracking-wide transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 select-none"
+                    >
+                      <Share2 className="w-3.5 h-3.5 hover:scale-110 transition" />
+                      <span>{sharingId === selectedMedia.id ? 'Đang gửi...' : 'Gửi qua Zalo'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={compressingId === selectedMedia.id}
+                      onClick={() => handleCompressPhoto(selectedMedia)}
+                      className="p-2.5 bg-emerald-50 hover:bg-emerald-100 active:scale-95 dark:bg-emerald-950/40 dark:hover:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 rounded-xl font-bold text-xs tracking-wide transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 select-none"
+                      title="Nén giảm dung lượng ảnh gốc để tránh đứng máy khi gửi Zalo"
+                    >
+                      <Zap className="w-3.5 h-3.5 hover:scale-110 transition text-amber-500" />
+                      <span>{compressingId === selectedMedia.id ? 'Đang nén...' : 'Nén tối ưu'}</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Bottom navigation link button */}
                 <div className="p-4 border-t border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
                   <button
@@ -905,6 +1008,24 @@ export default function GalleryTab({
                 >
                   <RotateCw className="w-5 h-5" />
                   <span className="hidden sm:inline">Xoay 90°</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSharePhoto(selectedMedia)}
+                  disabled={sharingId === selectedMedia.id}
+                  className="p-3 bg-white/10 hover:bg-indigo-650 hover:scale-105 active:scale-95 text-white rounded-full transition cursor-pointer select-none disabled:opacity-50"
+                  title="Chia sẻ ảnh qua Zalo"
+                >
+                  <Share2 className="w-5 h-5 text-indigo-300" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCompressPhoto(selectedMedia)}
+                  disabled={compressingId === selectedMedia.id}
+                  className="p-3 bg-white/10 hover:bg-emerald-650 hover:scale-105 active:scale-95 text-white rounded-full transition cursor-pointer select-none disabled:opacity-50"
+                  title="Nén nén nén giảm tối đa dung lượng"
+                >
+                  <Zap className="w-5 h-5 text-emerald-300" />
                 </button>
                 <button
                   type="button"

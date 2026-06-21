@@ -41,20 +41,29 @@ function translateOklchValues(str: string): string {
  * (like "oklch" in Tailwind v4) during style parsing.
  */
 export async function safeHtml2Canvas(element: HTMLElement, options?: any): Promise<HTMLCanvasElement> {
-  // Save original styleSheets descriptor to restore later
-  const styleSheetsDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'styleSheets') ||
-                                Object.getOwnPropertyDescriptor(document, 'styleSheets');
-                                
-  // Save original getComputedStyle
+  const protoDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'styleSheets');
+  const docOwnDescriptor = Object.getOwnPropertyDescriptor(document, 'styleSheets');
   const originalGetComputedStyle = window.getComputedStyle;
 
   try {
-    // 1. Redefine document.styleSheets
+    if (protoDescriptor) {
+      Object.defineProperty(Document.prototype, 'styleSheets', {
+        get() {
+          const mockList = {
+            length: 0,
+            item: () => null,
+            [Symbol.iterator]: function* () {}
+          };
+          return mockList as unknown as StyleSheetList;
+        },
+        configurable: true,
+        enumerable: true
+      });
+    }
+    
+    // Also shadow on the document instance to make sure html2canvas gets it there too:
     Object.defineProperty(document, 'styleSheets', {
-      get: () => {
-        // Return a mock StyleSheetList-like object that returns 0 sheets.
-        // This causes html2canvas to skip global stylesheet rules parsing (which parses raw text and fails on modern colors),
-        // while it still correctly resolves inline styles and class-computed styles via getComputedStyle!
+      get() {
         const mockList = {
           length: 0,
           item: () => null,
@@ -62,10 +71,11 @@ export async function safeHtml2Canvas(element: HTMLElement, options?: any): Prom
         };
         return mockList as unknown as StyleSheetList;
       },
-      configurable: true
+      configurable: true,
+      enumerable: true
     });
   } catch (err) {
-    console.warn("Could not temporarily redefine document.styleSheets for safe html2canvas capture:", err);
+    console.warn("Could not temporarily redefine styleSheets descriptor:", err);
   }
 
   try {
@@ -106,15 +116,23 @@ export async function safeHtml2Canvas(element: HTMLElement, options?: any): Prom
     const canvas = await html2canvas(element, options);
     return canvas;
   } finally {
-    // 3. Restore original styleSheets property to prevent side effects
-    if (styleSheetsDescriptor) {
-      Object.defineProperty(document, 'styleSheets', styleSheetsDescriptor);
-    } else {
-      try {
-        delete (document as any).styleSheets;
-      } catch (e) {
-        // Ignore if delete fails
+    // 3. Restore styleSheets property safely:
+    try {
+      if (protoDescriptor) {
+        Object.defineProperty(Document.prototype, 'styleSheets', protoDescriptor);
       }
+    } catch (e) {
+      console.warn("Could not restore Document.prototype.styleSheets:", e);
+    }
+
+    try {
+      if (docOwnDescriptor) {
+        Object.defineProperty(document, 'styleSheets', docOwnDescriptor);
+      } else {
+        delete (document as any).styleSheets;
+      }
+    } catch (e) {
+      console.warn("Could not restore document.styleSheets:", e);
     }
 
     // 4. Restore original getComputedStyle

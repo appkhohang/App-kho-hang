@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Download, X, Printer, CheckCircle2 } from 'lucide-react';
+import { Download, X, Printer, CheckCircle2, Share2 } from 'lucide-react';
 import { ImportItem, LaborPayment } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
+import { compressCanvasToBlob, shareImageFile } from '../utils/imageUtils';
 
 interface LaborPaymentReceiptModalProps {
   payment: LaborPayment;
@@ -20,6 +21,8 @@ export default function LaborPaymentReceiptModal({
 }: LaborPaymentReceiptModalProps) {
   const paperRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+
 
   // Computed metrics for the week
   const totalQty = weekItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
@@ -38,27 +41,58 @@ export default function LaborPaymentReceiptModal({
   const balanceBeforeThisPayment = grandTotal - previousPaid;
   const balanceAfterThisPayment = balanceBeforeThisPayment - payment.amount;
 
+  const generateReceiptBlob = async (): Promise<Blob | null> => {
+    if (!paperRef.current) return null;
+    const canvasObj = await safeHtml2Canvas(paperRef.current, {
+      scale: 1.7, // 1.7x yields incredible text crispness yet keeps the JPEG file extremely tiny (~120kb)
+      useCORS: true,
+      backgroundColor: '#ffffff',
+    });
+    return await compressCanvasToBlob(canvasObj, 0.78);
+  };
+
   const handleCaptureReceipt = async () => {
-    if (!paperRef.current) return;
     setIsExporting(true);
-    // Short wait to allow modal layout to form cleanly
     await new Promise((resolve) => setTimeout(resolve, 300));
     try {
-      const canvasObj = await safeHtml2Canvas(paperRef.current, {
-        scale: 3, // Ultra crisp HD capture for sharing
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-      const dataUrl = canvasObj.toDataURL("image/png");
+      const blob = await generateReceiptBlob();
+      if (!blob) throw new Error("Thất bại");
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const sanitizedWeek = payment.weekKey.toUpperCase().replace(/\s+/g, "_").replace(/[\/\\?*:[\]]/g, "_");
-      link.download = `BIEN_NHAN_CONG_THO_${sanitizedWeek}_${payment.date}.png`;
-      link.href = dataUrl;
+      link.download = `BIEN_NHAN_CONG_THO_${sanitizedWeek}_${payment.date}.jpg`;
+      link.href = url;
       link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       console.error("Export labor payment voucher failed", e);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleShareReceipt = async () => {
+    setIsSharing(true);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    try {
+      const blob = await generateReceiptBlob();
+      if (!blob) throw new Error("Thất bại khi tạo ảnh");
+      const sanitizedWeek = payment.weekKey.replace(/\s+/g, "_").replace(/[\/\\?*:[\]]/g, "_");
+      
+      const shared = await shareImageFile(
+        blob,
+        `CONG_THO_${sanitizedWeek}_${payment.date}.jpg`,
+        `Thanh toán công thợ ${payment.weekKey}`,
+        `Phiếu chi tiền công thợ tuần ${payment.weekKey} số tiền ${payment.amount.toLocaleString()}đ - Xưởng May An`
+      );
+      if (!shared) {
+        alert("Chia sẻ qua ứng dụng trực tiếp không tương thích. Vui lòng bấm 'Lưu hình' để tải ảnh.");
+      }
+    } catch (e) {
+      console.error("Share labor payment receipt failed", e);
+      alert("Lỗi khi chia sẻ ảnh phiếu.");
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -77,15 +111,24 @@ export default function LaborPaymentReceiptModal({
           <span className="text-[11px] font-extrabold tracking-widest text-[#4f46e5] uppercase font-mono flex items-center gap-1.5">
             💸 PHIẾU THANH TOÁN CÔNG THỢ
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleShareReceipt}
+              disabled={isSharing || isExporting}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl flex items-center gap-1 cursor-pointer transition select-none shadow active:scale-95"
+              title="Chia sẻ phiếu qua Zalo"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>{isSharing ? "Đang gửi..." : "Chia sẻ"}</span>
+            </button>
             <button
               onClick={handleCaptureReceipt}
-              disabled={isExporting}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white font-extrabold text-[11px] py-1.5 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition select-none shadow"
+              disabled={isExporting || isSharing}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl flex items-center gap-1 cursor-pointer transition select-none shadow active:scale-95"
               title="Lưu hình ảnh thanh toán về máy"
             >
-              <Download className="w-4 h-4" />
-              <span>{isExporting ? "Đang lưu..." : "Lưu hình về máy"}</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>{isExporting ? "Đang lưu..." : "Lưu hình"}</span>
             </button>
             <button
               onClick={onClose}

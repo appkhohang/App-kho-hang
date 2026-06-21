@@ -5,10 +5,11 @@
 
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AreaChart, X, Move, Sparkles, TrendingUp, Calendar, CalendarCheck, Package, Ship, DollarSign, Download, ChevronRight } from 'lucide-react';
+import { AreaChart, X, Move, Sparkles, TrendingUp, Calendar, CalendarCheck, Package, Ship, DollarSign, Download, ChevronRight, Share2 } from 'lucide-react';
 import { ImportItem } from '../types';
 import { getVietnameseWeekKey, getVietnameseMonthKey, formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
+import { compressCanvasToBlob, shareImageFile } from '../utils/imageUtils';
 
 interface FloatingStatsProps {
   items: ImportItem[];
@@ -20,6 +21,7 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
   const containerRef = useRef<HTMLDivElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   // Group items to identify the MOST RECENT week
   const itemsByWeek: { [week: string]: ImportItem[] } = {};
@@ -50,27 +52,60 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
   const mShipTP_ĐT = currentMonthItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
   const mNetShip = mShipTP_ĐT - mShipĐT_TP;
 
+  const generateStatsBlob = async (): Promise<Blob | null> => {
+    if (!printAreaRef.current) return null;
+    const canvas = await safeHtml2Canvas(printAreaRef.current, {
+      scale: 1.7, // 1.7x resolution keeps stats board completely readable yet fits perfectly within 150KB size bounds
+      useCORS: true,
+      backgroundColor: '#0f172a', // Slate dark background representation
+    });
+    return await compressCanvasToBlob(canvas, 0.78);
+  };
+
   // Export Stats Card to Image using html2canvas
   const exportStatsImage = async () => {
-    if (!printAreaRef.current) return;
     setIsDownloading(true);
     // short delay for transitions
     await new Promise((resolve) => setTimeout(resolve, 300));
     try {
-      const canvas = await safeHtml2Canvas(printAreaRef.current, {
-        scale: 2.2,
-        useCORS: true,
-        backgroundColor: '#0f172a', // Slate dark background representation
-      });
-      const dataUrl = canvas.toDataURL("image/png");
+      const blob = await generateStatsBlob();
+      if (!blob) throw new Error("Thất bại");
+      const url = URL.createObjectURL(blob);
       const dLink = document.createElement("a");
-      dLink.download = `THONG_KE_TUAN_${latestWeekLabel.replace(/\s+/g, "_")}.png`;
-      dLink.href = dataUrl;
+      dLink.download = `THONG_KE_TUAN_${latestWeekLabel.replace(/\s+/g, "_")}.jpg`;
+      dLink.href = url;
       dLink.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       console.error("Failed to export stats image", e);
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const shareStatsImage = async () => {
+    setIsSharing(true);
+    // short delay for transitions
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    try {
+      const blob = await generateStatsBlob();
+      if (!blob) throw new Error("Thất bại tạo ảnh thống kê");
+      const sanitizedLabel = latestWeekLabel.replace(/\s+/g, "_");
+      
+      const shared = await shareImageFile(
+        blob,
+        `THONG_KE_TUAN_${sanitizedLabel}.jpg`,
+        `Thống kê ${latestWeekLabel}`,
+        `Báo cáo thống kê sản lượng và chênh lệch phí ship tuần ${latestWeekLabel} - Xưởng May An`
+      );
+      if (!shared) {
+        alert("Chia sẻ qua ứng dụng không khả dụng trên trình duyệt hiện tại. Bạn có thể bấm Lưu Thống Kê để tải ảnh.");
+      }
+    } catch (e) {
+      console.error("Failed to share stats image", e);
+      alert("Gặp lỗi trong lúc trích xuất ảnh thống kê.");
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -149,10 +184,18 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
 
                 <div className="flex items-center gap-1.5">
                   <button
-                    onClick={exportStatsImage}
-                    disabled={isDownloading}
+                    onClick={shareStatsImage}
+                    disabled={isSharing || isDownloading}
                     className="bg-slate-800 hover:bg-slate-750 text-white p-1.5 rounded-lg border border-slate-700 transition cursor-pointer"
-                    title="Xuất ảnh thống kê tuần này"
+                    title="Chia sẻ báo cáo thống kê qua Zalo/Ứng dụng khác"
+                  >
+                    <Share2 className="w-4 h-4 text-indigo-400" />
+                  </button>
+                  <button
+                    onClick={exportStatsImage}
+                    disabled={isDownloading || isSharing}
+                    className="bg-slate-800 hover:bg-slate-750 text-white p-1.5 rounded-lg border border-slate-700 transition cursor-pointer"
+                    title="Lưu ảnh thống kê tuần này về máy"
                   >
                     <Download className="w-4 h-4 text-emerald-400" />
                   </button>

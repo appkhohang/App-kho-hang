@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Download, X, Printer, CheckCircle2 } from 'lucide-react';
+import { Download, X, Printer, CheckCircle2, Share2 } from 'lucide-react';
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
+import { compressCanvasToBlob, shareImageFile } from '../utils/imageUtils';
 
 interface PaymentReceiptModalProps {
   payment: PaymentRecord;
@@ -20,32 +21,64 @@ export default function PaymentReceiptModal({
 }: PaymentReceiptModalProps) {
   const paperRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   // Compute debt just before and immediately after this payment
   const debtBefore = calculateDebtBefore(payment.createdAt);
   const debtAfter = debtBefore - payment.amount;
 
+  const generateReceiptBlob = async (): Promise<Blob | null> => {
+    if (!paperRef.current) return null;
+    const canvasObj = await safeHtml2Canvas(paperRef.current, {
+      scale: 1.7, // 1.7x Retina resolution provides highly crisp rendering on mobile screens with minuscule footprint (<150kb)
+      useCORS: true,
+      backgroundColor: '#ffffff',
+    });
+    return await compressCanvasToBlob(canvasObj, 0.78);
+  };
+
   const handleCaptureReceipt = async () => {
-    if (!paperRef.current) return;
     setIsExporting(true);
-    // Brief timeout to ensure animations are settled and state is stable
     await new Promise((resolve) => setTimeout(resolve, 350));
     try {
-      const canvasObj = await safeHtml2Canvas(paperRef.current, {
-        scale: 3, // Premium ultra-high definition render scale
-        useCORS: true,
-        backgroundColor: '#ffffff',
-      });
-      const dataUrl = canvasObj.toDataURL("image/png");
+      const blob = await generateReceiptBlob();
+      if (!blob) throw new Error("Thất bại");
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const sanitizedName = customer.name.toUpperCase().replace(/\s+/g, "_");
-      link.download = `BIEN_NHAN_THANH_TOAN_${sanitizedName}_${payment.date}.png`;
-      link.href = dataUrl;
+      link.download = `BIEN_NHAN_THANH_TOAN_${sanitizedName}_${payment.date}.jpg`;
+      link.href = url;
       link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       console.error("Export payment receipt image failed", e);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleShareReceipt = async () => {
+    setIsSharing(true);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    try {
+      const blob = await generateReceiptBlob();
+      if (!blob) throw new Error("Thất bại khi xuất ảnh");
+      const sanitizedName = customer.name.replace(/\s+/g, "_");
+      
+      const shared = await shareImageFile(
+        blob,
+        `BIEN_NHAN_${sanitizedName}_${payment.date}.jpg`,
+        `Biên nhận thanh toán ${customer.name}`,
+        `Biên nhận thanh toán của khách sỉ ${customer.name} số tiền ${payment.amount.toLocaleString()}đ - Sổ sách Xưởng An`
+      );
+      if (!shared) {
+        alert("Chia sẻ qua ứng dụng trực tiếp không khả dụng. Bạn có thể sử dụng nút Lưu Hình để tải về.");
+      }
+    } catch (e) {
+      console.error("Share payment receipt image failed", e);
+      alert("Đã xảy ra lỗi khi chia sẻ ảnh.");
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -64,15 +97,24 @@ export default function PaymentReceiptModal({
           <span className="text-[11px] font-extrabold tracking-widest text-emerald-400 uppercase font-mono flex items-center gap-1.5">
             🧾 BIÊN NHẬN THANH TOÁN SỈ
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleShareReceipt}
+              disabled={isSharing || isExporting}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white font-extrabold text-[11px] py-2 px-3 rounded-xl flex items-center gap-1 cursor-pointer transition select-none shadow active:scale-95"
+              title="Chia sẻ qua Zalo/Ứng dụng"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>{isSharing ? "Đang gửi..." : "Chia sẻ"}</span>
+            </button>
             <button
               onClick={handleCaptureReceipt}
-              disabled={isExporting}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 text-white font-extrabold text-[11px] py-2 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition select-none shadow"
+              disabled={isExporting || isSharing}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 text-white font-extrabold text-[11px] py-2 px-3 rounded-xl flex items-center gap-1 cursor-pointer transition select-none shadow active:scale-95"
               title="Lưu hình ảnh biên nhận về máy"
             >
-              <Download className="w-4 h-4" />
-              <span>{isExporting ? "Đang lưu..." : "Lưu hình về máy"}</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>{isExporting ? "Đang lưu..." : "Lưu hình"}</span>
             </button>
             <button
               onClick={onClose}
