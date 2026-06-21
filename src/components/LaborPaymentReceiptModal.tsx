@@ -4,7 +4,7 @@ import { Download, X, Printer, CheckCircle2, Share2 } from 'lucide-react';
 import { ImportItem, LaborPayment } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
-import { compressCanvasToBlob, shareImageFile } from '../utils/imageUtils';
+import { convertCanvasToPngBlob, shareImageFile } from '../utils/imageUtils';
 
 interface LaborPaymentReceiptModalProps {
   payment: LaborPayment;
@@ -44,11 +44,11 @@ export default function LaborPaymentReceiptModal({
   const generateReceiptBlob = async (): Promise<Blob | null> => {
     if (!paperRef.current) return null;
     const canvasObj = await safeHtml2Canvas(paperRef.current, {
-      scale: 1.7, // 1.7x yields incredible text crispness yet keeps the JPEG file extremely tiny (~120kb)
+      scale: 1.7, // 1.7x yields incredible text crispness
       useCORS: true,
       backgroundColor: '#ffffff',
     });
-    return await compressCanvasToBlob(canvasObj, 0.78);
+    return await convertCanvasToPngBlob(canvasObj);
   };
 
   const handleCaptureReceipt = async () => {
@@ -60,7 +60,7 @@ export default function LaborPaymentReceiptModal({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const sanitizedWeek = payment.weekKey.toUpperCase().replace(/\s+/g, "_").replace(/[\/\\?*:[\]]/g, "_");
-      link.download = `BIEN_NHAN_CONG_THO_${sanitizedWeek}_${payment.date}.jpg`;
+      link.download = `BIEN_NHAN_CONG_THO_${sanitizedWeek}_${payment.date}.png`;
       link.href = url;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -81,7 +81,7 @@ export default function LaborPaymentReceiptModal({
       
       const shared = await shareImageFile(
         blob,
-        `CONG_THO_${sanitizedWeek}_${payment.date}.jpg`,
+        `CONG_THO_${sanitizedWeek}_${payment.date}.png`,
         `Thanh toán công thợ ${payment.weekKey}`,
         `Phiếu chi tiền công thợ tuần ${payment.weekKey} số tiền ${payment.amount.toLocaleString()}đ - Xưởng May An`
       );

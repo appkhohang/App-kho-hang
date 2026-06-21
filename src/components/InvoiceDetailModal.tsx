@@ -4,7 +4,7 @@ import { Download, X, Camera, CheckCircle, FileText, User, Calendar, Receipt, Do
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
-import { compressCanvasToBlob, shareImageFile } from '../utils/imageUtils';
+import { convertCanvasToPngBlob, shareImageFile } from '../utils/imageUtils';
 
 const dataURLtoBlob = (dataurl: string) => {
   try {
@@ -120,7 +120,7 @@ export default function InvoiceDetailModal({
       
       const shared = await shareImageFile(
         b,
-        `HOA_DON_${bill.billNumber}_${pName}.jpg`,
+        `HOA_DON_${bill.billNumber}_${pName}.png`,
         `Hóa đơn ${bill.billNumber}`,
         `Hóa đơn ${bill.billNumber} gửi Đại Lý ${customer.name} - Sổ sách Xưởng An`
       );
@@ -168,21 +168,21 @@ export default function InvoiceDetailModal({
         backgroundColor: '#ffffff',
       });
       
-      const jpegBlob = await compressCanvasToBlob(canvasObj, 0.78);
-      const blobUrl = URL.createObjectURL(jpegBlob);
+      const pngBlob = await convertCanvasToPngBlob(canvasObj);
+      const blobUrl = URL.createObjectURL(pngBlob);
       
       // Clean up previous blob URL to avoid memory leak
       if (exportedImgUrl && exportedImgUrl.startsWith('blob:')) {
         URL.revokeObjectURL(exportedImgUrl);
       }
       
-      setExportedBlob(jpegBlob);
+      setExportedBlob(pngBlob);
       setExportedImgUrl(blobUrl);
 
       // Trigger standard background download if possible
       try {
         const link = document.createElement("a");
-        link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.jpg`;
+        link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
         link.href = blobUrl;
         link.click();
       } catch (downloadErr) {

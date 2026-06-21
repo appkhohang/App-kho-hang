@@ -9,7 +9,7 @@ import { AreaChart, X, Move, Sparkles, TrendingUp, Calendar, CalendarCheck, Pack
 import { ImportItem } from '../types';
 import { getVietnameseWeekKey, getVietnameseMonthKey, formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
-import { compressCanvasToBlob, shareImageFile } from '../utils/imageUtils';
+import { convertCanvasToPngBlob, shareImageFile } from '../utils/imageUtils';
 
 interface FloatingStatsProps {
   items: ImportItem[];
@@ -59,7 +59,7 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
       useCORS: true,
       backgroundColor: '#0f172a', // Slate dark background representation
     });
-    return await compressCanvasToBlob(canvas, 0.78);
+    return await convertCanvasToPngBlob(canvas);
   };
 
   // Export Stats Card to Image using html2canvas
@@ -72,7 +72,7 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
       if (!blob) throw new Error("Thất bại");
       const url = URL.createObjectURL(blob);
       const dLink = document.createElement("a");
-      dLink.download = `THONG_KE_TUAN_${latestWeekLabel.replace(/\s+/g, "_")}.jpg`;
+      dLink.download = `THONG_KE_TUAN_${latestWeekLabel.replace(/\s+/g, "_")}.png`;
       dLink.href = url;
       dLink.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -94,7 +94,7 @@ export default function FloatingStats({ items, isFloating = true }: FloatingStat
       
       const shared = await shareImageFile(
         blob,
-        `THONG_KE_TUAN_${sanitizedLabel}.jpg`,
+        `THONG_KE_TUAN_${sanitizedLabel}.png`,
         `Thống kê ${latestWeekLabel}`,
         `Báo cáo thống kê sản lượng và chênh lệch phí ship tuần ${latestWeekLabel} - Xưởng May An`
       );

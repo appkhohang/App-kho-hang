@@ -1,9 +1,15 @@
 import html2canvas from 'html2canvas';
 
+// In-memory cache to skip heavy style calculations and avoid WebGL/Canvas allocation leaks
+const oklchCache = new Map<string, string>();
+
 /**
  * Converts any oklch color string into standard rgba color format using browser canvas rendering.
  */
 function oklchToRgbWithCanvas(oklchColor: string): string {
+  if (oklchCache.has(oklchColor)) {
+    return oklchCache.get(oklchColor)!;
+  }
   try {
     const canvas = document.createElement('canvas');
     canvas.width = 1;
@@ -15,7 +21,9 @@ function oklchToRgbWithCanvas(oklchColor: string): string {
     const imgData = ctx.getImageData(0, 0, 1, 1).data;
     // imgData is [r, g, b, a] where a is 0-255
     const alpha = (imgData[3] / 255).toFixed(3);
-    return `rgba(${imgData[0]}, ${imgData[1]}, ${imgData[2]}, ${alpha})`;
+    const result = `rgba(${imgData[0]}, ${imgData[1]}, ${imgData[2]}, ${alpha})`;
+    oklchCache.set(oklchColor, result);
+    return result;
   } catch (e) {
     console.warn("oklchToRgbWithCanvas failed for:", oklchColor, e);
     return oklchColor;
@@ -34,6 +42,23 @@ function translateOklchValues(str: string): string {
     return oklchToRgbWithCanvas(match);
   });
 }
+
+// These are known color-specific properties html2canvas actively inspects.
+// Filtering proxy queries to these prevents severe layout thrashing/lag (million+ trap hits)
+const COLOR_PROPS = new Set([
+  'color',
+  'backgroundColor',
+  'borderColor',
+  'borderTopColor',
+  'borderRightColor',
+  'borderBottomColor',
+  'borderLeftColor',
+  'outlineColor',
+  'fill',
+  'stroke',
+  'boxShadow',
+  'textShadow'
+]);
 
 /**
  * A safe wrapper around html2canvas that temporarily overrides document.styleSheets
@@ -84,8 +109,10 @@ export async function safeHtml2Canvas(element: HTMLElement, options?: any): Prom
       const style = originalGetComputedStyle.call(this, elt, pseudoElt);
       return new Proxy(style, {
         get(target, prop) {
-          const val = Reflect.get(target, prop);
-          
+          if (typeof prop !== 'string') {
+            return target[prop as any];
+          }
+
           if (prop === 'getPropertyValue') {
             return function(propertyName: string) {
               const realVal = style.getPropertyValue(propertyName);
@@ -95,15 +122,18 @@ export async function safeHtml2Canvas(element: HTMLElement, options?: any): Prom
               return realVal;
             };
           }
-          
-          if (typeof val === 'string' && val.includes('oklch')) {
-            return translateOklchValues(val);
-          }
-          
+
+          const val = target[prop as any];
           if (typeof val === 'function') {
             return val.bind(target);
           }
-          
+
+          if (COLOR_PROPS.has(prop)) {
+            if (typeof val === 'string' && val.includes('oklch')) {
+              return translateOklchValues(val);
+            }
+          }
+
           return val;
         }
       });

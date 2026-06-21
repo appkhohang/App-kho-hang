@@ -4,7 +4,7 @@ import { Download, X, Printer, CheckCircle2, Share2 } from 'lucide-react';
 import { Bill, Customer, PaymentRecord } from '../types';
 import { formatVietnameseDate } from '../utils/dateUtils';
 import { safeHtml2Canvas } from '../utils/safeHtml2Canvas';
-import { compressCanvasToBlob, shareImageFile } from '../utils/imageUtils';
+import { convertCanvasToPngBlob, shareImageFile } from '../utils/imageUtils';
 
 interface PaymentReceiptModalProps {
   payment: PaymentRecord;
@@ -30,11 +30,11 @@ export default function PaymentReceiptModal({
   const generateReceiptBlob = async (): Promise<Blob | null> => {
     if (!paperRef.current) return null;
     const canvasObj = await safeHtml2Canvas(paperRef.current, {
-      scale: 1.7, // 1.7x Retina resolution provides highly crisp rendering on mobile screens with minuscule footprint (<150kb)
+      scale: 1.7, // 1.7x Retina resolution provides highly crisp rendering on mobile screens with minuscule footprint
       useCORS: true,
       backgroundColor: '#ffffff',
     });
-    return await compressCanvasToBlob(canvasObj, 0.78);
+    return await convertCanvasToPngBlob(canvasObj);
   };
 
   const handleCaptureReceipt = async () => {
@@ -46,7 +46,7 @@ export default function PaymentReceiptModal({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const sanitizedName = customer.name.toUpperCase().replace(/\s+/g, "_");
-      link.download = `BIEN_NHAN_THANH_TOAN_${sanitizedName}_${payment.date}.jpg`;
+      link.download = `BIEN_NHAN_THANH_TOAN_${sanitizedName}_${payment.date}.png`;
       link.href = url;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -67,7 +67,7 @@ export default function PaymentReceiptModal({
       
       const shared = await shareImageFile(
         blob,
-        `BIEN_NHAN_${sanitizedName}_${payment.date}.jpg`,
+        `BIEN_NHAN_${sanitizedName}_${payment.date}.png`,
         `Biên nhận thanh toán ${customer.name}`,
         `Biên nhận thanh toán của khách sỉ ${customer.name} số tiền ${payment.amount.toLocaleString()}đ - Sổ sách Xưởng An`
       );

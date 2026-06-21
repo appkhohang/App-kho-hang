@@ -112,35 +112,107 @@ export default function GalleryTab({
     }
   };
 
+  const compressImageToPngBlob = (
+    dataUrl: string,
+    quality = 0.60,
+    maxDimension = 1200
+  ): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Downscale dimension to avoid massive memory consumption on Android/Zalo browsers
+        if (width > maxDimension || height > maxDimension) {
+          const ratio = Math.min(maxDimension / width, maxDimension / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error("Không lấy được context 2D của Canvas"));
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+
+        try {
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error("Canvas toBlob PNG thất bại"));
+              }
+            },
+            'image/png',
+            quality
+          );
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = (e) => reject(new Error("Không thể load hình ảnh nguồn"));
+      img.src = dataUrl;
+    });
+  };
+
   const handleSharePhoto = async (media: GalleryMediaItem) => {
+    let tempUrl: string | null = null;
     try {
       setSharingId(media.id);
       
-      let blob: Blob | null = null;
-      if (media.photo.startsWith('data:')) {
-        const res = await fetch(media.photo);
-        blob = await res.blob();
-      } else {
-        throw new Error("Không hỗ trợ định dạng ảnh này");
+      if (!media.photo || !media.photo.startsWith('data:')) {
+        throw new Error("Không hỗ trợ định dạng ảnh này hoặc cơ sở dữ liệu ảnh rỗng");
       }
-      
-      if (!blob) throw new Error("Chuyển đổi Blob thất bại");
-      
-      const fileName = `${media.type}_${media.id}.jpg`;
-      const shared = await shareImageFile(
-        blob,
-        fileName,
-        media.title,
-        `Chia sẻ ảnh từ kho lưu trữ: ${media.title} (${media.label})`
-      );
-      
-      if (!shared) {
-        alert("⚠️ Trình duyệt/Android của bạn không hỗ trợ tính năng chia sẻ trực tiếp. Bạn hãy bấm Tải ảnh về máy và tự gửi qua Zalo.");
+
+      // 1. Initial compression step: redraw on Canvas to PNG with lower quality (0.60)
+      let blob = await compressImageToPngBlob(media.photo, 0.60, 1200);
+      let fileName = `${media.type}_${media.id}.png`;
+      let file = new File([blob], fileName, { type: 'image/png' });
+
+      // 2. Size check: If file exceeds 5MB, auto-trigger ultra strong compression to prevent crash/freeze
+      if (file.size > 5 * 1024 * 1024) {
+        alert("⚠️ Dung lượng tệp ảnh quá lớn (>5MB). Ứng dụng đã tự động áp dụng giải pháp SIÊU NÉN để tránh đứng máy Android.");
+        // Super strong compression: 800px max, 0.45 quality
+        blob = await compressImageToPngBlob(media.photo, 0.45, 800);
+        file = new File([blob], fileName, { type: 'image/png' });
+      }
+
+      // Create a temporary Blob URL in memory for absolute tracking and quick release
+      tempUrl = URL.createObjectURL(blob);
+
+      // 3. Perform memory-safe native sharing directly using the File object
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: media.title,
+          text: `Ảnh đính kèm phiếu: ${media.title} (${media.label}) - Xưởng May An`
+        });
+      } else {
+        // Fallback or custom sharing prompt failure warning
+        alert("⚠️ Trình duyệt hoặc ứng dụng Zalo của bạn không hỗ trợ chia sẻ tệp trực tiếp từ khung nhìn này. Hãy nhấn Tải ảnh về và gửi thủ công.");
       }
     } catch (error) {
-      console.error(error);
-      alert("⚠️ Lỗi chia sẻ hình ảnh.");
+      console.error("Lỗi chia sẻ:", error);
+      alert("⚠️ Đã xảy ra lỗi trong quá trình xử lý và chia sẻ hình ảnh.");
     } finally {
+      // 4. Important cleanup: Revoke the temporary Blob URL immediately to trigger instant garbage collection
+      if (tempUrl) {
+        try {
+          URL.revokeObjectURL(tempUrl);
+        } catch (ev) {
+          console.error("Lỗi giải phóng bộ nhớ URL:", ev);
+        }
+      }
       setSharingId(null);
     }
   };

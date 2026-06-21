@@ -4,6 +4,45 @@
  */
 
 /**
+ * Convert a canvas to a crisp lossless PNG Blob
+ */
+export function convertCanvasToPngBlob(canvas: HTMLCanvasElement, maxWidth = 1600): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    let finalCanvas = canvas;
+    
+    // If canvas is extremely wide or tall, downsample it slightly to avoid high GPU/render memory limits on Android
+    if (canvas.width > maxWidth || canvas.height > maxWidth) {
+      const scale = maxWidth / Math.max(canvas.width, canvas.height);
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width * scale;
+      tempCanvas.height = canvas.height * scale;
+      const tCtx = tempCanvas.getContext('2d');
+      if (tCtx) {
+        tCtx.imageSmoothingEnabled = true;
+        tCtx.imageSmoothingQuality = 'high';
+        tCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+        finalCanvas = tempCanvas;
+      }
+    }
+
+    try {
+      finalCanvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("Không thể xuất Canvas sang Blob PNG."));
+          }
+        },
+        "image/png"
+      );
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+/**
  * Convert a canvas to a highly compressed but crisp JPEG Blob (saves up to 90% memory over PNG)
  */
 export function compressCanvasToBlob(canvas: HTMLCanvasElement, quality = 0.75, maxWidth = 1600): Promise<Blob> {
@@ -110,12 +149,12 @@ export async function shareImageFile(
     // Ensure accurate filename extension representation
     const safeFilename = filename.endsWith('.jpg') || filename.endsWith('.jpeg') || filename.endsWith('.png')
       ? filename
-      : `${filename}.jpg`;
+      : `${filename}.png`;
 
-    // Ensure the blob is tagged correct type
+    // Ensure the blob has the correct mime-type
     const typedBlob = blob.type === 'image/png' || blob.type === 'image/jpeg'
       ? blob
-      : new Blob([blob], { type: 'image/jpeg' });
+      : new Blob([blob], { type: safeFilename.endsWith('.png') ? 'image/png' : 'image/jpeg' });
 
     const file = new File([typedBlob], safeFilename, { type: typedBlob.type });
 
