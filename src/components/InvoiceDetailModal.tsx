@@ -230,25 +230,67 @@ export default function InvoiceDetailModal({
       setExportedBlob(pngBlob);
       setExportedImgUrl(base64Url); // Use Base64 data URL to ensure flawless long-press save in Zalo webviews
 
-      // Trigger standard background download if possible (mostly on desktop browsers)
-      const isWebView = /FBAN|FBAV|Zalo|Instagram/i.test(navigator.userAgent || '');
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '') && !(window as any).MSStream;
-      const isAndroid = /Android/i.test(navigator.userAgent || '');
+      const pName = customer.name.replace(/\s+/g, "_");
+      const fileName = `HOA_DON_${bill.billNumber}_${pName}.png`;
 
-      if (!isWebView && !isIOS && !isAndroid) {
+      // Trigger automatic save/download directly based on environment
+      if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
         try {
-          const link = document.createElement("a");
-          link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
-          link.href = base64Url;
-          link.click();
-        } catch (downloadErr) {
-          console.warn("Direct link download blocked or failed, which is normal on mobile inside app containers", downloadErr);
+          await downloadImageNative(base64Url, fileName);
+          setCopyStatus('downloaded');
+          setTimeout(() => setCopyStatus('idle'), 4000);
+        } catch (nativeErr) {
+          console.warn("Auto native saving failed during capture", nativeErr);
+          setErrorMessage("Không thể lưu ảnh trực tiếp. Vui lòng chụp ảnh màn hình.");
+          setTimeout(() => setErrorMessage(null), 5000);
+        }
+      } else {
+        const isWebView = /FBAN|FBAV|Zalo|Instagram/i.test(navigator.userAgent || '');
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '') && !(window as any).MSStream;
+        const isAndroid = /Android/i.test(navigator.userAgent || '');
+
+        if (!isWebView && !isIOS && !isAndroid) {
+          // Desktop browsers: Direct standard anchor click download
+          try {
+            const link = document.createElement("a");
+            link.download = fileName;
+            link.href = base64Url;
+            link.click();
+            setCopyStatus('downloaded');
+            setTimeout(() => setCopyStatus('idle'), 4000);
+          } catch (downloadErr) {
+            console.warn("Desktop link download blocked", downloadErr);
+          }
+        } else {
+          // Mobile web/webview environments: Trigger Web Share API directly
+          try {
+            const shared = await shareImageFile(
+              pngBlob,
+              fileName,
+              "", 
+              ""
+            );
+            if (shared) {
+              setCopyStatus('downloaded');
+              setTimeout(() => setCopyStatus('idle'), 4000);
+            } else {
+              // Fallback to Clipboard copy of the image if Web Share failed
+              try {
+                const item = new ClipboardItem({ [pngBlob.type]: pngBlob });
+                await navigator.clipboard.write([item]);
+                setCopyStatus('copied-img');
+                setTimeout(() => setCopyStatus('idle'), 5000);
+              } catch (clipErr) {
+                console.warn("Clipboard copy fallback failed", clipErr);
+                setErrorMessage("Hệ thống sao chép ảnh thất bại. Bạn hãy chụp ảnh màn hình nhé.");
+                setTimeout(() => setErrorMessage(null), 5000);
+              }
+            }
+          } catch (shareErr) {
+            console.warn("Web Share failed, falling back to copy", shareErr);
+          }
         }
       }
-      
-      // Immediately open the high-fidelity Export Success Overlay
-      // Here users can tap "Chia sẻ qua ứng dụng" (fresh synchronous user layout gesture)
-      setShowExportSuccessModal(true);
     } catch (e: any) {
       console.error("Export past invoice failed", e);
       setErrorMessage(e?.message || "Có lỗi kỹ thuật khi trích xuất hình ảnh. Vui lòng thử lại hoặc chụp ảnh màn hình.");
@@ -337,48 +379,55 @@ export default function InvoiceDetailModal({
               </div>
             </div>
 
-            {/* Invoice itemized listing ledger table - Built with pure CSS Grid for absolute pixel alignment and layout preservation */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs text-[11px] select-text">
-              {/* Grid Header */}
-              <div 
-                style={{ display: 'grid', gridTemplateColumns: '10% 50% 10% 15% 15%' }}
-                className="bg-slate-50 text-indigo-950 font-extrabold border-b border-slate-200 text-[10px] uppercase tracking-wider text-left items-stretch"
-              >
-                <div className="p-2.5 border-r border-slate-200 text-center font-mono h-full flex items-center justify-center">STT</div>
-                <div className="p-2.5 border-r border-slate-200 text-left h-full flex items-center pl-3">Phân Phối / Mẫu Mã</div>
-                <div className="p-2.5 border-r border-slate-200 text-center h-full flex items-center justify-center">SL</div>
-                <div className="p-2.5 border-r border-slate-200 text-right h-full flex items-center justify-end pr-3">Đơn Giá</div>
-                <div className="p-2.5 text-right h-full flex items-center justify-end pr-3">Thành Tiền</div>
-              </div>
-              
-              {/* Grid Body */}
-              <div className="divide-y divide-slate-150 text-slate-700">
-                {bill.items.map((item, i) => (
-                  <div 
-                    key={item.id} 
-                    style={{ display: 'grid', gridTemplateColumns: '10% 50% 10% 15% 15%' }}
-                    className="even:bg-slate-50/20 odd:bg-white text-slate-800 items-stretch text-left border-b border-slate-150 last:border-b-0 min-h-[38px]"
-                  >
-                    <div className="p-2.5 border-r border-slate-200 font-mono text-center text-slate-400 font-bold flex items-center justify-center">
-                      {i + 1}
-                    </div>
-                    <div className="p-2.5 border-r border-slate-200 font-sans font-bold text-slate-850 text-left flex items-center min-w-0 py-1.5 pl-3">
-                      <div className="break-words leading-normal whitespace-normal block w-full py-0.5">
-                        {item.mẫuMã}
-                      </div>
-                    </div>
-                    <div className="p-2.5 border-r border-slate-200 font-mono text-center font-bold text-indigo-650 flex items-center justify-center">
-                      {item.sốLượng.toLocaleString()}
-                    </div>
-                    <div className="p-2.5 border-r border-slate-200 font-mono text-right text-slate-550 flex items-center justify-end pr-3">
-                      {item.đơnGiá.toLocaleString()}
-                    </div>
-                    <div className="p-2.5 font-mono text-right font-black text-slate-900 flex items-center justify-end pr-3">
-                      {item.thànhTiền.toLocaleString()}đ
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {/* Invoice itemized listing ledger table - Built with standard HTML Table for absolute pixel alignment and perfect layout preservation in html2canvas */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs text-[11px] select-text bg-white">
+              <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse' }}>
+                <colgroup>
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '45%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '22%' }} />
+                </colgroup>
+                {/* Table Header */}
+                <thead>
+                  <tr className="bg-slate-50 text-indigo-950 font-extrabold border-b border-slate-200 text-[10px] uppercase tracking-wider text-left">
+                    <th className="p-2.5 border-r border-slate-200 text-center font-mono font-extrabold align-middle">STT</th>
+                    <th className="p-2.5 border-r border-slate-200 text-left font-sans font-extrabold pl-3 align-middle">Phân Phối / Mẫu Mã</th>
+                    <th className="p-2.5 border-r border-slate-200 text-center font-sans font-extrabold align-middle">SL</th>
+                    <th className="p-2.5 border-r border-slate-200 text-right font-sans font-extrabold pr-3 align-middle">Đơn Giá</th>
+                    <th className="p-2.5 text-right font-sans font-extrabold pr-3 align-middle">Thành Tiền</th>
+                  </tr>
+                </thead>
+                
+                {/* Table Body */}
+                <tbody className="divide-y divide-slate-150 text-slate-700">
+                  {bill.items.map((item, i) => (
+                    <tr 
+                      key={item.id} 
+                      className="even:bg-slate-50/20 odd:bg-white text-slate-800 text-left border-b border-slate-150 last:border-b-0 min-h-[38px] align-middle"
+                    >
+                      <td className="p-2.5 border-r border-slate-200 font-mono text-center text-slate-400 font-bold whitespace-nowrap align-middle">
+                        {i + 1}
+                      </td>
+                      <td className="p-2.5 border-r border-slate-200 font-sans font-bold text-slate-850 text-left py-1.5 pl-3 align-middle">
+                        <div className="break-words leading-normal whitespace-normal block w-full py-0.5">
+                          {item.mẫuMã}
+                        </div>
+                      </td>
+                      <td className="p-2.5 border-r border-slate-200 font-mono text-center font-bold text-indigo-650 whitespace-nowrap align-middle">
+                        {item.sốLượng.toLocaleString()}
+                      </td>
+                      <td className="p-2.5 border-r border-slate-200 font-mono text-right text-slate-550 pr-3 whitespace-nowrap align-middle">
+                        {item.đơnGiá.toLocaleString()}
+                      </td>
+                      <td className="p-2.5 font-mono text-right font-black text-slate-900 pr-3 whitespace-nowrap align-middle">
+                        {item.thànhTiền.toLocaleString()}đ
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             {/* Summary calculations area */}
@@ -453,6 +502,22 @@ export default function InvoiceDetailModal({
         </div>
 
         {/* Handy Bottom Action Deck (Excluded from captured image) */}
+        {copyStatus !== 'idle' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`text-xs font-bold p-3 rounded-2xl text-center shadow-lg border ${
+              copyStatus === 'downloaded' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+              copyStatus === 'copied-img' ? 'bg-teal-50 text-teal-800 border-teal-200' :
+              'bg-indigo-50 text-indigo-800 border-indigo-200'
+            }`}
+          >
+            {copyStatus === 'downloaded' && "✓ Đã tải và lưu ảnh hóa đơn thành công!"}
+            {copyStatus === 'copied-img' && "✓ Đã copy ảnh! Hãy mở Zalo và dán (Paste) để gửi ngay."}
+            {copyStatus === 'copied-text' && "✓ Đã copy văn bản chi tiết hóa đơn!"}
+          </motion.div>
+        )}
+
         {errorMessage && (
           <div className="bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold p-3 rounded-2xl text-center shadow-md animate-pulse">
             ⚠️ {errorMessage}
@@ -465,8 +530,8 @@ export default function InvoiceDetailModal({
             disabled={isExportingModalImage}
             className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-500/15"
           >
-            <Share2 className="w-4 h-4" />
-            <span>{isExportingModalImage ? "Đang xuất..." : "Chia Sẻ Hóa Đơn"}</span>
+            <Download className="w-4 h-4" />
+            <span>{isExportingModalImage ? "Đang xuất..." : "Lưu Ảnh Về Máy"}</span>
           </button>
           
           <button
@@ -479,114 +544,6 @@ export default function InvoiceDetailModal({
           </button>
         </div>
       </motion.div>
-
-      {/* Modern instructions overlay popup for iPhone/in-app Zalo browsers to save and share */}
-      {showExportSuccessModal && exportedImgUrl && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="absolute inset-0" onClick={() => setShowExportSuccessModal(false)} />
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 10 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="relative bg-white text-slate-800 border border-slate-200 rounded-3xl p-5 sm:p-6 max-w-md w-full text-center space-y-4 z-10 shadow-2xl overflow-y-auto max-h-[92vh]"
-          >
-            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle className="w-6 h-6 animate-bounce" />
-            </div>
-            
-            <div className="space-y-1">
-              <h4 className="font-extrabold text-slate-900 text-base uppercase tracking-wide">Đã Tạo Hóa Đơn Xong!</h4>
-              <p className="text-[11px] text-slate-500 leading-normal">
-                Cách tốt nhất để gửi hóa đơn này qua Zalo:
-              </p>
-            </div>
-
-            {/* Quick Actions Dashboard */}
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
-              <button
-                type="button"
-                onClick={handleDownloadImage}
-                className="flex flex-col items-center justify-center gap-1.5 p-2 sm:p-3 bg-amber-50 hover:bg-amber-100/80 active:scale-95 text-amber-800 font-extrabold rounded-2xl transition border border-amber-150 hover:border-amber-200 shadow-sm cursor-pointer"
-              >
-                <Download className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
-                <span>Tải Hóa Đơn</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleCopyImageToClipboard}
-                className="flex flex-col items-center justify-center gap-1.5 p-2 sm:p-3 bg-emerald-50 hover:bg-emerald-100/80 active:scale-95 text-emerald-800 font-extrabold rounded-2xl transition border border-emerald-150 hover:border-emerald-200 shadow-sm cursor-pointer"
-              >
-                <Copy className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
-                <span>Sao Chép Ảnh</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleCopyTextToClipboard}
-                className="flex flex-col items-center justify-center gap-1.5 p-2 sm:p-3 bg-indigo-50 hover:bg-indigo-100/80 active:scale-95 text-indigo-800 font-extrabold rounded-2xl transition border border-indigo-150 hover:border-indigo-200 shadow-sm cursor-pointer"
-              >
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
-                <span>Sao Chép Chữ</span>
-              </button>
-            </div>
-
-            {/* Notification alert states with smooth transition indicators */}
-            {copyStatus !== 'idle' && (
-              <motion.div 
-                initial={{ opacity: 0, y: -5 }} 
-                animate={{ opacity: 1, y: 0 }}
-                className={`text-[11px] font-bold p-2.5 rounded-xl border ${
-                  copyStatus === 'downloaded' ? 'bg-amber-50 text-amber-800 border-amber-200' :
-                  copyStatus === 'copied-img' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
-                  copyStatus === 'copied-text' ? 'bg-indigo-50 text-indigo-800 border-indigo-200' :
-                  'bg-rose-50 text-rose-800 border-rose-200'
-                }`}
-              >
-                {copyStatus === 'downloaded' && "✓ Đã tải ảnh hóa đơn về máy thành công!"}
-                {copyStatus === 'copied-img' && "✓ Đã copy ảnh! Hãy mở cuộc trò chuyện Zalo và nhấn 'Dán' (Paste) để gửi ngay."}
-                {copyStatus === 'copied-text' && "✓ Đã copy nội dung chữ chi tiết hóa đơn! Hãy mở Zalo và dán."}
-                {copyStatus === 'error' && "⚠️ Trình duyệt/Thiết bị của bạn chặn thao tác nhanh. Vui lòng làm theo hướng dẫn bên dưới."}
-              </motion.div>
-            )}
-
-            {/* Sincere Instruction Banner */}
-            <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-amber-900 text-[10.5px] leading-relaxed text-left font-sans">
-              💡 <strong>Lưu ý tiện lợi:</strong> Nhấn giữ vào hình ảnh hóa đơn bên dưới khoảng 2 giây, rồi chọn <strong>"Gửi qua Zalo"</strong> hoặc <strong>"Lưu vào máy"</strong> để gửi nhanh chóng!
-            </div>
-
-            <div 
-              className="border border-slate-200 rounded-xl overflow-y-auto max-h-[320px] bg-slate-50 p-2 pointer-events-auto select-text"
-              style={{ userSelect: 'auto', WebkitUserSelect: 'auto' }}
-            >
-              <img 
-                src={exportedImgUrl} 
-                alt="Hóa đơn Xưởng An" 
-                className="w-full h-auto rounded-lg mx-auto border border-slate-300 pointer-events-auto select-text cursor-pointer"
-                style={{ userSelect: 'auto', WebkitUserSelect: 'auto', pointerEvents: 'auto' }}
-                referrerPolicy="no-referrer"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleNativeShare}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95 border border-indigo-550/20"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>Chia sẻ qua ứng dụng</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowExportSuccessModal(false)}
-                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer"
-              >
-                Đóng
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 }
