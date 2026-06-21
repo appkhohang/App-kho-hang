@@ -57,12 +57,7 @@ export default function InvoiceDetailModal({
       // 1. If running in Capacitor native container (Android APK/iOS App)
       if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
         try {
-          const savedPath = await downloadImageNative(exportedImgUrl, fileName);
-          alert(
-            "✅ Tải ảnh hóa đơn thành công!\n\n" +
-            "📂 Hình ảnh đã được lưu vào thư mục 'Tài liệu' (Documents) của thiết bị.\n" +
-            "Bạn có thể mở Album ảnh hoặc ứng dụng quản lý tệp trên máy để xem nhé."
-          );
+          await downloadImageNative(exportedImgUrl, fileName);
           setCopyStatus('downloaded');
           setTimeout(() => setCopyStatus('idle'), 3000);
           return;

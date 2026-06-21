@@ -38,36 +38,38 @@ export async function downloadImageNative(base64UrlOrData: string, fileName: str
     finalFileName += '.png';
   }
 
-  // Request storage permission
-  try {
-    const perm = await Filesystem.checkPermissions();
-    if (perm.publicStorage !== 'granted') {
-      await Filesystem.requestPermissions();
-    }
-  } catch (err) {
-    console.warn("Storage permission check/request failed", err);
-  }
-
-  // Attempt writing to Directory.Documents
+  let fileUri = '';
   try {
     const result = await Filesystem.writeFile({
       path: finalFileName,
       data: base64Data,
-      directory: Directory.Documents,
+      directory: Directory.Cache,
       recursive: true
     });
-    return result.uri;
-  } catch (error) {
-    console.warn("Direct write to Documents failed, trying fallback Directory.Library/Cache", error);
-    // iOS/Android fallback to local cache/data space
+    fileUri = result.uri;
+  } catch (err) {
+    console.warn("Direct write to Directory.Cache failed, trying fallback Directory.Data", err);
     const result = await Filesystem.writeFile({
       path: finalFileName,
       data: base64Data,
       directory: Directory.Data,
       recursive: true
     });
-    return result.uri;
+    fileUri = result.uri;
   }
+
+  // Open native system share sheet with file uri to allow "Save image" or direct sharing to Zalo
+  try {
+    await Share.share({
+      title: 'Tải Hóa Đơn',
+      text: 'Chọn "Lưu hình ảnh" hoặc gửi trực tiếp qua Zalo',
+      files: [fileUri]
+    });
+  } catch (error) {
+    console.warn("File sharing/saving dialog cancelled or failed", error);
+  }
+
+  return fileUri;
 }
 
 /**
@@ -216,10 +218,28 @@ export async function shareImageFile(
   if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
     try {
       const base64Url = await blobToBase64(blob);
+      let base64Data = base64Url;
+      if (base64Url.includes(',')) {
+        base64Data = base64Url.split(',')[1];
+      }
+
+      const safeFilename = filename.endsWith('.jpg') || filename.endsWith('.jpeg') || filename.endsWith('.png')
+        ? filename
+        : `${filename}.png`;
+
+      // Save to cache directory temporarily
+      const cacheResult = await Filesystem.writeFile({
+        path: safeFilename,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true
+      });
+
+      // Share local cached file URI
       await Share.share({
         title: title || 'Hóa đơn Xưởng An',
         text: text || 'Hóa đơn khách hàng',
-        url: base64Url
+        files: [cacheResult.uri]
       });
       return true;
     } catch (capErr: any) {
