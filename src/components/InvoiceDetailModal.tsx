@@ -50,6 +50,18 @@ export default function InvoiceDetailModal({
   const handleDownloadImage = () => {
     if (!exportedImgUrl) return;
     try {
+      const isWebView = /FBAN|FBAV|Zalo|Instagram/i.test(navigator.userAgent || '');
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '') && !(window as any).MSStream;
+      const isAndroid = /Android/i.test(navigator.userAgent || '');
+
+      if (isWebView || isIOS || isAndroid) {
+        alert(
+          "👉 Trên điện thoại di động (hoặc WebView Zalo/Facebook), trình duyệt không hỗ trợ tải tệp tự động.\n\n" +
+          "💡 Giải pháp: Vui lòng NHẤN GIỮ (long-press) vào hình ảnh hóa đơn hiển thị ở phía dưới, rồi chọn 'Lưu hình ảnh' hoặc 'Lưu vào Album' nhé!"
+        );
+        return;
+      }
+
       const link = document.createElement('a');
       link.href = exportedImgUrl;
       const pName = customer.name.replace(/\s+/g, "_");
@@ -61,8 +73,10 @@ export default function InvoiceDetailModal({
       setTimeout(() => setCopyStatus('idle'), 3000);
     } catch (err) {
       console.warn("Failed to download image", err);
-      setCopyStatus('error');
-      setTimeout(() => setCopyStatus('idle'), 3000);
+      alert(
+        "👉 Trình duyệt chặn tải trực tiếp.\n\n" +
+        "💡 Giải pháp: Bạn hãy NHẤN GIỮ (long-press) vào hình ảnh hóa đơn ở bên dưới khoảng 2 giây, rồi chọn 'Lưu hình ảnh' để tải về nhé!"
+      );
     }
   };
 
@@ -189,24 +203,30 @@ export default function InvoiceDetailModal({
       });
       
       const pngBlob = await convertCanvasToPngBlob(canvasObj);
-      const blobUrl = URL.createObjectURL(pngBlob);
+      const base64Url = canvasObj.toDataURL('image/png');
       
-      // Clean up previous blob URL to avoid memory leak
+      // Clean up previous blob URL if any
       if (exportedImgUrl && exportedImgUrl.startsWith('blob:')) {
         URL.revokeObjectURL(exportedImgUrl);
       }
       
       setExportedBlob(pngBlob);
-      setExportedImgUrl(blobUrl);
+      setExportedImgUrl(base64Url); // Use Base64 data URL to ensure flawless long-press save in Zalo webviews
 
-      // Trigger standard background download if possible
-      try {
-        const link = document.createElement("a");
-        link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
-        link.href = blobUrl;
-        link.click();
-      } catch (downloadErr) {
-        console.warn("Direct link download blocked or failed, which is normal on mobile inside app containers", downloadErr);
+      // Trigger standard background download if possible (mostly on desktop browsers)
+      const isWebView = /FBAN|FBAV|Zalo|Instagram/i.test(navigator.userAgent || '');
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '') && !(window as any).MSStream;
+      const isAndroid = /Android/i.test(navigator.userAgent || '');
+
+      if (!isWebView && !isIOS && !isAndroid) {
+        try {
+          const link = document.createElement("a");
+          link.download = `HOA_DON_${bill.billNumber}_${customer.name.toUpperCase().replace(/\s+/g, "_")}.png`;
+          link.href = base64Url;
+          link.click();
+        } catch (downloadErr) {
+          console.warn("Direct link download blocked or failed, which is normal on mobile inside app containers", downloadErr);
+        }
       }
       
       // Immediately open the high-fidelity Export Success Overlay
@@ -517,11 +537,15 @@ export default function InvoiceDetailModal({
               💡 <strong>Lưu ý tiện lợi:</strong> Nhấn giữ vào hình ảnh hóa đơn bên dưới khoảng 2 giây, rồi chọn <strong>"Gửi qua Zalo"</strong> hoặc <strong>"Lưu vào máy"</strong> để gửi nhanh chóng!
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-inner max-h-56 overflow-y-auto bg-slate-50 p-2">
+            <div 
+              className="border border-slate-200 rounded-xl overflow-y-auto max-h-[320px] bg-slate-50 p-2 pointer-events-auto select-text"
+              style={{ userSelect: 'auto', WebkitUserSelect: 'auto' }}
+            >
               <img 
                 src={exportedImgUrl} 
                 alt="Hóa đơn Xưởng An" 
-                className="w-full h-auto select-all pointer-events-auto rounded-lg mx-auto border border-slate-300"
+                className="w-full h-auto rounded-lg mx-auto border border-slate-300 pointer-events-auto select-text cursor-pointer"
+                style={{ userSelect: 'auto', WebkitUserSelect: 'auto', pointerEvents: 'auto' }}
                 referrerPolicy="no-referrer"
               />
             </div>

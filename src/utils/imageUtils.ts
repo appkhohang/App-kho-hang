@@ -1,7 +1,22 @@
 /**
  * @license
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.5
  */
+
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
+
+/**
+ * Helper to convert a Blob to base64 Data URL
+ */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 /**
  * Convert a canvas to a crisp lossless PNG Blob
@@ -145,6 +160,21 @@ export async function shareImageFile(
   title: string,
   text: string
 ): Promise<boolean> {
+  // Check if we are running on a native platform (Android/iOS) where Capacitor is active
+  if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+    try {
+      const base64Url = await blobToBase64(blob);
+      await Share.share({
+        title: title || 'Hóa đơn Xưởng An',
+        text: text || 'Hóa đơn khách hàng',
+        url: base64Url
+      });
+      return true;
+    } catch (capErr: any) {
+      console.warn("Capacitor Native Share failed, falling back to Web Share...", capErr);
+    }
+  }
+
   const isWebShareSupported = typeof navigator !== 'undefined' && !!navigator.share;
   
   if (!isWebShareSupported) {
