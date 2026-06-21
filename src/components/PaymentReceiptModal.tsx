@@ -30,16 +30,17 @@ export default function PaymentReceiptModal({
   const generateReceiptBlob = async (): Promise<Blob | null> => {
     if (!paperRef.current) return null;
     const canvasObj = await safeHtml2Canvas(paperRef.current, {
-      scale: 1.7, // 1.7x Retina resolution provides highly crisp rendering on mobile screens with minuscule footprint
+      scale: 1.5, // 1.5x Retina resolution provides highly crisp rendering on mobile screens almost instantly
       useCORS: true,
       backgroundColor: '#ffffff',
+      fixedLayoutWidth: 510,
     });
     return await convertCanvasToPngBlob(canvasObj);
   };
 
   const handleCaptureReceipt = async () => {
     setIsExporting(true);
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     try {
       const blob = await generateReceiptBlob();
       if (!blob) throw new Error("Thất bại");
@@ -59,7 +60,7 @@ export default function PaymentReceiptModal({
 
   const handleShareReceipt = async () => {
     setIsSharing(true);
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     try {
       const blob = await generateReceiptBlob();
       if (!blob) throw new Error("Thất bại khi xuất ảnh");

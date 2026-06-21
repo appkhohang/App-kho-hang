@@ -192,11 +192,24 @@ export default function GalleryTab({
 
       // 3. Perform memory-safe native sharing directly using the File object
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: media.title,
-          text: `Ảnh đính kèm phiếu: ${media.title} (${media.label}) - Xưởng May An`
-        });
+        try {
+          await navigator.share({
+            files: [file],
+            title: media.title,
+            text: `Ảnh đính kèm phiếu: ${media.title} (${media.label}) - Xưởng May An`
+          });
+        } catch (shareErr: any) {
+          if (shareErr instanceof Error && shareErr.name === 'AbortError') {
+            console.log("Người dùng đã huỷ thao tác chia sẻ trong Gallery.");
+          } else {
+            console.error("Lỗi crash khi thực thi navigator.share trong Gallery:", shareErr);
+            alert(
+              `⚠️ Không thể chia sẻ trực tiếp hình ảnh do giới hạn ứng dụng hoặc bộ nhớ thiết bị quá tải.\n` +
+              `Chi tiết lỗi: ${shareErr?.message || shareErr || 'Chưa rõ nguyên nhân'}\n\n` +
+              `👉 Khắc phục: Bạn vui lòng lưu/tải hình ảnh về máy trước rồi gửi thủ công.`
+            );
+          }
+        }
       } else {
         // Fallback or custom sharing prompt failure warning
         alert("⚠️ Trình duyệt hoặc ứng dụng Zalo của bạn không hỗ trợ chia sẻ tệp trực tiếp từ khung nhìn này. Hãy nhấn Tải ảnh về và gửi thủ công.");

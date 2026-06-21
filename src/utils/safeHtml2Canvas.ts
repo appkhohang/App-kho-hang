@@ -1,69 +1,66 @@
 import html2canvas from 'html2canvas';
 
 // In-memory cache to skip heavy style calculations and avoid WebGL/Canvas allocation leaks
-const oklchCache = new Map<string, string>();
+const colorCache = new Map<string, string>();
 
 /**
- * Converts any oklch color string into standard rgba color format using browser canvas rendering.
+ * Converts any modern color string (oklch, oklab, hwb) into standard rgba color format using browser canvas rendering.
  */
-function oklchToRgbWithCanvas(oklchColor: string): string {
-  if (oklchCache.has(oklchColor)) {
-    return oklchCache.get(oklchColor)!;
+function modernColorToRgbWithCanvas(colorStr: string): string {
+  if (colorCache.has(colorStr)) {
+    return colorCache.get(colorStr)!;
   }
   try {
     const canvas = document.createElement('canvas');
     canvas.width = 1;
     canvas.height = 1;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return oklchColor;
-    ctx.fillStyle = oklchColor;
+    if (!ctx) return colorStr;
+    ctx.fillStyle = colorStr;
     ctx.fillRect(0, 0, 1, 1);
     const imgData = ctx.getImageData(0, 0, 1, 1).data;
     // imgData is [r, g, b, a] where a is 0-255
     const alpha = (imgData[3] / 255).toFixed(3);
     const result = `rgba(${imgData[0]}, ${imgData[1]}, ${imgData[2]}, ${alpha})`;
-    oklchCache.set(oklchColor, result);
+    colorCache.set(colorStr, result);
     return result;
   } catch (e) {
-    console.warn("oklchToRgbWithCanvas failed for:", oklchColor, e);
-    return oklchColor;
+    console.warn("modernColorToRgbWithCanvas failed for:", colorStr, e);
+    return colorStr;
   }
 }
 
 /**
- * Replaces any oklch(...) occurrences in a CSS string with parsed standard rgba(...) format.
+ * Replaces modern CSS color occurrences in a CSS string with parsed standard rgba(...) format.
  */
-function translateOklchValues(str: string): string {
-  if (!str || typeof str !== 'string' || !str.includes('oklch')) {
+function translateModernColorValues(str: string): string {
+  if (!str || typeof str !== 'string') {
     return str;
   }
-  const oklchRegex = /oklch\([^)]+\)/g;
-  return str.replace(oklchRegex, (match) => {
-    return oklchToRgbWithCanvas(match);
+  if (!str.includes('oklch') && !str.includes('oklab') && !str.includes('hwb')) {
+    return str;
+  }
+  // Matches oklch(...), oklab(...), and hwb(...) colors
+  const colorRegex = /(oklch|oklab|hwb)\([^)]+\)/g;
+  return str.replace(colorRegex, (match) => {
+    return modernColorToRgbWithCanvas(match);
   });
 }
 
-// These are known color-specific properties html2canvas actively inspects.
-// Filtering proxy queries to these prevents severe layout thrashing/lag (million+ trap hits)
-const COLOR_PROPS = new Set([
-  'color',
-  'backgroundColor',
-  'borderColor',
-  'borderTopColor',
-  'borderRightColor',
-  'borderBottomColor',
-  'borderLeftColor',
-  'outlineColor',
-  'fill',
-  'stroke',
-  'boxShadow',
-  'textShadow'
-]);
+function hasModernColors(value: any): boolean {
+  return typeof value === 'string' && (value.includes('oklch') || value.includes('oklab') || value.includes('hwb'));
+}
+
+const COLOR_PROPS_SUBSTRINGS = ['color', 'fill', 'stroke'];
+function isColorProperty(propName: string): boolean {
+  const lower = propName.toLowerCase();
+  return COLOR_PROPS_SUBSTRINGS.some(sub => lower.includes(sub));
+}
 
 /**
  * A safe wrapper around html2canvas that temporarily overrides document.styleSheets
  * and window.getComputedStyle to prevent crashes caused by newer CSS color functions
- * (like "oklch" in Tailwind v4) during style parsing.
+ * (like "oklch" or "oklab" in Tailwind v4) during style parsing.
  */
 export async function safeHtml2Canvas(element: HTMLElement, options?: any): Promise<HTMLCanvasElement> {
   const protoDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'styleSheets');
@@ -104,7 +101,7 @@ export async function safeHtml2Canvas(element: HTMLElement, options?: any): Prom
   }
 
   try {
-    // 2. Wrap window.getComputedStyle
+    // 2. Wrap window.getComputedStyle with extremely fast-filtering proxy
     window.getComputedStyle = function (elt, pseudoElt) {
       const style = originalGetComputedStyle.call(this, elt, pseudoElt);
       return new Proxy(style, {
@@ -116,8 +113,8 @@ export async function safeHtml2Canvas(element: HTMLElement, options?: any): Prom
           if (prop === 'getPropertyValue') {
             return function(propertyName: string) {
               const realVal = style.getPropertyValue(propertyName);
-              if (typeof realVal === 'string' && realVal.includes('oklch')) {
-                return translateOklchValues(realVal);
+              if (isColorProperty(propertyName) && hasModernColors(realVal)) {
+                return translateModernColorValues(realVal);
               }
               return realVal;
             };
@@ -128,10 +125,8 @@ export async function safeHtml2Canvas(element: HTMLElement, options?: any): Prom
             return val.bind(target);
           }
 
-          if (COLOR_PROPS.has(prop)) {
-            if (typeof val === 'string' && val.includes('oklch')) {
-              return translateOklchValues(val);
-            }
+          if (isColorProperty(prop) && hasModernColors(val)) {
+            return translateModernColorValues(val);
           }
 
           return val;
@@ -143,7 +138,74 @@ export async function safeHtml2Canvas(element: HTMLElement, options?: any): Prom
   }
 
   try {
-    const canvas = await html2canvas(element, options);
+    const finalOptions = {
+      logging: false,
+      imageTimeout: 0,
+      removeContainer: true,
+      ...options,
+      onclone: (clonedDoc: Document, clonedEl: HTMLElement) => {
+        const fixedWidth = options?.fixedLayoutWidth;
+        if (fixedWidth) {
+          try {
+            clonedEl.style.width = `${fixedWidth}px`;
+            clonedEl.style.minWidth = `${fixedWidth}px`;
+            clonedEl.style.maxWidth = `${fixedWidth}px`;
+            clonedEl.style.boxSizing = 'border-box';
+            
+            let parent = clonedEl.parentElement;
+            while (parent) {
+              parent.style.width = '100%';
+              parent.style.maxWidth = 'none';
+              parent.style.minWidth = 'none';
+              parent.style.padding = '0';
+              parent.style.margin = '0';
+              parent = parent.parentElement;
+            }
+          } catch (layoutErr) {
+            console.warn("Could not apply fixedLayoutWidth to cloned element:", layoutErr);
+          }
+        }
+
+        try {
+          const style = clonedDoc.createElement('style');
+          style.textContent = `
+            * {
+              font-family: "Inter", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+            }
+            
+            .font-mono, 
+            [class*="font-mono"],
+            th.font-mono,
+            td.font-mono,
+            strong.font-mono {
+              font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace !important;
+            }
+
+            table {
+              table-layout: fixed !important;
+              width: 100% !important;
+              border-collapse: collapse !important;
+            }
+
+            td, th {
+              line-height: 1.45 !important;
+              vertical-align: middle !important;
+              word-break: break-word !important;
+              overflow-wrap: break-word !important;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+        } catch (cssErr) {
+          console.warn("Could not inject custom font styles into cloned document:", cssErr);
+        }
+
+        if (options && typeof options.onclone === 'function') {
+          options.onclone(clonedDoc, clonedEl);
+        }
+      }
+    };
+
+    const canvas = await html2canvas(element, finalOptions);
     return canvas;
   } finally {
     // 3. Restore styleSheets property safely:

@@ -145,6 +145,16 @@ export async function shareImageFile(
   title: string,
   text: string
 ): Promise<boolean> {
+  const isWebShareSupported = typeof navigator !== 'undefined' && !!navigator.share;
+  
+  if (!isWebShareSupported) {
+    alert(
+      "⚠️ Trình duyệt hoặc WebView ứng dụng (như Zalo/Facebook) hiện tại không hỗ trợ Web Share API.\n\n" +
+      "👉 Giải pháp: Vui lòng nhấn vào nút 'Tải ảnh' hoặc chụp màn hình và tự gửi thủ công."
+    );
+    return false;
+  }
+
   try {
     // Ensure accurate filename extension representation
     const safeFilename = filename.endsWith('.jpg') || filename.endsWith('.jpeg') || filename.endsWith('.png')
@@ -158,17 +168,59 @@ export async function shareImageFile(
 
     const file = new File([typedBlob], safeFilename, { type: typedBlob.type });
 
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({
-        files: [file],
-        title: title,
-        text: text
-      });
-      return true;
+    // Try detecting file share capability safely
+    let canShareFiles = false;
+    try {
+      if (navigator.canShare) {
+        canShareFiles = navigator.canShare({ files: [file] });
+      }
+    } catch (checkErr) {
+      console.warn("Lỗi khi kiểm tra navigator.canShare:", checkErr);
     }
-    return false;
-  } catch (error) {
-    console.error("Native sharing error:", error);
+
+    if (!canShareFiles) {
+      alert(
+        "⚠️ Trình duyệt hoặc ứng dụng không cho phép chia sẻ trực tiếp tệp ảnh (MIME/File unsupported).\n\n" +
+        "👉 Giải pháp: Vui lòng nhấn 'Tải ảnh' để lưu ảnh về thiết bị rồi gửi qua Zalo thủ công."
+      );
+      return false;
+    }
+
+    // Try executing the share call in a robust try-catch block
+    try {
+      const shareData: ShareData = {
+        files: [file]
+      };
+      if (title && title.trim() !== "") {
+        shareData.title = title;
+      }
+      if (text && text.trim() !== "") {
+        shareData.text = text;
+      }
+      await navigator.share(shareData);
+      return true;
+    } catch (shareErr: any) {
+      // AbortError is normal user cancellation, do not alert
+      if (shareErr instanceof Error && shareErr.name === 'AbortError') {
+        console.log("Người dùng đã huỷ thao tác chia sẻ.");
+        return false;
+      }
+      
+      console.error("Lỗi khi thực thi navigator.share:", shareErr);
+      
+      alert(
+        `⚠️ Không thể chia sẻ trực tiếp hình ảnh do giới hạn ứng dụng hoặc bộ nhớ thiết bị quá tải.\n` +
+        `Chi tiết lỗi: ${shareErr?.message || shareErr || 'Chờ phản hồi'}\n\n` +
+        `👉 Khắc phục: Bạn vui lòng lưu/tải hình ảnh về máy trước và gửi thủ công.`
+      );
+      return false;
+    }
+  } catch (error: any) {
+    console.error("Native sharing preparation error:", error);
+    alert(
+      `⚠️ Gặp sự cố không mong muốn khi chuẩn bị tệp ảnh để chia sẻ.\n` +
+      `Chi tiết: ${error?.message || error || 'Lỗi xử lý file'}`
+    );
     return false;
   }
 }

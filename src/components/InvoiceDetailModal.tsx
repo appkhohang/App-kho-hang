@@ -121,8 +121,8 @@ export default function InvoiceDetailModal({
       const shared = await shareImageFile(
         b,
         `HOA_DON_${bill.billNumber}_${pName}.png`,
-        `Hóa đơn ${bill.billNumber}`,
-        `Hóa đơn ${bill.billNumber} gửi Đại Lý ${customer.name} - Sổ sách Xưởng An`
+        "", // Không gửi title để tránh Zalo/Facebook tự chèn chú thích tiêu đề
+        ""  // Không gửi text chú thích theo yêu cầu của khách hàng
       );
       if (!shared) {
         // Fallback: Copy to clipboard of the image
@@ -160,12 +160,13 @@ export default function InvoiceDetailModal({
   const handleCapturePastInvoice = async () => {
     if (!detailInvoicePaperRef.current) return;
     setIsExportingModalImage(true);
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     try {
       const canvasObj = await safeHtml2Canvas(detailInvoicePaperRef.current, {
-        scale: 1.7, // 1.7x resolution is highly crisp on text, and has an incredibly lightweight footprint (<250kb)
+        scale: 1.5, // 1.5x resolution is incredibly crisp while processing almost instantly
         useCORS: true,
         backgroundColor: '#ffffff',
+        fixedLayoutWidth: 580,
       });
       
       const pngBlob = await convertCanvasToPngBlob(canvasObj);
@@ -218,6 +219,8 @@ export default function InvoiceDetailModal({
           {/* Printable Invoice Paper Block */}
           <div
             ref={detailInvoicePaperRef}
+            id="home_card_hoa_don"
+            style={{ aspectRatio: '1 / 1.414' }}
             className="bg-white text-slate-900 p-6 sm:p-8 w-full border border-slate-100 flex flex-col space-y-6 rounded-2xl relative"
           >
             {/* Top design header */}
@@ -278,33 +281,48 @@ export default function InvoiceDetailModal({
               </div>
             </div>
 
-            {/* Invoice itemized listing ledger table */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-              <table className="w-full text-[11px] text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-indigo-900 font-extrabold border-b border-slate-205 text-[10px] uppercase tracking-wider">
-                    <th className="p-2.5 border-r border-slate-200 text-center w-10 font-mono">STT</th>
-                    <th className="p-2.5 border-r border-slate-200">Phân Phối / Mẫu Mã</th>
-                    <th className="p-2.5 border-r border-slate-200 text-center w-14">SL</th>
-                    <th className="p-2.5 border-r border-slate-200 text-right w-20">Đơn Giá</th>
-                    <th className="p-2.5 text-right w-24">Thành Tiền</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-150 text-slate-700">
-                  {bill.items.map((item, i) => (
-                    <tr 
-                      key={item.id} 
-                      className="even:bg-slate-50/30 odd:bg-white text-slate-800"
-                    >
-                      <td className="p-2.5 border-r border-slate-200 font-mono text-center text-slate-400 font-bold">{i + 1}</td>
-                      <td className="p-2.5 border-r border-slate-200 font-sans font-bold text-slate-800">{item.mẫuMã}</td>
-                      <td className="p-2.5 border-r border-slate-200 font-mono text-center font-bold text-indigo-650">{item.sốLượng.toLocaleString()}</td>
-                      <td className="p-2.5 border-r border-slate-200 font-mono text-right text-slate-550">{item.đơnGiá.toLocaleString()}</td>
-                      <td className="p-2.5 font-mono text-right font-black text-slate-900">{item.thànhTiền.toLocaleString()}đ</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Invoice itemized listing ledger table - Built with pure CSS Grid for absolute pixel alignment and layout preservation */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs text-[11px] select-text">
+              {/* Grid Header */}
+              <div 
+                style={{ display: 'grid', gridTemplateColumns: '10% 50% 10% 15% 15%' }}
+                className="bg-slate-50 text-indigo-950 font-extrabold border-b border-slate-200 text-[10px] uppercase tracking-wider text-left items-stretch"
+              >
+                <div className="p-2.5 border-r border-slate-200 text-center font-mono h-full flex items-center justify-center">STT</div>
+                <div className="p-2.5 border-r border-slate-200 text-left h-full flex items-center pl-3">Phân Phối / Mẫu Mã</div>
+                <div className="p-2.5 border-r border-slate-200 text-center h-full flex items-center justify-center">SL</div>
+                <div className="p-2.5 border-r border-slate-200 text-right h-full flex items-center justify-end pr-3">Đơn Giá</div>
+                <div className="p-2.5 text-right h-full flex items-center justify-end pr-3">Thành Tiền</div>
+              </div>
+              
+              {/* Grid Body */}
+              <div className="divide-y divide-slate-150 text-slate-700">
+                {bill.items.map((item, i) => (
+                  <div 
+                    key={item.id} 
+                    style={{ display: 'grid', gridTemplateColumns: '10% 50% 10% 15% 15%' }}
+                    className="even:bg-slate-50/20 odd:bg-white text-slate-800 items-stretch text-left border-b border-slate-150 last:border-b-0 min-h-[38px]"
+                  >
+                    <div className="p-2.5 border-r border-slate-200 font-mono text-center text-slate-400 font-bold flex items-center justify-center">
+                      {i + 1}
+                    </div>
+                    <div className="p-2.5 border-r border-slate-200 font-sans font-bold text-slate-850 text-left flex items-center min-w-0 py-1.5 pl-3">
+                      <div className="break-words leading-normal whitespace-normal block w-full py-0.5">
+                        {item.mẫuMã}
+                      </div>
+                    </div>
+                    <div className="p-2.5 border-r border-slate-200 font-mono text-center font-bold text-indigo-650 flex items-center justify-center">
+                      {item.sốLượng.toLocaleString()}
+                    </div>
+                    <div className="p-2.5 border-r border-slate-200 font-mono text-right text-slate-550 flex items-center justify-end pr-3">
+                      {item.đơnGiá.toLocaleString()}
+                    </div>
+                    <div className="p-2.5 font-mono text-right font-black text-slate-900 flex items-center justify-end pr-3">
+                      {item.thànhTiền.toLocaleString()}đ
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Summary calculations area */}

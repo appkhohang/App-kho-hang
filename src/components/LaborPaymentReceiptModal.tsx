@@ -44,16 +44,17 @@ export default function LaborPaymentReceiptModal({
   const generateReceiptBlob = async (): Promise<Blob | null> => {
     if (!paperRef.current) return null;
     const canvasObj = await safeHtml2Canvas(paperRef.current, {
-      scale: 1.7, // 1.7x yields incredible text crispness
+      scale: 1.5, // 1.5x yields incredible text crispness almost instantly
       useCORS: true,
       backgroundColor: '#ffffff',
+      fixedLayoutWidth: 540,
     });
     return await convertCanvasToPngBlob(canvasObj);
   };
 
   const handleCaptureReceipt = async () => {
     setIsExporting(true);
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     try {
       const blob = await generateReceiptBlob();
       if (!blob) throw new Error("Thất bại");
@@ -73,7 +74,7 @@ export default function LaborPaymentReceiptModal({
 
   const handleShareReceipt = async () => {
     setIsSharing(true);
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     try {
       const blob = await generateReceiptBlob();
       if (!blob) throw new Error("Thất bại khi tạo ảnh");
