@@ -328,7 +328,7 @@ export default function InvoiceDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-55 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-y-auto font-sans">
+    <div className="fixed inset-0 z-55 flex items-center justify-center p-0 sm:p-4 bg-slate-950/75 backdrop-blur-md overflow-y-auto font-sans">
       <div className="absolute inset-0" onClick={onClose}></div>
       
       <motion.div
@@ -336,25 +336,24 @@ export default function InvoiceDetailModal({
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0, y: 15 }}
         transition={{ type: "spring", duration: 0.4 }}
-        className="relative w-full max-w-lg z-10 flex flex-col gap-3 my-6 mx-auto select-none"
+        className="relative w-full max-w-lg z-10 flex flex-col gap-3 my-0 sm:my-6 mx-auto select-none"
       >
-        {/* Floating Close Button at top-right corner to replace bulky bottom close button */}
+        {/* Floating Close Button in a reachable position on mobile and desktop */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute -top-1 -right-1 z-30 w-8 h-8 rounded-full bg-slate-900/90 text-white border border-slate-700/80 flex items-center justify-center hover:bg-slate-800 transition active:scale-90 cursor-pointer shadow-md"
+          className="absolute top-3 right-3 sm:-top-1 sm:-right-1 z-35 w-8 h-8 rounded-full bg-slate-900/90 text-white border border-slate-700/80 flex items-center justify-center hover:bg-slate-800 transition active:scale-90 cursor-pointer shadow-md"
         >
-          <X className="w-4 h-4" />
+          <X className="w-4 h-4 text-rose-400" />
         </button>
-        {/* Scrollable Receipt Body Container (Includes proper top margin to safeguard iOS safe-area/notches) */}
-        <div className="border border-slate-200/50 dark:border-slate-800 p-1 bg-slate-50 dark:bg-[#090e0b] rounded-3xl shadow-2xl overflow-hidden max-h-[82vh] overflow-y-auto mt-2">
+        {/* Scrollable Receipt Body Container (No borders/padding on mobile to fit screen edge-to-edge) */}
+        <div className="border-0 sm:border border-slate-200/50 dark:border-slate-800 p-0 sm:p-1 bg-slate-50 dark:bg-[#090e0b] rounded-none sm:rounded-3xl shadow-2xl overflow-hidden max-h-screen sm:max-h-[82vh] overflow-y-auto mt-0 sm:mt-2">
           
-          {/* Printable Invoice Paper Block */}
+          {/* Printable Invoice Paper Block - aspect ratio removed for standard dynamic vertical flow on mobile screens */}
           <div
             ref={detailInvoicePaperRef}
             id="home_card_hoa_don"
-            style={{ aspectRatio: '1 / 1.414' }}
-            className="bg-white text-slate-900 p-6 sm:p-8 w-full border border-slate-100 flex flex-col space-y-6 rounded-2xl relative"
+            className="bg-white text-slate-900 p-4 sm:p-8 w-full border-0 sm:border border-slate-100 flex flex-col space-y-6 rounded-none sm:rounded-2xl relative"
           >
             {/* Top design header */}
             <div className="relative border-b-2 border-dashed border-slate-200 pb-5 text-center flex flex-col items-center">
@@ -567,55 +566,6 @@ export default function InvoiceDetailModal({
           </div>
         )}
 
-        {/* Floating action buttons at the bottom of the invoice layout */}
-        <div className="bg-slate-900 border border-slate-850 rounded-2xl p-2.5 flex flex-col gap-2 shadow-xl shrink-0">
-          {/* Main primary "Tải hóa đơn" button using standard HTML download if image is generated */}
-          {!blobObjectUrl && !exportedImgUrl ? (
-            <button
-              type="button"
-              onClick={handleAutoDownloadInvoice}
-              disabled={isExportingModalImage}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white font-black text-sm uppercase tracking-wide rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-400/20"
-            >
-              <Download className="w-5 h-5 animate-pulse" />
-              <span>{isExportingModalImage ? "Đang kết xuất tệp..." : "Tạo & Tải Hóa Đơn"}</span>
-            </button>
-          ) : (
-            <a
-              href={blobObjectUrl || exportedImgUrl || '#'}
-              download={`HOA_DON_${bill.billNumber}_${customer.name.replace(/\s+/g, "_")}.png`}
-              onClick={() => {
-                setCopyStatus('downloaded');
-                setTimeout(() => setCopyStatus('idle'), 4000);
-              }}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm uppercase tracking-wide rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-400/20 text-center"
-            >
-              <Download className="w-5 h-5 animate-bounce" />
-              <span>Tải Ảnh Hóa Đơn (HTML)</span>
-            </a>
-          )}
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={handleCapturePastInvoice}
-              disabled={isExportingModalImage}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-705 disabled:bg-slate-800 text-slate-200 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-slate-700"
-            >
-              <Camera className="w-4 h-4 text-indigo-400" />
-              <span>Chụp & Chia sẻ</span>
-            </button>
-            
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-755 text-slate-300 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-slate-705"
-            >
-              <X className="w-4 h-4 text-rose-450" />
-              <span>Đóng lại</span>
-            </button>
-          </div>
-        </div>
       </motion.div>
 
       {/* Modern overlay showing the captured invoice image with clear instruction for APK/Webview */}
