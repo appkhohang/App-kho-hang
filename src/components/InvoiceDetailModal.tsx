@@ -47,6 +47,23 @@ export default function InvoiceDetailModal({
   const [showExportSuccessModal, setShowExportSuccessModal] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied-img' | 'copied-text' | 'downloaded' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [blobObjectUrl, setBlobObjectUrl] = useState<string>('');
+
+  React.useEffect(() => {
+    if (!exportedBlob) {
+      setBlobObjectUrl('');
+      return;
+    }
+    try {
+      const url = URL.createObjectURL(exportedBlob);
+      setBlobObjectUrl(url);
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    } catch (err) {
+      console.warn("Lỗi khi tạo URL tạm thời cho tệp ảnh:", err);
+    }
+  }, [exportedBlob]);
 
   const handleAutoDownloadInvoice = async () => {
     let currentUrl = exportedImgUrl;
@@ -577,7 +594,7 @@ export default function InvoiceDetailModal({
             <button
               type="button"
               onClick={onClose}
-              className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-slate-705"
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-755 text-slate-300 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-slate-705"
             >
               <X className="w-4 h-4 text-rose-450" />
               <span>Đóng lại</span>
@@ -594,12 +611,12 @@ export default function InvoiceDetailModal({
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 30 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 w-full max-w-sm text-center shadow-2xl z-10 flex flex-col gap-4 max-h-[90vh] overflow-y-auto select-none"
+            className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 w-full max-w-sm text-center shadow-2xl z-10 flex flex-col gap-4 max-h-[90vh] overflow-y-auto select-auto"
           >
             <button
               type="button"
               onClick={() => setShowExportSuccessModal(false)}
-              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-750 dark:text-slate-200 flex items-center justify-center transition active:scale-90 cursor-pointer shadow"
+              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-755 dark:text-slate-200 flex items-center justify-center transition active:scale-90 cursor-pointer shadow"
             >
               <X className="w-4 h-4" />
             </button>
@@ -611,8 +628,9 @@ export default function InvoiceDetailModal({
               <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-105 uppercase tracking-tight mt-2">
                 ĐÃ CHỤP ẢNH HOÁ ĐƠN! 📸
               </h3>
-              <p className="text-[11px] text-rose-500 dark:text-rose-400 font-extrabold px-1 block leading-relaxed">
-                👉 DÀNH CHO APK: Bạn hãy ĐÈ GIỮ (Nhấn giữ im 2 giây) lên hình ảnh hóa đơn dưới đây & Chọn "Tải xuống hình ảnh" (hoặc "Lưu hình ảnh") để lưu trực tiếp vào Thư viện máy nhé!
+              <p className="text-[11px] text-rose-600 dark:text-rose-400 font-extrabold px-2.5 py-2 block leading-relaxed bg-rose-50/50 dark:bg-rose-950/30 rounded-2xl border border-rose-100/50">
+                👉 XỬ LÝ LỖI WEBVIEW & APK:<br/>
+                Bạn hãy <span className="underline decoration-wavy text-emerald-600 dark:text-emerald-400 font-black">ĐÈ GIỮ TRỰC TIẾP LÊN HÌNH ẢNH</span> bên dưới trong 2 giây rồi chọn <span className="font-black text-rose-700 dark:text-rose-350">"Lưu hình ảnh"</span>, hoặc bấm nút <span className="text-sky-600 dark:text-sky-450 font-black">Mở Ở TRANG MỚI</span> ngay ở dưới nhé!
               </p>
             </div>
 
@@ -621,28 +639,45 @@ export default function InvoiceDetailModal({
               <img
                 src={exportedImgUrl}
                 alt="Captured Invoice Image"
-                className="w-full h-auto max-h-[42vh] object-contain rounded-xl select-all pointer-events-auto cursor-pointer border border-slate-150 active:scale-[0.99] transition duration-200"
+                className="w-full h-auto max-h-[38vh] object-contain rounded-xl pointer-events-auto cursor-pointer border border-slate-150 active:scale-[0.99] transition duration-200 select-auto"
                 title="Đè giữ để lưu hoá đơn"
+                style={{
+                  touchAction: 'auto',
+                  userSelect: 'auto',
+                  WebkitUserSelect: 'auto',
+                  WebkitTouchCallout: 'default',
+                }}
               />
             </div>
 
             {/* Dynamic Action Controls */}
             <div className="flex flex-col gap-2">
+              {/* Force Web open in a separate browser tab to bypass webview sandboxing entirely and make saving built-in */}
+              <a
+                href={blobObjectUrl || exportedImgUrl || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow active:scale-95 border border-sky-400/25 text-center"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-300 animate-bounce" />
+                <span>Mở ảnh rộng để tải về</span>
+              </a>
+
               {/* Native web share button option */}
               <button
                 type="button"
                 onClick={handleNativeShare}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow active:scale-95 border border-indigo-500/20"
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow active:scale-95 border border-indigo-500/20"
               >
-                <Share2 className="w-4 h-4" />
-                <span>Gửi nhanh qua Zalo / Apps khác</span>
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Gửi nhanh Zalo / Apps khác</span>
               </button>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 animate-none">
                 <button
                   type="button"
                   onClick={handleCopyImageToClipboard}
-                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-[10.5px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-extrabold text-[10.5px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-slate-200/50 dark:border-slate-800/50"
                 >
                   <Copy className="w-3.5 h-3.5 text-slate-500" />
                   <span>Copy Ảnh</span>
@@ -651,7 +686,7 @@ export default function InvoiceDetailModal({
                 <button
                   type="button"
                   onClick={handleCopyTextToClipboard}
-                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-[10.5px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-205 font-extrabold text-[10.5px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-slate-200/50 dark:border-slate-800/50"
                 >
                   <FileText className="w-3.5 h-3.5 text-slate-500" />
                   <span>Copy Chữ</span>
@@ -661,7 +696,7 @@ export default function InvoiceDetailModal({
               <button
                 type="button"
                 onClick={() => setShowExportSuccessModal(false)}
-                className="w-full py-2 mt-1 bg-slate-900 hover:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-350 dark:text-slate-300 font-bold text-xs rounded-xl transition active:scale-95"
+                className="w-full py-2 mt-1 bg-slate-900 hover:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-350 dark:text-slate-300 font-bold text-xs rounded-xl transition active:scale-95 border border-slate-800"
               >
                 Đóng bảng xem ảnh
               </button>
