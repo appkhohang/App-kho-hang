@@ -5,7 +5,7 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, ShieldCheck, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle, X, ChevronRight } from 'lucide-react';
+import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, ShieldCheck, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle, X, ChevronRight, Bell } from 'lucide-react';
 import { AppSettings, ImportItem, Customer, UserProfile, Bill, CURRENT_VERSION, AppUpdateInfo } from '../types';
 import { isNewerVersion } from '../utils/updateService';
 import { useAndroidBack } from '../hooks/useAndroidBack';
@@ -17,6 +17,7 @@ import { updatePassword, getAuth, createUserWithEmailAndPassword, signOut as log
 import { initializeApp, deleteApp } from 'firebase/app';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { playNotificationChime, sendSystemNotification, requestNotificationPermission } from '../utils/notificationHelper';
 
 interface SettingsTabProps {
   settings: AppSettings;
@@ -61,6 +62,10 @@ export default function SettingsTab({
   const [isThemeOpen, setIsThemeOpen] = useState(false);
   const [isPwdOpen, setIsPwdOpen] = useState(false);
   const [isGroupOpen, setIsGroupOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<string>(() => {
+    return typeof Notification !== 'undefined' ? Notification.permission : 'default';
+  });
   const [forceDefaultDb, setForceDefaultDb] = useState(() => {
     return localStorage.getItem("xuongan_force_default_db") === "true";
   });
@@ -1128,6 +1133,7 @@ export default function SettingsTab({
               setIsUpdatesOpen(false);
               setIsGroupOpen(false);
               setIsUsersOpen(false);
+              setIsNotifOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isThemeOpen
@@ -1139,7 +1145,7 @@ export default function SettingsTab({
               <Palette className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 min-w-0">
-              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Giao diện xưởng</span>
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Giao diện xưởng</span>
               <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
                 {settings.theme === 'light' ? 'Chế độ Sáng' : settings.theme === 'dark' ? 'Chế độ Tối' : 'Tự động'}
               </span>
@@ -1159,6 +1165,7 @@ export default function SettingsTab({
               setIsUpdatesOpen(false);
               setIsGroupOpen(false);
               setIsUsersOpen(false);
+              setIsNotifOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isDbOpen
@@ -1170,7 +1177,7 @@ export default function SettingsTab({
               <Database className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 min-w-0">
-              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Cơ sở dữ liệu</span>
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Cơ sở dữ liệu</span>
               <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
                 {syncStatus === 'syncing' ? 'Sync...' : syncStatus === 'error' ? 'Lỗi' : 'Sẵn sàng'}
               </span>
@@ -1190,6 +1197,7 @@ export default function SettingsTab({
               setIsUpdatesOpen(false);
               setIsGroupOpen(false);
               setIsUsersOpen(false);
+              setIsNotifOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isGpsOpen
@@ -1201,7 +1209,7 @@ export default function SettingsTab({
               <MapPin className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 min-w-0">
-              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Thiết bị & GPS</span>
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Thiết bị & GPS</span>
               <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
                 {gpsData.latitude !== null ? `${gpsData.latitude.toFixed(1)}, ${gpsData.longitude?.toFixed(1)}` : 'Sẵn sàng'}
               </span>
@@ -1221,6 +1229,7 @@ export default function SettingsTab({
               setIsGpsOpen(false);
               setIsGroupOpen(false);
               setIsUsersOpen(false);
+              setIsNotifOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isUpdatesOpen
@@ -1232,7 +1241,7 @@ export default function SettingsTab({
               <ArrowUpCircle className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 min-w-0">
-              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Nâng cấp OTA</span>
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Nâng cấp OTA</span>
               <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
                 v{localStorage.getItem('capgo_active_version') || CURRENT_VERSION}
               </span>
@@ -1252,6 +1261,7 @@ export default function SettingsTab({
               setIsGpsOpen(false);
               setIsUpdatesOpen(false);
               setIsUsersOpen(false);
+              setIsNotifOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isGroupOpen
@@ -1263,7 +1273,7 @@ export default function SettingsTab({
               <Share2 className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 min-w-0">
-              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Liên kết Nhóm</span>
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Liên kết Nhóm</span>
               <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
                 {localStorage.getItem("xuongan_group_code") ? `Mã: ${localStorage.getItem("xuongan_group_code")}` : 'Mặc định chung'}
               </span>
@@ -1283,6 +1293,7 @@ export default function SettingsTab({
               setIsGpsOpen(false);
               setIsUpdatesOpen(false);
               setIsGroupOpen(false);
+              setIsNotifOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isUsersOpen
@@ -1294,12 +1305,76 @@ export default function SettingsTab({
               <Users className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 min-w-0">
-              <span className="block text-[11px] font-black text-slate-750 dark:text-slate-200 uppercase tracking-wide truncate">Thành viên xưởng</span>
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Thành viên xưởng</span>
               <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
                 {userProfiles.length || 0} thành viên
               </span>
             </div>
             {isUsersOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+            )}
+          </button>
+
+          {/* Tile 6: Security Members & Roles */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsUsersOpen(!isUsersOpen);
+              setIsThemeOpen(false);
+              setIsDbOpen(false);
+              setIsGpsOpen(false);
+              setIsUpdatesOpen(false);
+              setIsGroupOpen(false);
+              setIsNotifOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isUsersOpen
+                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+            }`}
+          >
+            <div className={`p-2 rounded-lg shrink-0 ${isUsersOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <Users className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Thành viên xưởng</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                {userProfiles.length || 0} thành viên
+              </span>
+            </div>
+            {isUsersOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+            )}
+          </button>
+
+          {/* Tile 7: Notification Permissions & Bells */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsNotifOpen(!isNotifOpen);
+              setIsThemeOpen(false);
+              setIsDbOpen(false);
+              setIsGpsOpen(false);
+              setIsUpdatesOpen(false);
+              setIsGroupOpen(false);
+              setIsUsersOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isNotifOpen
+                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+            }`}
+          >
+            <div className={`p-2 rounded-lg shrink-0 ${isNotifOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <Bell className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Thông báo & Chuông</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                {notifPermission === 'granted' ? 'Đã cho phép' : notifPermission === 'denied' ? 'Bị từ chối' : 'Yêu cầu quyền'}
+              </span>
+            </div>
+            {isNotifOpen && (
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
             )}
           </button>
@@ -1360,6 +1435,111 @@ export default function SettingsTab({
             <p className="text-[10.5px] text-slate-400 leading-normal font-sans italic text-center">
               Trạng thái tự động đồng bộ theo cấu hình mặc định của thiết bị.
             </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 1b. CHẾ ĐỘ THÔNG BÁO ỨNG DỤNG COLLAPSIBLE CARD */}
+      <AnimatePresence initial={false}>
+        {isNotifOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            className="overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4 text-left"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                  <Bell className="w-4 h-4 text-indigo-500 animate-bounce" />
+                  <span>Cấu hình Quyền & Chuông thông báo xưởng</span>
+                </h3>
+                <p className="text-xs text-slate-450 mt-1">Quản lý nhận thông báo tức thời của hệ thống trên điện thoại hoặc máy tính khi phát sinh thay đổi dữ liệu mới.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNotifOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 transition shrink-0 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-950/40 p-3.5 rounded-xl border border-slate-150 dark:border-slate-850 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wide">Trạng thái quyền hệ thống:</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-black uppercase border ${
+                  notifPermission === 'granted'
+                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400'
+                    : notifPermission === 'denied'
+                    ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/20 dark:text-rose-450'
+                    : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-450'
+                }`}>
+                  {notifPermission === 'granted' ? 'Đã cho phép (ACTIVE)' : notifPermission === 'denied' ? 'Bị chặn (BLOCKED)' : 'Mặc định (PROMPT)'}
+                </span>
+              </div>
+              
+              <p className="text-[10.5px] text-slate-450 mt-1 leading-relaxed">
+                {notifPermission === 'granted' 
+                  ? '✓ Ứng dụng đã được cấp quyền hiển thị thông báo. Bạn sẽ nhận được âm thanh chuông đôi và pop-up hệ thống mỗi khi có bất kỳ thay đổi nào liên quan đến đơn hàng, hóa đơn, công nợ hoặc hàng hóa mẫu.'
+                  : notifPermission === 'denied'
+                  ? '⚠️ Bạn đã chặn quyền thông báo của ứng dụng. Để nhận được thông báo, vui lòng nhấp vào biểu tượng 🔒 hoặc ⚙️ trên thanh địa chỉ trình duyệt, chọn "Cài đặt trang web" và chuyển quyền "Thông báo" sang "Cho phép".'
+                  : '💡 Quyền thông báo đang ở trạng thái chờ. Hãy bấm vào nút kích hoạt phía dưới để nhận thông báo tức thì trên thiết bị của bạn.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof Notification !== 'undefined') {
+                    Notification.requestPermission().then((perm) => {
+                      setNotifPermission(perm);
+                      if (perm === 'granted') {
+                        playNotificationChime();
+                        sendSystemNotification(
+                          "🔔 KÍCH HOẠT THÀNH CÔNG",
+                          "Hệ thống thông báo Sổ Sách Xưởng An đã sẵn sàng hoạt động trên thiết bị của bạn."
+                        );
+                      } else {
+                        alert(`Trạng thái cấp quyền hiện tại: ${perm}. Vui lòng mở cài đặt trình duyệt để cấp quyền nếu muốn nhận thông báo.`);
+                      }
+                    });
+                  } else {
+                    alert("Thiết bị này không hỗ trợ API thông báo chuẩn HTML5.");
+                  }
+                }}
+                className="w-full py-2.5 px-4 bg-indigo-650 hover:bg-indigo-600 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 border border-indigo-500/20"
+              >
+                <Bell className="w-4 h-4 animate-bounce" />
+                <span>Yêu cầu cấp quyền thông báo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playNotificationChime();
+                  sendSystemNotification(
+                    "🎵 KIỂM TRA CHUÔNG KẾT NỐI",
+                    "Chuông thử nghiệm phát thành công! Âm lượng kép giúp bạn không bỏ lỡ thay đổi đơn hàng từ cơ sở dữ liệu."
+                  );
+                }}
+                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-205 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-700 active:scale-95"
+              >
+                <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
+                <span>Thử chuông & Bắn thông báo nháp</span>
+              </button>
+            </div>
+
+            <div className="bg-indigo-502/5 border border-indigo-400/25 p-3 rounded-xl">
+              <h4 className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-1 mb-1 font-mono">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                <span>Cơ chế kích hoạt thời gian thực (Realtime Hooks)</span>
+              </h4>
+              <p className="text-[10px] text-slate-450 leading-relaxed font-normal">
+                Hệ thống tự động phát chuông đôi và gửi thông báo hiển thị ra ngoài màn hình chờ của thiết bị của tất cả mọi người khi có ai đó thêm hóa đơn mới, cập nhật lô hàng, chỉnh sửa định mức hàng mẫu hay nạp thanh toán công nợ. Đảm bảo toàn bộ xưởng An đạt tính kết nối đồng bộ tức thì, không bị lệch sổ sách.
+              </p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
