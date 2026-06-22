@@ -569,16 +569,31 @@ export default function InvoiceDetailModal({
 
         {/* Floating action buttons at the bottom of the invoice layout */}
         <div className="bg-slate-900 border border-slate-850 rounded-2xl p-2.5 flex flex-col gap-2 shadow-xl shrink-0">
-          {/* Main primary "Tải hóa đơn" button requested by the user */}
-          <button
-            type="button"
-            onClick={handleAutoDownloadInvoice}
-            disabled={isExportingModalImage}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white font-black text-sm uppercase tracking-wide rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-400/20"
-          >
-            <Download className="w-5 h-5 animate-pulse" />
-            <span>{isExportingModalImage ? "Đang kết xuất tệp..." : "Tải Hóa Đơn"}</span>
-          </button>
+          {/* Main primary "Tải hóa đơn" button using standard HTML download if image is generated */}
+          {!blobObjectUrl && !exportedImgUrl ? (
+            <button
+              type="button"
+              onClick={handleAutoDownloadInvoice}
+              disabled={isExportingModalImage}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white font-black text-sm uppercase tracking-wide rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-400/20"
+            >
+              <Download className="w-5 h-5 animate-pulse" />
+              <span>{isExportingModalImage ? "Đang kết xuất tệp..." : "Tạo & Tải Hóa Đơn"}</span>
+            </button>
+          ) : (
+            <a
+              href={blobObjectUrl || exportedImgUrl || '#'}
+              download={`HOA_DON_${bill.billNumber}_${customer.name.replace(/\s+/g, "_")}.png`}
+              onClick={() => {
+                setCopyStatus('downloaded');
+                setTimeout(() => setCopyStatus('idle'), 4000);
+              }}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm uppercase tracking-wide rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-400/20 text-center"
+            >
+              <Download className="w-5 h-5 animate-bounce" />
+              <span>Tải Ảnh Hóa Đơn (HTML)</span>
+            </a>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -652,6 +667,20 @@ export default function InvoiceDetailModal({
 
             {/* Dynamic Action Controls */}
             <div className="flex flex-col gap-2">
+              {/* Direct HTML download using native HTML5 download attribute */}
+              <a
+                href={blobObjectUrl || exportedImgUrl || '#'}
+                download={`HOA_DON_${bill.billNumber}_${customer.name.replace(/\s+/g, "_")}.png`}
+                onClick={() => {
+                  setCopyStatus('downloaded');
+                  setTimeout(() => setCopyStatus('idle'), 4000);
+                }}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow active:scale-95 border border-emerald-500/25 text-center"
+              >
+                <Download className="w-4 h-4 animate-bounce" />
+                <span>Bấm tải ảnh xuống (HTML)</span>
+              </a>
+
               {/* Force Web open in a separate browser tab to bypass webview sandboxing entirely and make saving built-in */}
               <a
                 href={blobObjectUrl || exportedImgUrl || '#'}
