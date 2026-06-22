@@ -229,11 +229,12 @@ export default function InvoiceDetailModal({
       
       setExportedBlob(pngBlob);
       setExportedImgUrl(base64Url); // Use Base64 data URL to ensure flawless long-press save in Zalo webviews
+      setShowExportSuccessModal(true); // Always open the dedicated download/long-press popup for absolute APK confidence!
 
       const pName = customer.name.replace(/\s+/g, "_");
       const fileName = `HOA_DON_${bill.billNumber}_${pName}.png`;
 
-      // Trigger automatic save/download directly based on environment
+      // Trigger automatic save/download directly on desktop only, otherwise rely on the beautiful success popup
       if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
         try {
           await downloadImageNative(base64Url, fileName);
@@ -241,8 +242,6 @@ export default function InvoiceDetailModal({
           setTimeout(() => setCopyStatus('idle'), 4000);
         } catch (nativeErr) {
           console.warn("Auto native saving failed during capture", nativeErr);
-          setErrorMessage("Không thể lưu ảnh trực tiếp. Vui lòng chụp ảnh màn hình.");
-          setTimeout(() => setErrorMessage(null), 5000);
         }
       } else {
         const isWebView = /FBAN|FBAV|Zalo|Instagram/i.test(navigator.userAgent || '');
@@ -250,7 +249,7 @@ export default function InvoiceDetailModal({
         const isAndroid = /Android/i.test(navigator.userAgent || '');
 
         if (!isWebView && !isIOS && !isAndroid) {
-          // Desktop browsers: Direct standard anchor click download
+          // Desktop browsers: Direct standard anchor click download is robust
           try {
             const link = document.createElement("a");
             link.download = fileName;
@@ -260,34 +259,6 @@ export default function InvoiceDetailModal({
             setTimeout(() => setCopyStatus('idle'), 4000);
           } catch (downloadErr) {
             console.warn("Desktop link download blocked", downloadErr);
-          }
-        } else {
-          // Mobile web/webview environments: Trigger Web Share API directly
-          try {
-            const shared = await shareImageFile(
-              pngBlob,
-              fileName,
-              "", 
-              ""
-            );
-            if (shared) {
-              setCopyStatus('downloaded');
-              setTimeout(() => setCopyStatus('idle'), 4000);
-            } else {
-              // Fallback to Clipboard copy of the image if Web Share failed
-              try {
-                const item = new ClipboardItem({ [pngBlob.type]: pngBlob });
-                await navigator.clipboard.write([item]);
-                setCopyStatus('copied-img');
-                setTimeout(() => setCopyStatus('idle'), 5000);
-              } catch (clipErr) {
-                console.warn("Clipboard copy fallback failed", clipErr);
-                setErrorMessage("Hệ thống sao chép ảnh thất bại. Bạn hãy chụp ảnh màn hình nhé.");
-                setTimeout(() => setErrorMessage(null), 5000);
-              }
-            }
-          } catch (shareErr) {
-            console.warn("Web Share failed, falling back to copy", shareErr);
           }
         }
       }
@@ -539,7 +510,113 @@ export default function InvoiceDetailModal({
             ⚠️ {errorMessage}
           </div>
         )}
+
+        {/* Floating action buttons at the bottom of the invoice layout */}
+        <div className="bg-slate-900 border border-slate-850 rounded-2xl p-2.5 grid grid-cols-2 gap-2 shadow-xl shrink-0">
+          <button
+            type="button"
+            onClick={handleCapturePastInvoice}
+            disabled={isExportingModalImage}
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-500/15"
+          >
+            <Camera className="w-4 h-4" />
+            <span>{isExportingModalImage ? "Đang chụp..." : "Chụp Ảnh Hoá Đơn"}</span>
+          </button>
+          
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-slate-705"
+          >
+            <X className="w-4 h-4" />
+            <span>Đóng lại</span>
+          </button>
+        </div>
       </motion.div>
+
+      {/* Modern overlay showing the captured invoice image with clear instruction for APK/Webview */}
+      {showExportSuccessModal && exportedImgUrl && (
+        <div className="fixed inset-0 z-56 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-lg p-4 transition-all overflow-y-auto">
+          <div className="absolute inset-0" onClick={() => setShowExportSuccessModal(false)}></div>
+          
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 30 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 w-full max-w-sm text-center shadow-2xl z-10 flex flex-col gap-4 max-h-[90vh] overflow-y-auto select-none"
+          >
+            <button
+              type="button"
+              onClick={() => setShowExportSuccessModal(false)}
+              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-750 dark:text-slate-200 flex items-center justify-center transition active:scale-90 cursor-pointer shadow"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="space-y-1 mt-2">
+              <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/55 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                <Camera className="w-6 h-6 animate-pulse" />
+              </div>
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-105 uppercase tracking-tight mt-2">
+                ĐÃ CHỤP ẢNH HOÁ ĐƠN! 📸
+              </h3>
+              <p className="text-[11px] text-rose-500 dark:text-rose-400 font-extrabold px-1 block leading-relaxed">
+                👉 DÀNH CHO APK: Bạn hãy ĐÈ GIỮ (Nhấn giữ im 2 giây) lên hình ảnh hóa đơn dưới đây & Chọn "Tải xuống hình ảnh" (hoặc "Lưu hình ảnh") để lưu trực tiếp vào Thư viện máy nhé!
+              </p>
+            </div>
+
+            {/* Display the captured PNG actual Image so WebView can trigger native Save/Share on long press */}
+            <div className="border-4 border-emerald-500/10 rounded-2xl overflow-hidden shadow-inner bg-slate-50 dark:bg-slate-950 p-1 flex justify-center items-center">
+              <img
+                src={exportedImgUrl}
+                alt="Captured Invoice Image"
+                className="w-full h-auto max-h-[42vh] object-contain rounded-xl select-all pointer-events-auto cursor-pointer border border-slate-150 active:scale-[0.99] transition duration-200"
+                title="Đè giữ để lưu hoá đơn"
+              />
+            </div>
+
+            {/* Dynamic Action Controls */}
+            <div className="flex flex-col gap-2">
+              {/* Native web share button option */}
+              <button
+                type="button"
+                onClick={handleNativeShare}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow active:scale-95 border border-indigo-500/20"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Gửi nhanh qua Zalo / Apps khác</span>
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyImageToClipboard}
+                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-[10.5px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Copy className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Copy Ảnh</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyTextToClipboard}
+                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-[10.5px] uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <FileText className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Copy Chữ</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowExportSuccessModal(false)}
+                className="w-full py-2 mt-1 bg-slate-900 hover:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-350 dark:text-slate-300 font-bold text-xs rounded-xl transition active:scale-95"
+              >
+                Đóng bảng xem ảnh
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

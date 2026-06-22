@@ -35,6 +35,7 @@ import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import AppUpdateModal from './components/AppUpdateModal';
 import AnBrandLogo from './components/AnBrandLogo';
 import InvoiceDetailModal from './components/InvoiceDetailModal';
+import { requestNotificationPermission } from './utils/notificationHelper';
 
 
 const TabLoadingFallback = () => (
@@ -55,6 +56,7 @@ export default function App() {
   // Initialize LocalStorage with seeds if empty
   useEffect(() => {
     initLocalStorage();
+    requestNotificationPermission();
   }, []);
 
   // Firebase Auth initialized state

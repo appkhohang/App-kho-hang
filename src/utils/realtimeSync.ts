@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db, getNamespaceCollection, getSettingsDocId, sanitizeDataForFirestore } from './firebase';
 import { COLLECTION_MAP, isUserAdmin } from './syncService';
+import { sendSystemNotification } from './notificationHelper';
 
 // Safely normalize user-facing semantic data for deep comparison, ignoring dynamic metadata keys
 function cleanAndSort(val: any): any {
@@ -325,13 +326,16 @@ export function useRealtimeSync({
                       targetType = 'import';
                       title = `Tài khoản ${item.updatedBy || 'khác'} vừa cập nhật lô hàng mẫu "${item.mẫu || item.mau || ''}" (số lượng: ${item.sốLượng || item.soLuong || 0}) trong tuần ${item.weekKey || ''}.`;
                       targetExtra = item.weekKey || '';
+                      sendSystemNotification("📦 CẬP NHẬT ĐƠN HÀNG MỚI", title);
                     } else if (key === 'bills') {
                       targetType = 'invoice';
                       title = `Tài khoản ${item.updatedBy || 'khác'} vừa viết Hoá đơn "${item.billNumber || 'Mới'}" trị giá ${(item.subtotal || 0).toLocaleString()}đ.`;
                       targetExtra = item.customerId || '';
+                      sendSystemNotification("🧾 CẬP NHẬT HOÁ ĐƠN MỚI", title);
                     } else if (key === 'rawMaterials') {
                       targetType = 'material';
                       title = `Tài khoản ${item.updatedBy || 'khác'} vừa cập nhật Định mức kho vật tư "${item.name || ''}" (Tồn kho: ${item.currentStock || 0} ${item.unit || ''}).`;
+                      sendSystemNotification("🛠️ CẬP NHẬT ĐỊNH MỨC KHO", title);
                     }
 
                     const newNotif = {
