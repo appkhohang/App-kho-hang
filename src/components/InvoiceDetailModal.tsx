@@ -48,52 +48,91 @@ export default function InvoiceDetailModal({
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied-img' | 'copied-text' | 'downloaded' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleDownloadImage = async () => {
-    if (!exportedImgUrl) return;
+  const handleAutoDownloadInvoice = async () => {
+    let currentUrl = exportedImgUrl;
+    let currentBlob = exportedBlob;
+    
+    // If not captured yet, capture it inline on the fly!
+    if (!currentUrl) {
+      if (!detailInvoicePaperRef.current) return;
+      setIsExportingModalImage(true);
+      setErrorMessage(null);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      try {
+        const canvasObj = await safeHtml2Canvas(detailInvoicePaperRef.current, {
+          scale: 1.8, // Super crisp high resolution
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          fixedLayoutWidth: 580,
+        });
+        
+        const pngBlob = await convertCanvasToPngBlob(canvasObj);
+        const base64Url = canvasObj.toDataURL('image/png');
+        
+        setExportedBlob(pngBlob);
+        setExportedImgUrl(base64Url);
+        currentUrl = base64Url;
+        currentBlob = pngBlob;
+      } catch (captureErr: any) {
+        console.error("Direct high-res capturing failed", captureErr);
+        setErrorMessage("Lỗi chuẩn bị hình ảnh: " + (captureErr?.message || ""));
+        setTimeout(() => setErrorMessage(null), 5000);
+        setIsExportingModalImage(false);
+        return;
+      } finally {
+        setIsExportingModalImage(false);
+      }
+    }
+
+    if (!currentUrl) return;
+
     try {
       const pName = customer.name.replace(/\s+/g, "_");
       const fileName = `HOA_DON_${bill.billNumber}_${pName}.png`;
 
-      // 1. If running in Capacitor native container (Android APK/iOS App)
+      // 1. Android APK & iOS Native via Capacitor Filesystem
       if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
         try {
-          await downloadImageNative(exportedImgUrl, fileName);
+          await downloadImageNative(currentUrl, fileName);
           setCopyStatus('downloaded');
-          setTimeout(() => setCopyStatus('idle'), 3000);
+          setTimeout(() => setCopyStatus('idle'), 5000);
           return;
-        } catch (nativeErr) {
-          console.warn("Failsafe native saving failed, offering fallback alert", nativeErr);
+        } catch (nativeErr: any) {
+          console.warn("Native file saving error, falling back to Share UI", nativeErr);
+          setErrorMessage("Không thể lưu ảnh trực tiếp. Đã mở bảng chia sẻ để bạn sao chép.");
+          setTimeout(() => setErrorMessage(null), 5000);
         }
       }
 
-      // 2. Mobile brownsers / webviews (Zalo / Facebook) standard alert
+      // 2. Mobile web view browser context
       const isWebView = /FBAN|FBAV|Zalo|Instagram/i.test(navigator.userAgent || '');
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '') && !(window as any).MSStream;
       const isAndroid = /Android/i.test(navigator.userAgent || '');
 
       if (isWebView || isIOS || isAndroid) {
-        alert(
-          "👉 Trên trình duyệt di động hoặc WebView (Zalo/Facebook), tệp không tự động tải xuống trực tiếp.\n\n" +
-          "💡 Giải pháp: Vui lòng NHẤN GIỮ (long-press) vào hình ảnh hóa đơn hiển thị ở phía dưới, rồi chọn 'Lưu hình ảnh' hoặc 'Lưu vào Album' để lưu về máy nhé!"
-        );
+        // Show success modal to enable long-press saving with explicit visual highlight!
+        setShowExportSuccessModal(true);
         return;
       }
 
-      // 3. Desktop standard browser download
-      const link = document.createElement('a');
-      link.href = exportedImgUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setCopyStatus('downloaded');
-      setTimeout(() => setCopyStatus('idle'), 3000);
-    } catch (err) {
-      console.warn("Failed to download image", err);
-      alert(
-        "👉 Trình duyệt chặn tải trực tiếp.\n\n" +
-        "💡 Giải pháp: Bạn hãy NHẤN GIỮ (long-press) vào hình ảnh hóa đơn ở bên dưới khoảng 2 giây, rồi chọn 'Lưu hình ảnh' để tải về nhé!"
-      );
+      // 3. Desktop browser context: Trigger standard file download automatically
+      try {
+        const link = document.createElement('a');
+        link.href = currentUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setCopyStatus('downloaded');
+        setTimeout(() => setCopyStatus('idle'), 4000);
+      } catch (err) {
+        console.warn("Desktop link click download failed", err);
+        setShowExportSuccessModal(true);
+      }
+    } catch (err: any) {
+      console.warn("Failed directly downloading document", err);
+      setErrorMessage("Không thể tải xuống trực tiếp: " + (err?.message || ""));
+      setTimeout(() => setErrorMessage(null), 5000);
     }
   };
 
@@ -512,25 +551,38 @@ export default function InvoiceDetailModal({
         )}
 
         {/* Floating action buttons at the bottom of the invoice layout */}
-        <div className="bg-slate-900 border border-slate-850 rounded-2xl p-2.5 grid grid-cols-2 gap-2 shadow-xl shrink-0">
+        <div className="bg-slate-900 border border-slate-850 rounded-2xl p-2.5 flex flex-col gap-2 shadow-xl shrink-0">
+          {/* Main primary "Tải hóa đơn" button requested by the user */}
           <button
             type="button"
-            onClick={handleCapturePastInvoice}
+            onClick={handleAutoDownloadInvoice}
             disabled={isExportingModalImage}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-500/15"
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white font-black text-sm uppercase tracking-wide rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 border border-emerald-400/20"
           >
-            <Camera className="w-4 h-4" />
-            <span>{isExportingModalImage ? "Đang chụp..." : "Chụp Ảnh Hoá Đơn"}</span>
+            <Download className="w-5 h-5 animate-pulse" />
+            <span>{isExportingModalImage ? "Đang kết xuất tệp..." : "Tải Hóa Đơn"}</span>
           </button>
-          
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 border border-slate-705"
-          >
-            <X className="w-4 h-4" />
-            <span>Đóng lại</span>
-          </button>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleCapturePastInvoice}
+              disabled={isExportingModalImage}
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-705 disabled:bg-slate-800 text-slate-200 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-slate-700"
+            >
+              <Camera className="w-4 h-4 text-indigo-400" />
+              <span>Chụp & Chia sẻ</span>
+            </button>
+            
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-extrabold text-xs uppercase tracking-wider rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-slate-705"
+            >
+              <X className="w-4 h-4 text-rose-450" />
+              <span>Đóng lại</span>
+            </button>
+          </div>
         </div>
       </motion.div>
 
