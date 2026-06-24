@@ -117,6 +117,20 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>(() => getSavedArray("xuongan_customers", []));
   const [bills, setBills] = useState<Bill[]>(() => getSavedArray("xuongan_bills", []));
   const [payments, setPayments] = useState<PaymentRecord[]>(() => getSavedArray("xuongan_payments", []));
+  
+  // Track previous state for detecting newly added/updated large transactions
+  const prevBillsRef = useRef<Bill[]>([]);
+  const prevPaymentsRef = useRef<PaymentRecord[]>([]);
+
+  // Initialize refs after mounting/initial load
+  useEffect(() => {
+    if (bills && bills.length > 0) {
+      prevBillsRef.current = bills;
+    }
+    if (payments && payments.length > 0) {
+      prevPaymentsRef.current = payments;
+    }
+  }, []);
   const [authState, setAuthState] = useState<AuthState>(() => {
     const saved = getSavedState<AuthState>("xuongan_auth", {
       isAuthenticated: false,
@@ -1057,7 +1071,7 @@ export default function App() {
     settings: settings
   };
 
-  const saveAutoBackup = (trigger: 'interval' | 'crucial_change') => {
+  const saveAutoBackup = (trigger: string) => {
     try {
       const source = backupDataRef.current || {
         importItems: items,
@@ -1150,13 +1164,87 @@ export default function App() {
     triggerCrucialChangeBackup();
   }, [items, bills, payments, laborPayments, workers, productionBatches]);
 
-  // Periodic interval automatic backup useEffect (5 minutes)
+  // Periodic interval automatic backup (5 minutes) and overnight day-change check
   useEffect(() => {
     const interval = setInterval(() => {
       saveAutoBackup('interval');
+
+      // Check if calendar day changed while app is open
+      const todayStr = new Date().toLocaleDateString('vi-VN');
+      const lastBackupDate = localStorage.getItem("xuongan_last_backup_date");
+      if (lastBackupDate && lastBackupDate !== todayStr) {
+        saveAutoBackup('dau_ngay_moi');
+        localStorage.setItem("xuongan_last_backup_date", todayStr);
+      }
     }, 5 * 60 * 1000); // Every 5 minutes in ms
     return () => clearInterval(interval);
   }, []);
+
+  // Daily Startup auto backup (New day check when starting application)
+  useEffect(() => {
+    const todayStr = new Date().toLocaleDateString('vi-VN');
+    const lastBackupDate = localStorage.getItem("xuongan_last_backup_date");
+    if (!lastBackupDate) {
+      // First time loading application - record date, don't trigger backup yet to avoid empty backup
+      localStorage.setItem("xuongan_last_backup_date", todayStr);
+    } else if (lastBackupDate !== todayStr) {
+      // It's a new day! Backup shortly after load to let states initialize
+      const startTimer = setTimeout(() => {
+        saveAutoBackup('dau_ngay_moi');
+        localStorage.setItem("xuongan_last_backup_date", todayStr);
+      }, 3000);
+      return () => clearTimeout(startTimer);
+    }
+  }, []);
+
+  // Large transaction detector (Invoice >= 20,000,000đ or Payment >= 20,000,000đ)
+  useEffect(() => {
+    // If previous refs are completely empty but we have loaded database records,
+    // we should simply initialize the refs to avoid treating all historic records as newly added.
+    if (prevBillsRef.current.length === 0 && bills.length > 0) {
+      prevBillsRef.current = bills;
+      return;
+    }
+    if (prevPaymentsRef.current.length === 0 && payments.length > 0) {
+      prevPaymentsRef.current = payments;
+      return;
+    }
+
+    // Determine newly added invoices
+    const addedBills = bills.filter(b => !prevBillsRef.current.some(pb => pb.id === b.id));
+    // Determine newly added payment vouchers
+    const addedPayments = payments.filter(p => !prevPaymentsRef.current.some(pp => pp.id === p.id));
+
+    const LARGE_TRANSACTION_THRESHOLD = 20000000; // 20 million VND
+    let hasLargeTx = false;
+    let description = '';
+
+    for (const b of addedBills) {
+      if (b.subtotal >= LARGE_TRANSACTION_THRESHOLD) {
+        hasLargeTx = true;
+        description = `Hóa đơn số ${b.billNumber || b.id.substring(0, 6)} - trị giá ${b.subtotal.toLocaleString()}đ`;
+        break;
+      }
+    }
+
+    if (!hasLargeTx) {
+      for (const p of addedPayments) {
+        if (p.amount >= LARGE_TRANSACTION_THRESHOLD) {
+          hasLargeTx = true;
+          description = `Phiếu thu ${p.note || p.id.substring(0, 6)} - số tiền ${p.amount.toLocaleString()}đ`;
+          break;
+        }
+      }
+    }
+
+    if (hasLargeTx) {
+      saveAutoBackup(`giao_dich_lon (${description})`);
+    }
+
+    // Always update tracking refs to current states
+    prevBillsRef.current = bills;
+    prevPaymentsRef.current = payments;
+  }, [bills, payments]);
 
   // Sync state changes to LocalStorage hooks
   useEffect(() => {

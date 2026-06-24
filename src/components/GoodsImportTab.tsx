@@ -160,7 +160,7 @@ export default function GoodsImportTab({
   const setSelectedWeekFilter = setExternalWeekFilter !== undefined ? setExternalWeekFilter : setLocalWeekFilter;
 
   // Filter mode & month selection states
-  const [filterMode, setFilterMode] = useState<'week' | 'month'>('week');
+  const [filterMode, setFilterMode] = useState<'week' | 'month'>('month');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('all');
 
   // Track which weeks' labor details panels are expanded
@@ -595,8 +595,8 @@ export default function GoodsImportTab({
     // Tổng tiền ship (vận chuyển) = ship TP ➔ ĐT trừ ship ĐT ➔ TP
     const totalShip = totalShipTpDt - totalShipDtTp;
 
-    // Tổng tiền hàng / thợ = tiền hàng cộng Tổng tiền ship (vận chuyển)
-    const totalGoodsAmount = totalBaseGoodsAmount + totalShip;
+    // Tổng tiền hàng / thợ = tiền hàng cộng Tổng tiền ship (vận chuyển) - trừ đi tiền đã thanh toán cho thợ
+    const totalGoodsAmount = totalBaseGoodsAmount + totalShip - totalLaborPaid;
 
     return {
       totalQty,
@@ -606,6 +606,36 @@ export default function GoodsImportTab({
       totalCost: totalBaseGoodsAmount
     };
   }, [items, tpDtShippings, laborPayments, filterMode, selectedWeekFilter, selectedMonthFilter, itemsByWeek, itemsByMonth, shippingsByWeek, shippingsByMonth]);
+
+  // Reusable helper to open labor payment window for the current filtered time period
+  const handleOpenLaborPay = () => {
+    const isWeekMode = filterMode === 'week';
+    const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
+    const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
+    const filteredGroupKeys = Object.keys(groupData)
+      .sort((a, b) => b.localeCompare(a))
+      .filter(label => currentFilterValue === 'all' || label === currentFilterValue);
+    
+    const defaultLabel = filteredGroupKeys.length > 0 ? filteredGroupKeys[0] : (Object.keys(groupData).sort((a, b) => b.localeCompare(a))[0] || '');
+    
+    if (defaultLabel) {
+      setActiveWeekForLaborPay(defaultLabel);
+      
+      const weekItems = groupData[defaultLabel] || [];
+      const totalAmount = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+      const weekLaborPayments = isWeekMode 
+        ? laborPayments.filter(p => p.weekKey === defaultLabel)
+        : laborPayments.filter(p => getVietnameseMonthKey(p.date) === defaultLabel || p.weekKey === defaultLabel);
+      const totalLaborPaid = weekLaborPayments.reduce((acc, p) => acc + p.amount, 0);
+      const remainingLaborDebt = totalAmount - totalLaborPaid;
+      
+      setLaborPayAmount(remainingLaborDebt > 0 ? remainingLaborDebt : '');
+      setLaborPayNote('Thanh toán tiền công thợ');
+      setLaborPayDate(getCurrentDateStr());
+    } else {
+      alert("Chưa có danh sách lô nhập kho nào để thực hiện thanh toán!");
+    }
+  };
 
   // EXCEL GENERATION LOGIC - STRICT COMPLIANCE TO USER REQUEST FORMAT:
   const exportWeekToExcel = (weekLabel: string, weekItems: ImportItem[]) => {
@@ -1031,34 +1061,7 @@ export default function GoodsImportTab({
 
               <button
                 type="button"
-                onClick={() => {
-                  const isWeekMode = filterMode === 'week';
-                  const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
-                  const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
-                  const filteredGroupKeys = Object.keys(groupData)
-                    .sort((a, b) => b.localeCompare(a))
-                    .filter(label => currentFilterValue === 'all' || label === currentFilterValue);
-                  
-                  const defaultLabel = filteredGroupKeys.length > 0 ? filteredGroupKeys[0] : (Object.keys(groupData).sort((a, b) => b.localeCompare(a))[0] || '');
-                  
-                  if (defaultLabel) {
-                    setActiveWeekForLaborPay(defaultLabel);
-                    
-                    const weekItems = groupData[defaultLabel] || [];
-                    const totalAmount = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
-                    const weekLaborPayments = isWeekMode 
-                      ? laborPayments.filter(p => p.weekKey === defaultLabel)
-                      : laborPayments.filter(p => getVietnameseMonthKey(p.date) === defaultLabel || p.weekKey === defaultLabel);
-                    const totalLaborPaid = weekLaborPayments.reduce((acc, p) => acc + p.amount, 0);
-                    const remainingLaborDebt = totalAmount - totalLaborPaid;
-                    
-                    setLaborPayAmount(remainingLaborDebt > 0 ? remainingLaborDebt : '');
-                    setLaborPayNote('Thanh toán tiền công thợ');
-                    setLaborPayDate(getCurrentDateStr());
-                  } else {
-                    alert("Chưa có danh sách lô nhập kho nào để thực hiện thanh toán!");
-                  }
-                }}
+                onClick={handleOpenLaborPay}
                 className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-black tracking-tight transition shadow-sm hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                 title="Nhấn để lập phiếu thanh toán tiền công thợ"
               >
@@ -1132,7 +1135,7 @@ export default function GoodsImportTab({
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-emerald-500 animate-pulse" />
                 <span className="text-[10px] font-extrabold tracking-wider text-slate-500 dark:text-slate-400 uppercase font-sans">
-                  Tổng kết nhanh của danh sách đang hiển thị
+                  {filterMode === 'month' ? "Tổng kết nhanh theo tháng đang hiển thị" : "Tổng kết nhanh theo tuần đang hiển thị"}
                 </span>
               </div>
               <span className="text-[10px] font-mono font-extrabold text-[#31574a] dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
@@ -1140,44 +1143,65 @@ export default function GoodsImportTab({
               </span>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Tiền hàng */}
-              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none">
-                  Tổng tiền hàng / thợ
-                </span>
-                <div className="text-base font-black font-mono text-indigo-650 dark:text-indigo-400 mt-2">
-                  {displayedTotals.totalGoodsAmount.toLocaleString()} <span className="text-xs font-normal text-slate-400">đ</span>
-                </div>
-                <div className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans">
-                  (Tiền hàng + Tổng ship)
-                </div>
-              </div>
-
-              {/* Tiền ship */}
-              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none">
-                  Tổng tiền ship (vận chuyển)
-                </span>
-                <div className="text-base font-black font-mono text-rose-500 dark:text-rose-400 mt-2">
-                  {displayedTotals.totalShip.toLocaleString()} <span className="text-xs font-normal text-slate-400">đ</span>
-                </div>
-                <div className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans">
-                  (Ship TP ➔ ĐT - Ship ĐT ➔ TP)
-                </div>
-              </div>
-
-              {/* Tổng chi phí */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
+              {/* Box 1: TỔNG CHI PHÍ THỰC TẾ */}
               <div className="p-3 bg-emerald-500/10 dark:bg-emerald-500/10 border border-emerald-500/25 dark:border-emerald-500/20 rounded-xl shadow-2xs">
                 <span className="text-[9px] uppercase font-extrabold text-emerald-600 dark:text-emerald-400 block tracking-wider leading-none">
                   TỔNG CHI PHÍ THỰC TẾ
                 </span>
-                <div className="text-base font-black font-mono text-emerald-650 dark:text-emerald-300 mt-2 flex items-baseline gap-1">
+                <div className="text-sm sm:text-base font-black font-mono text-emerald-650 dark:text-emerald-300 mt-2 truncate flex items-baseline gap-0.5 sm:gap-1">
                   <span>{displayedTotals.totalCost.toLocaleString()}</span>
-                  <span className="text-xs font-bold text-emerald-550/80">đ</span>
+                  <span className="text-[10px] sm:text-xs font-bold text-emerald-550/80">đ</span>
                 </div>
-                <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-sans">
-                  (Tiền hàng)
+                <div className="text-[8.5px] sm:text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-sans truncate">
+                  (Tổng giá trị gốc lô dệt)
+                </div>
+              </div>
+
+              {/* Box 2: Tiền ship (vận chuyển) */}
+              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none">
+                  Tổng tiền ship (vận chuyển)
+                </span>
+                <div className="text-sm sm:text-base font-black font-mono text-rose-500 dark:text-rose-400 mt-2 truncate">
+                  {displayedTotals.totalShip.toLocaleString()} <span className="text-[10px] sm:text-xs font-normal text-slate-400">đ</span>
+                </div>
+                <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
+                  (Ship TP➔ĐT - Ship ĐT➔TP)
+                </div>
+              </div>
+
+              {/* Box 3: Đã thanh toán cho thợ */}
+              <button
+                type="button"
+                onClick={handleOpenLaborPay}
+                className="p-3 text-left bg-indigo-50/40 hover:bg-indigo-50/80 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/40 border border-indigo-200/55 dark:border-indigo-900/50 rounded-xl shadow-2xs transition hover:scale-[1.01] active:scale-[0.99] cursor-pointer group"
+                title="Nhấp để xem chi tiết / lập phiếu chi thợ"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[9px] uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider leading-none group-hover:underline">
+                    Đã thanh toán cho thợ
+                  </span>
+                  <Wallet className="w-3 h-3 text-indigo-500 animate-pulse shrink-0" />
+                </div>
+                <div className="text-sm sm:text-base font-black font-mono text-indigo-700 dark:text-indigo-300 mt-2 truncate">
+                  {displayedTotals.totalLaborPaid.toLocaleString()} <span className="text-[10px] sm:text-xs font-normal text-slate-400">đ</span>
+                </div>
+                <div className="text-[8.5px] sm:text-[9px] text-indigo-500 dark:text-indigo-400 mt-1 font-sans font-bold truncate">
+                  ➜ Nhấn xem chi tiết
+                </div>
+              </button>
+
+              {/* Box 4: Tiền hàng / thợ còn lại */}
+              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none">
+                  Tiền hàng / thợ còn lại
+                </span>
+                <div className="text-sm sm:text-base font-black font-mono text-indigo-650 dark:text-indigo-400 mt-2 truncate">
+                  {displayedTotals.totalGoodsAmount.toLocaleString()} <span className="text-[10px] sm:text-xs font-normal text-slate-400">đ</span>
+                </div>
+                <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
+                  (Tiền hàng + Ship - Đã trả)
                 </div>
               </div>
             </div>

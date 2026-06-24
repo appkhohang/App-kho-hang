@@ -1699,33 +1699,57 @@ export default function SettingsTab({
                   <span>Nhật ký tự động sao lưu an toàn</span>
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-650 dark:bg-indigo-950/30 dark:text-indigo-400 self-start">
-                  Auto-save: 5 phút / Thay đổi dữ liệu
+                  Hệ thống tự động sao lưu an toàn
                 </span>
               </div>
 
               {autoBackups.length === 0 ? (
                 <div className="text-center py-5 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 dark:text-slate-500 text-[10.5px]">
-                  Chưa có bản tự động sao lưu nào. Hệ thống sẽ lưu sau mỗi 5 phút hoặc khi sửa đổi dữ liệu quan trọng.
+                  Chưa có bản tự động sao lưu nào. Hệ thống tự động sao lưu định kỳ, khi thay đổi dữ liệu, bắt đầu ngày mới hoặc khi có giao dịch lớn.
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
                   {autoBackups.map((bak) => {
-                    const isCrucial = bak.trigger === 'crucial_change';
+                    let triggerLabel = 'Định kỳ 5 phút';
+                    let triggerColorClass = 'text-emerald-600 dark:text-emerald-400';
+                    let dotColorClass = 'bg-emerald-500';
+
+                    if (bak.trigger === 'crucial_change') {
+                      triggerLabel = 'Thay đổi dữ liệu';
+                      triggerColorClass = 'text-amber-655 dark:text-amber-400';
+                      dotColorClass = 'bg-amber-500';
+                    } else if (bak.trigger === 'dau_ngay_moi') {
+                      triggerLabel = 'Bắt đầu ngày mới';
+                      triggerColorClass = 'text-blue-600 dark:text-blue-400';
+                      dotColorClass = 'bg-blue-500';
+                    } else if (bak.trigger && bak.trigger.startsWith('giao_dich_lon')) {
+                      triggerLabel = 'Giao dịch lớn';
+                      triggerColorClass = 'text-rose-600 dark:text-rose-400';
+                      dotColorClass = 'bg-rose-500';
+                    }
+
                     return (
                       <div
                         key={bak.id}
                         className="p-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 hover:bg-slate-50 dark:hover:bg-slate-955/40 transition flex items-center justify-between gap-3 text-xs"
                       >
-                        <div className="space-y-0.5">
+                        <div className="space-y-0.5 max-w-[70%]">
                           <div className="font-mono text-[11px] font-extrabold text-slate-700 dark:text-slate-350 flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isCrucial ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                            <span className={`w-1.5 h-1.5 rounded-full ${dotColorClass}`} />
                             <span>{bak.timeStr}</span>
                           </div>
-                          <div className="text-[10px] text-slate-455 dark:text-slate-500 flex items-center gap-1">
-                            <span>Hình thức:</span>
-                            <strong className={`font-black ${isCrucial ? 'text-amber-655 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                              {isCrucial ? 'Thay đổi dữ liệu' : 'Định kỳ 5 phút'}
-                            </strong>
+                          <div className="text-[10px] text-slate-455 dark:text-slate-500 flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1">
+                              <span>Hình thức:</span>
+                              <strong className={`font-black ${triggerColorClass}`}>
+                                {triggerLabel}
+                              </strong>
+                            </div>
+                            {bak.trigger && bak.trigger.includes('giao_dich_lon (') && (
+                              <div className="text-[9px] text-slate-400 dark:text-slate-500 font-sans italic truncate" title={bak.trigger.substring(bak.trigger.indexOf('(') + 1, bak.trigger.lastIndexOf(')'))}>
+                                {bak.trigger.substring(bak.trigger.indexOf('(') + 1, bak.trigger.lastIndexOf(')'))}
+                              </div>
+                            )}
                           </div>
                         </div>
 
