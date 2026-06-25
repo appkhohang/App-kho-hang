@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   FileText, UserPlus, Receipt, DollarSign, Image, Save, Plus, 
   Trash2, Calendar, ChevronRight, Search, X, ArrowLeft, 
-  TrendingUp, Activity, Download, Camera, Edit, Tag, Share2
+  TrendingUp, Activity, Download, Camera, Edit, Tag, Share2, History
 } from 'lucide-react';
 import { Customer, Bill, BillItem, PaymentRecord, ImportItem } from '../types';
 import { getCurrentDateStr } from '../utils/dateUtils';
@@ -184,6 +184,7 @@ export default function InvoicesTab({
   const [isWritingInvoice, setIsWritingInvoice] = useState(false);
   const [openedFromDirectory, setOpenedFromDirectory] = useState(false);
   const [statsCustomer, setStatsCustomer] = useState<Customer | null>(null);
+  const [paymentHistoryCustomer, setPaymentHistoryCustomer] = useState<Customer | null>(null);
 
   // High-fidelity modal states matching user's screenshot exactly
   const [modalDraftItems, setModalDraftItems] = useState<Omit<BillItem, 'id'>[]>([
@@ -378,7 +379,12 @@ export default function InvoicesTab({
     setIsWritingInvoice(true);
   };
 
-  const calculateDebtForCustomerWithList = (custId: string, upToTime: number, customBills: Bill[]) => {
+  const calculateDebtForCustomerWithList = (
+    custId: string, 
+    upToTime: number, 
+    customBills: Bill[], 
+    customPayments: PaymentRecord[] = payments
+  ) => {
     const cust = customers.find(c => c.id === custId);
     if (!cust) return 0;
 
@@ -386,23 +392,27 @@ export default function InvoicesTab({
       .filter(b => b.customerId === custId && b.createdAt <= upToTime)
       .sort((a, b) => a.createdAt - b.createdAt);
 
-    let runningBalance = cust.initialDebt;
+    let runningBalance = Math.round(cust.initialDebt || 0);
 
     custBills.forEach(bill => {
-      runningBalance += bill.subtotal - bill.paymentAmount;
+      runningBalance += Math.round(bill.subtotal || 0) - Math.round(bill.paymentAmount || 0);
     });
 
-    const custPayments = payments
+    const custPayments = customPayments
       .filter(p => p.customerId === custId && p.createdAt <= upToTime);
     
     custPayments.forEach(p => {
-      runningBalance -= p.amount;
+      runningBalance -= Math.round(p.amount || 0);
     });
 
-    return runningBalance;
+    return Math.round(runningBalance);
   };
 
-  const recalculateCustomerBills = (custId: string, currentBills: Bill[]): Bill[] => {
+  const recalculateCustomerBills = (
+    custId: string, 
+    currentBills: Bill[], 
+    customPayments: PaymentRecord[] = payments
+  ): Bill[] => {
     const cust = customers.find(c => c.id === custId);
     if (!cust) return currentBills;
 
@@ -413,8 +423,8 @@ export default function InvoicesTab({
     const otherBills = currentBills.filter(b => b.customerId !== custId);
 
     const updatedCustomerBills = customerBills.map(bill => {
-      const prevDebt = calculateDebtForCustomerWithList(custId, bill.createdAt - 1, currentBills);
-      const grandTotal = bill.subtotal + prevDebt - bill.paymentAmount;
+      const prevDebt = Math.round(calculateDebtForCustomerWithList(custId, bill.createdAt - 1, currentBills, customPayments));
+      const grandTotal = Math.round(Math.round(bill.subtotal || 0) + prevDebt - Math.round(bill.paymentAmount || 0));
       return {
         ...bill,
         previousDebt: prevDebt,
@@ -447,8 +457,8 @@ export default function InvoicesTab({
       return;
     }
 
-    const subtotal = activeItems.reduce((sum, item) => sum + (Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)), 0);
-    const payment = modalHasPaid ? Number(modalPaymentAmount || 0) : 0;
+    const subtotal = Math.round(activeItems.reduce((sum, item) => sum + (Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)), 0));
+    const payment = Math.round(modalHasPaid ? Number(modalPaymentAmount || 0) : 0);
 
     if (editingBillId) {
       const updated = bills.map(b => {
@@ -461,7 +471,7 @@ export default function InvoicesTab({
               mẫuMã: item.mẫuMã.trim(),
               sốLượng: Number(item.sốLượng || 0),
               đơnGiá: Number(item.đơnGiá || 0),
-              thànhTiền: Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)
+              thànhTiền: Math.round(Number(item.sốLượng || 0) * Number(item.đơnGiá || 0))
             })),
             subtotal,
             paymentAmount: payment,
@@ -477,7 +487,7 @@ export default function InvoicesTab({
 
       alert("Cập nhật hóa đơn thành công!");
     } else {
-      const previousDebt = calculateCustomerCumulativeDebt(selectedCustomerId);
+      const previousDebt = Math.round(calculateCustomerCumulativeDebt(selectedCustomerId));
       const newBill: Bill = {
         id: "bill-" + Date.now(),
         customerId: selectedCustomerId,
@@ -488,12 +498,12 @@ export default function InvoicesTab({
           mẫuMã: item.mẫuMã.trim(),
           sốLượng: Number(item.sốLượng || 0),
           đơnGiá: Number(item.đơnGiá || 0),
-          thànhTiền: Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)
+          thànhTiền: Math.round(Number(item.sốLượng || 0) * Number(item.đơnGiá || 0))
         })),
         subtotal,
         paymentAmount: payment,
         previousDebt,
-        grandTotal: subtotal + previousDebt - payment,
+        grandTotal: Math.round(subtotal + previousDebt - payment),
         createdAt: Date.now(),
         hasPaid: modalHasPaid,
         photo: invoicePhoto || undefined
@@ -799,40 +809,45 @@ export default function InvoicesTab({
   };
 
   // CALCULATE STANDING DEBT FOR CUSTOMER
-  const calculateCustomerCumulativeDebt = (custId: string, upToTime: number = Date.now()): number => {
+  const calculateCustomerCumulativeDebt = (
+    custId: string, 
+    upToTime: number = Date.now(),
+    customBills: Bill[] = bills,
+    customPayments: PaymentRecord[] = payments
+  ): number => {
     const cust = customers.find(c => c.id === custId);
     if (!cust) return 0;
 
-    const custBills = bills
+    const custBills = customBills
       .filter(b => b.customerId === custId && b.createdAt <= upToTime)
       .sort((a, b) => a.createdAt - b.createdAt);
 
-    let runningBalance = cust.initialDebt;
+    let runningBalance = Math.round(cust.initialDebt || 0);
 
     custBills.forEach(bill => {
-      runningBalance += bill.subtotal - bill.paymentAmount;
+      runningBalance += Math.round(bill.subtotal || 0) - Math.round(bill.paymentAmount || 0);
     });
 
-    const custPayments = payments
+    const custPayments = customPayments
       .filter(p => p.customerId === custId && p.createdAt <= upToTime);
     
     custPayments.forEach(p => {
-      runningBalance -= p.amount;
+      runningBalance -= Math.round(p.amount || 0);
     });
 
-    return runningBalance;
+    return Math.round(runningBalance);
   };
 
   const getCustomerTotalCharges = (custId: string): number => {
     const cust = customers.find(c => c.id === custId);
     if (!cust) return 0;
-    const billSum = bills.filter(b => b.customerId === custId).reduce((s, b) => s + b.subtotal, 0);
-    return cust.initialDebt + billSum;
+    const billSum = bills.filter(b => b.customerId === custId).reduce((s, b) => s + Math.round(b.subtotal || 0), 0);
+    return Math.round(cust.initialDebt || 0) + billSum;
   };
 
   const getCustomerTotalPaid = (custId: string): number => {
-    const billPaySum = bills.filter(b => b.customerId === custId).reduce((s, b) => s + b.paymentAmount, 0);
-    const paySum = payments.filter(p => p.customerId === custId).reduce((s, p) => s + p.amount, 0);
+    const billPaySum = bills.filter(b => b.customerId === custId).reduce((s, b) => s + Math.round(b.paymentAmount || 0), 0);
+    const paySum = payments.filter(p => p.customerId === custId).reduce((s, p) => s + Math.round(p.amount || 0), 0);
     return billPaySum + paySum;
   };
 
@@ -859,8 +874,13 @@ export default function InvoicesTab({
       alert("⚠️ Tài khoản của bạn là CHỈ XEM, không có quyền xóa hóa đơn!");
       return;
     }
+    const targetBill = bills.find(b => b.id === billId);
+    if (!targetBill) return;
+
     if (confirm("Bạn có chắc muốn xoá hoá đơn này? Dư nợ lũy kế sẽ tính toán lại tịnh tiến.")) {
-      setBills(prev => prev.filter(b => b.id !== billId));
+      const remainingBills = bills.filter(b => b.id !== billId);
+      const recalculated = recalculateCustomerBills(targetBill.customerId, remainingBills);
+      setBills(recalculated);
       alert("Đã xoá hoá đơn thành công!");
     }
   };
@@ -905,20 +925,24 @@ export default function InvoicesTab({
       return;
     }
 
-    const subtotal = billItems.reduce((sum, item) => sum + item.thànhTiền, 0);
-    const payment = Number(billPayment || 0);
-    const previousDebt = calculateCustomerCumulativeDebt(selectedCustomerId);
+    const subtotal = Math.round(billItems.reduce((sum, item) => sum + Math.round(item.thànhTiền || 0), 0));
+    const payment = Math.round(Number(billPayment || 0));
+    const previousDebt = Math.round(calculateCustomerCumulativeDebt(selectedCustomerId));
 
     const newBill: Bill = {
       id: "bill-" + Date.now(),
       customerId: selectedCustomerId,
       billNumber: "HD-" + (bills.filter(b => b.customerId === selectedCustomerId).length + 1).toString().padStart(3, '0'),
       date: billDate,
-      items: billItems.map((item, i) => ({ ...item, id: `bi-${Date.now()}-${i}` })),
+      items: billItems.map((item, i) => ({ 
+        ...item, 
+        id: `bi-${Date.now()}-${i}`,
+        thànhTiền: Math.round(item.thànhTiền || 0)
+      })),
       subtotal,
       paymentAmount: payment,
       previousDebt,
-      grandTotal: subtotal + previousDebt - payment,
+      grandTotal: Math.round(subtotal + previousDebt - payment),
       createdAt: Date.now()
     };
 
@@ -942,13 +966,18 @@ export default function InvoicesTab({
     const newPay: PaymentRecord = {
       id: "pay-" + Date.now(),
       customerId: quickPayCustomerId,
-      amount: Number(quickPayAmount),
+      amount: Math.round(Number(quickPayAmount)),
       date: quickPayDate,
       note: quickPayNote || "Thanh toán dồn công nợ sỉ",
       createdAt: Date.now()
     };
 
-    setPayments(prev => [...prev, newPay]);
+    const updatedPayments = [...payments, newPay];
+    setPayments(updatedPayments);
+
+    // Recalculate customer bills
+    const recalculatedBills = recalculateCustomerBills(quickPayCustomerId, bills, updatedPayments);
+    setBills(recalculatedBills);
     
     setQuickPayAmount('');
     setQuickPayNote('');
@@ -959,9 +988,57 @@ export default function InvoicesTab({
   };
 
   // Compute draft summaries
-  const draftSubtotal = billItems.reduce((sum, item) => sum + item.thànhTiền, 0);
-  const draftPreviousDebt = selectedCustomerId ? calculateCustomerCumulativeDebt(selectedCustomerId) : 0;
-  const draftGrandTotal = draftSubtotal + draftPreviousDebt - Number(billPayment || 0);
+  const draftSubtotal = Math.round(billItems.reduce((sum, item) => sum + Math.round(item.thànhTiền || 0), 0));
+  const draftPreviousDebt = selectedCustomerId ? Math.round(calculateCustomerCumulativeDebt(selectedCustomerId)) : 0;
+  const draftGrandTotal = Math.round(draftSubtotal + draftPreviousDebt - Math.round(Number(billPayment || 0)));
+
+  // Compute payment history items for a customer
+  const paymentHistoryItems = useMemo(() => {
+    if (!paymentHistoryCustomer) return [];
+
+    const list: {
+      id: string;
+      type: 'independent' | 'bill';
+      amount: number;
+      date: string;
+      note: string;
+      createdAt: number;
+      ref?: any;
+    }[] = [];
+
+    // Add independent payments
+    payments
+      .filter(p => p.customerId === paymentHistoryCustomer.id)
+      .forEach(p => {
+        list.push({
+          id: p.id,
+          type: 'independent',
+          amount: p.amount,
+          date: p.date,
+          note: p.note || 'Thanh toán sỉ dồn nợ',
+          createdAt: p.createdAt,
+          ref: p
+        });
+      });
+
+    // Add bill payment amounts
+    bills
+      .filter(b => b.customerId === paymentHistoryCustomer.id && b.paymentAmount > 0)
+      .forEach(b => {
+        list.push({
+          id: b.id,
+          type: 'bill',
+          amount: b.paymentAmount,
+          date: b.date,
+          note: `Đã trả kèm Hoá đơn ${b.billNumber || 'HD'}`,
+          createdAt: b.createdAt,
+          ref: b
+        });
+      });
+
+    // Sort descending by date/createdAt
+    return list.sort((a, b) => b.createdAt - a.createdAt);
+  }, [paymentHistoryCustomer, payments, bills]);
 
   // Filtered customer listing based on user search query
   const filteredCustomers = customers.filter(c => 
@@ -1157,6 +1234,16 @@ export default function InvoicesTab({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setPaymentHistoryCustomer(cust);
+                              }}
+                              className="p-1 rounded text-amber-500 hover:text-amber-400 transition hover:bg-slate-100 dark:hover:bg-[#152720]"
+                              title="Xem lịch sử thanh toán của khách hàng"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setCustomerForCustomPrices(cust);
                                 setCustomPriceModel('');
                                 setCustomPriceValue('');
@@ -1210,8 +1297,17 @@ export default function InvoicesTab({
                       </div>
                       
                       {/* Sub-block ĐÃ TRẢ */}
-                      <div className="py-2.5 flex flex-col justify-center border-r bg-emerald-500/5 dark:bg-[#10b981]/5 border-slate-150 dark:border-[#1a2a24]">
-                        <span className="text-[8px] text-[#10b981] font-black uppercase font-sans tracking-tight">ĐÃ TRẢ</span>
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPaymentHistoryCustomer(cust);
+                        }}
+                        className="py-2.5 flex flex-col justify-center border-r bg-emerald-500/5 dark:bg-[#10b981]/5 border-slate-150 dark:border-[#1a2a24] hover:bg-emerald-500/10 dark:hover:bg-emerald-500/15 cursor-pointer transition"
+                        title="Xem lịch sử thanh toán chi tiết"
+                      >
+                        <span className="text-[8px] text-[#10b981] font-black uppercase font-sans tracking-tight flex items-center justify-center gap-0.5">
+                          ĐÃ TRẢ <History className="w-2 h-2 text-amber-500 inline" />
+                        </span>
                         <span className="text-[10px] font-black text-[#10b981] mt-0.5 font-mono">
                           {totalPaid.toLocaleString()}đ
                         </span>
@@ -1776,8 +1872,14 @@ export default function InvoicesTab({
                   </span>
                 </div>
                 
-                <div className="border-l border-r px-1 border-slate-200 dark:border-[#1c2d27]/40">
-                  <span className="text-[8px] text-emerald-600 dark:text-emerald-400 block font-black uppercase font-sans tracking-tight">ĐÃ TRẢ</span>
+                <div 
+                  onClick={() => setPaymentHistoryCustomer(currentCustomer)}
+                  className="border-l border-r px-1 border-slate-200 dark:border-[#1c2d27]/40 cursor-pointer hover:bg-emerald-500/10 dark:hover:bg-emerald-500/15 transition rounded-lg"
+                  title="Xem lịch sử thanh toán chi tiết"
+                >
+                  <span className="text-[8px] text-emerald-600 dark:text-emerald-400 block font-black uppercase font-sans tracking-tight flex items-center justify-center gap-0.5">
+                    ĐÃ TRẢ <History className="w-2.5 h-2.5 inline text-amber-500" />
+                  </span>
                   <span className="text-xs sm:text-sm font-black text-emerald-600 dark:text-[#10b981] block mt-1 font-mono leading-none">
                     {getCustomerTotalPaid(currentCustomer.id).toLocaleString()}đ
                   </span>
@@ -1803,6 +1905,17 @@ export default function InvoicesTab({
                 className="w-full bg-[#14b8a6] hover:bg-[#0ea5e9] text-white text-xs font-black py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98] transition"
               >
                 <span>💳 Thanh toán ngay</span>
+              </button>
+
+              {/* View Payment History button */}
+              <button
+                onClick={() => {
+                  setPaymentHistoryCustomer(currentCustomer);
+                }}
+                className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white text-xs font-black py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98] transition border border-slate-200 dark:border-[#1c2d27]"
+              >
+                <History className="w-4 h-4 text-amber-500" />
+                <span>Xem lịch sử thanh toán ({payments.filter(p => p.customerId === currentCustomer.id).length + bills.filter(b => b.customerId === currentCustomer.id && b.paymentAmount > 0).length} đợt)</span>
               </button>
             </div>
           )}
@@ -2239,6 +2352,158 @@ export default function InvoicesTab({
         )}
       </AnimatePresence>
 
+      {/* Individual Customer Payment History Modal */}
+      <AnimatePresence>
+        {paymentHistoryCustomer && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+            <div className="absolute inset-0" onClick={() => setPaymentHistoryCustomer(null)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              className="w-full max-w-lg p-6 rounded-2xl shadow-2xl z-20 space-y-4 text-xs border transition bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27] max-h-[85vh] flex flex-col"
+            >
+              <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27] shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                    <History className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold uppercase tracking-wider font-mono text-slate-900 dark:text-white text-sm">Lịch Sử Thanh Toán</h3>
+                    <p className="text-[10px] text-slate-450 dark:text-[#657f76]">
+                      Khách sỉ: <span className="font-extrabold text-slate-750 dark:text-emerald-400">{paymentHistoryCustomer.name}</span>
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setPaymentHistoryCustomer(null)} className="p-1 rounded-full transition text-slate-400 dark:text-[#657f76] hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a2d25]">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* General Summary row */}
+              <div className="grid grid-cols-2 gap-3 shrink-0">
+                <div className="p-3 rounded-xl border bg-slate-50 dark:bg-[#111c18] border-slate-200 dark:border-[#1c2d27]/70 text-center">
+                  <span className="font-mono uppercase block text-[8px] tracking-wider text-slate-400 dark:text-[#657f76]">Dư nợ đầu kỳ</span>
+                  <span className="text-sm font-black font-mono mt-0.5 block text-slate-800 dark:text-white">
+                    {Math.round(paymentHistoryCustomer.initialDebt || 0).toLocaleString()}đ
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl border bg-emerald-500/5 dark:bg-[#10b981]/5 border-emerald-500/20 dark:border-emerald-500/10 text-center">
+                  <span className="font-mono uppercase block text-[8px] tracking-wider text-emerald-600 dark:text-[#10b981] font-bold">Tổng tiền đã trả</span>
+                  <span className="text-sm font-black text-emerald-600 dark:text-[#10b981] font-mono mt-0.5 block">
+                    {getCustomerTotalPaid(paymentHistoryCustomer.id).toLocaleString()}đ
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment ledger history feed */}
+              <div className="flex-grow overflow-y-auto pr-1 space-y-2.5 min-h-[250px] scrollbar-thin scrollbar-thumb-slate-250 dark:scrollbar-thumb-slate-800">
+                {paymentHistoryItems.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed rounded-xl text-slate-400 dark:text-[#556b62] bg-slate-50 dark:bg-[#111c18]/45 border-slate-205 dark:border-[#1c2d27]/45">
+                    <p className="italic font-medium">Chưa ghi nhận bất kỳ khoản thanh toán nào.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Sử dụng nút "Thanh toán ngay" để tạo đợt thu nợ mới.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {paymentHistoryItems.map((item) => (
+                      <div 
+                        key={`${item.type}-${item.id}`}
+                        className={`p-3 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3 ${
+                          item.type === 'bill' 
+                            ? 'bg-slate-50/50 dark:bg-[#101915]/30 border-slate-200/60 dark:border-[#1a2d24]/60' 
+                            : 'bg-emerald-500/5 dark:bg-emerald-500/5 border-emerald-500/20 dark:border-emerald-500/15'
+                        }`}
+                      >
+                        <div className="space-y-1 min-w-0 flex-grow">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono tracking-wide ${
+                              item.type === 'bill'
+                                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30'
+                                : 'bg-emerald-150 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/30'
+                            }`}>
+                              {item.type === 'bill' ? 'Theo Hoá Đơn' : 'Độc Lập'}
+                            </span>
+                            <span className="text-[10.5px] font-extrabold text-slate-800 dark:text-white truncate">
+                              {item.note}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-[#657f76] font-mono">
+                            <span className="flex items-center gap-0.5"><Calendar className="w-3 h-3 text-slate-400" /> {item.date}</span>
+                            <span>•</span>
+                            <span className="text-[9px] opacity-75">{new Date(item.createdAt).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>
+                          </div>
+                        </div>
+
+                        {/* Action + Value block */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <span className="text-xs font-black text-emerald-600 dark:text-[#10b981] font-mono block">
+                              -{item.amount.toLocaleString()}đ
+                            </span>
+                            <span 
+                              onClick={() => {
+                                if (item.type === 'bill') {
+                                  // Find the actual bill object
+                                  const targetBill = bills.find(b => b.id === item.id);
+                                  if (targetBill) {
+                                    setPaymentHistoryCustomer(null);
+                                    setSelectedInvoiceForModal(targetBill);
+                                  }
+                                } else {
+                                  setSelectedPaymentForModal(item.ref);
+                                }
+                              }}
+                              className="text-[9px] font-bold text-slate-400 dark:text-[#556b62] hover:text-indigo-500 dark:hover:text-emerald-400 underline cursor-pointer select-none"
+                            >
+                              Xem phiếu 📄
+                            </span>
+                          </div>
+
+                          {/* Delete independent payment */}
+                          {item.type === 'independent' && (
+                            <button
+                              onClick={() => {
+                                if (isViewer) {
+                                  alert("⚠️ Tài khoản của bạn là CHỈ XEM, không có quyền xóa đợt thanh toán!");
+                                  return;
+                                }
+                                if (confirm(`Bạn có chắc chắn muốn xoá đợt thanh toán "${item.note}" trị giá ${item.amount.toLocaleString()}đ này?\nSố dư nợ lũy kế trên toàn bộ hóa đơn sỉ của khách này sẽ được tính toán lại tịnh tiến.`)) {
+                                  const updatedPayments = payments.filter(p => p.id !== item.id);
+                                  setPayments(updatedPayments);
+                                  const recalculatedBills = recalculateCustomerBills(paymentHistoryCustomer.id, bills, updatedPayments);
+                                  setBills(recalculatedBills);
+                                  alert("Đã xoá lượt thanh toán độc lập và cập nhật công nợ thành công!");
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-550 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 transition cursor-pointer"
+                              title="Xóa đợt thanh toán độc lập này"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal footer closing hints */}
+              <div className="pt-3 border-t border-slate-150 dark:border-[#1c2d27] flex justify-between items-center shrink-0 text-[10px] text-slate-400 dark:text-[#556b62] font-mono">
+                <span>Tổng cộng {paymentHistoryItems.length} lượt giao dịch thanh toán.</span>
+                <button
+                  onClick={() => setPaymentHistoryCustomer(null)}
+                  className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
+                >
+                  Đóng
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Invoice Detail Modal with screen snapshot export */}
       <AnimatePresence>
         {selectedInvoiceForModal && currentCustomer && (
@@ -2518,10 +2783,15 @@ export default function InvoicesTab({
       {/* Decoupled persistent write invoice drawer/overlay */}
       <AnimatePresence>
         {isWritingInvoice && (() => {
-          const modalSubtotal = modalDraftItems.reduce((sum, item) => sum + (Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)), 0);
-          const modalPrevDebt = selectedCustomerId ? calculateCustomerCumulativeDebt(selectedCustomerId) : 0;
-          const modalPaymentValue = modalHasPaid ? Number(modalPaymentAmount || 0) : 0;
-          const modalGrandTotal = modalSubtotal + modalPrevDebt - modalPaymentValue;
+          const modalSubtotal = Math.round(modalDraftItems.reduce((sum, item) => sum + (Number(item.sốLượng || 0) * Number(item.đơnGiá || 0)), 0));
+          const existingBill = editingBillId ? bills.find(b => b.id === editingBillId) : null;
+          const modalPrevDebt = selectedCustomerId 
+            ? (existingBill 
+                ? Math.round(calculateCustomerCumulativeDebt(selectedCustomerId, existingBill.createdAt - 1)) 
+                : Math.round(calculateCustomerCumulativeDebt(selectedCustomerId, Date.now())))
+            : 0;
+          const modalPaymentValue = Math.round(modalHasPaid ? Number(modalPaymentAmount || 0) : 0);
+          const modalGrandTotal = Math.round(modalSubtotal + modalPrevDebt - modalPaymentValue);
 
           return (
             <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
