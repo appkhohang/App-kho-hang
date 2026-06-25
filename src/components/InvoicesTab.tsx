@@ -1011,81 +1011,72 @@ export default function InvoicesTab({
             {/* Removed upper-right buttons as per user request */}
           </div>
 
-          {/* Simulated tabs matching Image 2 */}
-          <div className="flex border-b font-semibold text-xs border-slate-150 dark:border-[#14231d] text-slate-450 dark:text-[#657f76]">
-            <button className="w-full py-2.5 text-center flex items-center justify-center gap-2 text-emerald-450 border-b-2 border-emerald-500 font-extrabold transition">
-              <span>📄 Hoá Đơn</span>
-            </button>
-          </div>
-
-          {/* Quick overall statistical cards row */}
-          <div className="flex md:grid md:grid-cols-5 overflow-x-auto md:overflow-x-visible gap-3 px-1 pt-1 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            
-            {/* Metric 1: Tổng nợ phải thu */}
-            <div className="p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start border transition bg-slate-50/80 dark:bg-[#101915] border-slate-200 dark:border-[#15261f] shadow-2xs">
-              <div className="w-9 h-9 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400 border border-orange-500/20 animate-pulse">
-                <TrendingUp className="w-4.5 h-4.5" />
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <span className="text-[8.5px] font-extrabold uppercase tracking-wider block font-mono truncate text-slate-450 dark:text-[#657f76]">1. Tổng nợ phải thu</span>
-                <p className="text-xs sm:text-sm font-black text-orange-600 dark:text-orange-400 font-mono truncate">
-                  {customers.reduce((sum, c) => sum + calculateCustomerCumulativeDebt(c.id), 0).toLocaleString()}đ
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 2: Tổng lợi nhuận */}
-            <div className="p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start border transition bg-slate-50/80 dark:bg-[#101915] border-slate-200 dark:border-[#15261f] shadow-2xs">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <DollarSign className="w-4.5 h-4.5" />
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <span className="text-[8.5px] font-extrabold uppercase tracking-wider block font-mono truncate text-slate-450 dark:text-[#657f76]">2. Tổng lợi nhuận</span>
-                <p className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono truncate">
-                  {customers.reduce((sum, c) => sum + getCustomerTotalCharges(c.id), 0).toLocaleString()}đ
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 3: Đã bán luỹ kế */}
-            <div className="p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start border transition bg-slate-50/80 dark:bg-[#101915] border-slate-200 dark:border-[#15261f] shadow-2xs">
-              <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-450 border border-indigo-500/20">
-                <Receipt className="w-4.5 h-4.5" />
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <span className="text-[8.5px] font-extrabold uppercase tracking-wider block font-mono truncate text-slate-450 dark:text-[#657f76]">3. Đã bán luỹ kế</span>
-                <p className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-300 font-mono truncate">
-                  {bills.reduce((sum, b) => sum + b.subtotal, 0).toLocaleString()}đ
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 4: Đã thu cash sỉ */}
-            <div className="p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start border transition bg-slate-50/80 dark:bg-[#101915] border-slate-200 dark:border-[#15261f] shadow-2xs">
-              <div className="w-9 h-9 rounded-xl bg-teal-500/10 flex items-center justify-center text-[#10b981] dark:text-teal-400 border border-teal-500/20">
-                <Activity className="w-4.5 h-4.5" />
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <span className="text-[8.5px] font-extrabold uppercase tracking-wider block font-mono truncate text-slate-450 dark:text-[#657f76]">4. Đã thu cash sỉ</span>
-                <p className="text-xs sm:text-sm font-black text-emerald-650 dark:text-[#10b981] font-mono truncate">
-                  {(bills.reduce((sum, b) => sum + b.paymentAmount, 0) + payments.reduce((sum, p) => sum + p.amount, 0)).toLocaleString()}đ
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 5: Số đối tác sỉ */}
-            <div className="p-3 rounded-2xl flex items-center gap-3 flex-shrink-0 w-56 md:w-auto snap-start border transition bg-slate-50/80 dark:bg-[#101915] border-slate-200 dark:border-[#15261f] shadow-2xs">
-              <div className="w-9 h-9 rounded-xl bg-slate-500/10 flex items-center justify-center text-slate-500 dark:text-slate-400 border border-slate-500/20">
-                <UserPlus className="w-4.5 h-4.5" />
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <span className="text-[8.5px] font-extrabold uppercase tracking-wider block font-mono truncate text-slate-450 dark:text-[#657f76]">5. Số đối tác sỉ</span>
-                <p className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-200 font-mono truncate">
-                  {customers.length} khách hàng
-                </p>
-              </div>
+          {/* Real-time sum panel for wholesale invoices matching monthly quick summary layout */}
+          <div className="bg-gradient-to-r from-indigo-500/5 to-emerald-500/5 dark:from-indigo-950/20 dark:to-emerald-950/20 border border-indigo-100 dark:border-indigo-950/60 p-4 rounded-2xl shadow-xs space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-extrabold text-indigo-650 dark:text-indigo-400 bg-indigo-500/10 dark:bg-indigo-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                👥 {customers.length.toLocaleString()} ĐỐI TÁC SỈ
+              </span>
+              <span className="text-[10px] font-mono font-extrabold text-[#31574a] dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                📄 {bills.length.toLocaleString()} HOÁ ĐƠN
+              </span>
             </div>
             
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+              
+              {/* Metric 1: Tổng lợi nhuận */}
+              <div className="p-3 bg-emerald-500/5 dark:bg-emerald-500/5 border border-emerald-500/20 dark:border-emerald-500/20 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block tracking-wider leading-none">
+                  1. TỔNG LỢI NHUẬN
+                </span>
+                <div className="text-sm sm:text-base font-black font-mono text-emerald-600 dark:text-emerald-400 mt-2 truncate">
+                  {customers.reduce((sum, c) => sum + getCustomerTotalCharges(c.id), 0).toLocaleString()} <span className="text-[10px] sm:text-xs font-normal">đ</span>
+                </div>
+                <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
+                  (Gia công trừ nợ)
+                </div>
+              </div>
+
+              {/* Metric 2: Tổng nợ phải thu */}
+              <div className="p-3 bg-orange-500/5 dark:bg-orange-500/5 border border-orange-500/20 dark:border-orange-500/20 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-bold text-orange-600 dark:text-orange-400 block tracking-wider leading-none">
+                  2. TỔNG NỢ PHẢI THU
+                </span>
+                <div className="text-sm sm:text-base font-black font-mono text-orange-600 dark:text-orange-400 mt-2 truncate">
+                  {customers.reduce((sum, c) => sum + calculateCustomerCumulativeDebt(c.id), 0).toLocaleString()} <span className="text-[10px] sm:text-xs font-normal">đ</span>
+                </div>
+                <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
+                  (Tổng dư nợ lũy kế)
+                </div>
+              </div>
+
+              {/* Metric 3: Đã bán lũy kế */}
+              <div className="p-3 bg-indigo-500/5 dark:bg-indigo-500/5 border border-indigo-500/20 dark:border-indigo-500/20 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-bold text-indigo-600 dark:text-indigo-400 block tracking-wider leading-none">
+                  3. ĐÃ BÁN LŨY KẾ
+                </span>
+                <div className="text-sm sm:text-base font-black font-mono text-indigo-600 dark:text-indigo-350 mt-2 truncate">
+                  {bills.reduce((sum, b) => sum + b.subtotal, 0).toLocaleString()} <span className="text-[10px] sm:text-xs font-normal">đ</span>
+                </div>
+                <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
+                  (Tổng giá trị hóa đơn)
+                </div>
+              </div>
+
+              {/* Metric 4: Đã thu cash sỉ */}
+              <div className="p-3 bg-teal-500/5 dark:bg-teal-500/5 border border-teal-500/20 dark:border-teal-500/20 rounded-xl shadow-2xs">
+                <span className="text-[9px] uppercase font-bold text-teal-600 dark:text-teal-400 block tracking-wider leading-none">
+                  4. ĐÃ THU CASH SỈ
+                </span>
+                <div className="text-sm sm:text-base font-black font-mono text-teal-600 dark:text-teal-400 mt-2 truncate">
+                  {(bills.reduce((sum, b) => sum + b.paymentAmount, 0) + payments.reduce((sum, p) => sum + p.amount, 0)).toLocaleString()} <span className="text-[10px] sm:text-xs font-normal">đ</span>
+                </div>
+                <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
+                  (Trực tiếp & chuyển khoản)
+                </div>
+              </div>
+
+            </div>
           </div>
 
           {/* Search box styled as beautiful pill */}
@@ -1871,7 +1862,7 @@ export default function InvoicesTab({
                 );
               }
 
-               return customerBills.map((bill, index) => {
+              return customerBills.map((bill, index) => {
                 const billNum = customerBills.length - index;
                 const grandTotalLeft = bill.grandTotal;
 
