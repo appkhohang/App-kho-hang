@@ -186,6 +186,12 @@ export default function InvoicesTab({
   const [statsCustomer, setStatsCustomer] = useState<Customer | null>(null);
   const [paymentHistoryCustomer, setPaymentHistoryCustomer] = useState<Customer | null>(null);
 
+  // States for Invoices metric breakdown modals
+  const [showProfitBreakdown, setShowProfitBreakdown] = useState(false);
+  const [showDebtBreakdown, setShowDebtBreakdown] = useState(false);
+  const [showSalesBreakdown, setShowSalesBreakdown] = useState(false);
+  const [showCollectedCashBreakdown, setShowCollectedCashBreakdown] = useState(false);
+
   // High-fidelity modal states matching user's screenshot exactly
   const [modalDraftItems, setModalDraftItems] = useState<Omit<BillItem, 'id'>[]>([
     { mẫuMã: '', sốLượng: '', đơnGiá: '', thànhTiền: 0 } as any
@@ -612,6 +618,10 @@ export default function InvoicesTab({
   useAndroidBack(selectedInvoiceForModal !== null, () => setSelectedInvoiceForModal(null));
   useAndroidBack(selectedPaymentForModal !== null, () => setSelectedPaymentForModal(null));
   useAndroidBack(isManagingCustomPrices, () => setIsManagingCustomPrices(false));
+  useAndroidBack(showProfitBreakdown, () => setShowProfitBreakdown(false));
+  useAndroidBack(showDebtBreakdown, () => setShowDebtBreakdown(false));
+  useAndroidBack(showSalesBreakdown, () => setShowSalesBreakdown(false));
+  useAndroidBack(showCollectedCashBreakdown, () => setShowCollectedCashBreakdown(false));
 
   // Clear current row builder inputs when switching customer
   useEffect(() => {
@@ -1102,54 +1112,82 @@ export default function InvoicesTab({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
               
               {/* Metric 1: Tổng lợi nhuận */}
-              <div className="p-3 bg-emerald-500/5 dark:bg-emerald-500/5 border border-emerald-500/20 dark:border-emerald-500/20 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block tracking-wider leading-none">
-                  1. TỔNG LỢI NHUẬN
-                </span>
+              <div 
+                onClick={() => setShowProfitBreakdown(true)}
+                className="p-3 bg-emerald-500/5 dark:bg-emerald-500/5 border border-emerald-500/20 dark:border-emerald-500/20 rounded-xl shadow-2xs cursor-pointer hover:bg-emerald-500/10 hover:border-emerald-500/30 active:scale-[0.98] transition-all group"
+                title="Xem chi tiết tổng doanh thu & lợi nhuận gia công"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block tracking-wider leading-none group-hover:underline">
+                    1. TỔNG LỢI NHUẬN
+                  </span>
+                  <History className="w-2.5 h-2.5 text-emerald-500/60" />
+                </div>
                 <div className="text-sm sm:text-base font-black font-mono text-emerald-600 dark:text-emerald-400 mt-2 truncate">
                   {customers.reduce((sum, c) => sum + getCustomerTotalCharges(c.id), 0).toLocaleString()} <span className="text-[10px] sm:text-xs font-normal">đ</span>
                 </div>
                 <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
-                  (Gia công trừ nợ)
+                  ➜ Nhấn xem chi tiết
                 </div>
               </div>
 
               {/* Metric 2: Tổng nợ phải thu */}
-              <div className="p-3 bg-orange-500/5 dark:bg-orange-500/5 border border-orange-500/20 dark:border-orange-500/20 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-bold text-orange-600 dark:text-orange-400 block tracking-wider leading-none">
-                  2. TỔNG NỢ PHẢI THU
-                </span>
+              <div 
+                onClick={() => setShowDebtBreakdown(true)}
+                className="p-3 bg-orange-500/5 dark:bg-orange-500/5 border border-orange-500/20 dark:border-orange-500/20 rounded-xl shadow-2xs cursor-pointer hover:bg-orange-500/10 hover:border-orange-500/30 active:scale-[0.98] transition-all group"
+                title="Xem chi tiết danh sách nợ phải thu của các khách hàng"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-bold text-orange-600 dark:text-orange-400 block tracking-wider leading-none group-hover:underline">
+                    2. TỔNG NỢ PHẢI THU
+                  </span>
+                  <History className="w-2.5 h-2.5 text-orange-500/60" />
+                </div>
                 <div className="text-sm sm:text-base font-black font-mono text-orange-600 dark:text-orange-400 mt-2 truncate">
                   {customers.reduce((sum, c) => sum + calculateCustomerCumulativeDebt(c.id), 0).toLocaleString()} <span className="text-[10px] sm:text-xs font-normal">đ</span>
                 </div>
                 <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
-                  (Tổng dư nợ lũy kế)
+                  ➜ Nhấn xem chi tiết
                 </div>
               </div>
 
               {/* Metric 3: Đã bán lũy kế */}
-              <div className="p-3 bg-indigo-500/5 dark:bg-indigo-500/5 border border-indigo-500/20 dark:border-indigo-500/20 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-bold text-indigo-600 dark:text-indigo-400 block tracking-wider leading-none">
-                  3. ĐÃ BÁN LŨY KẾ
-                </span>
+              <div 
+                onClick={() => setShowSalesBreakdown(true)}
+                className="p-3 bg-indigo-500/5 dark:bg-indigo-500/5 border border-indigo-500/20 dark:border-indigo-500/20 rounded-xl shadow-2xs cursor-pointer hover:bg-indigo-500/10 hover:border-indigo-500/30 active:scale-[0.98] transition-all group"
+                title="Xem phân tích cơ cấu doanh số bán hàng dồn"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-bold text-indigo-600 dark:text-indigo-400 block tracking-wider leading-none group-hover:underline">
+                    3. ĐÃ BÁN LŨY KẾ
+                  </span>
+                  <History className="w-2.5 h-2.5 text-indigo-500/60" />
+                </div>
                 <div className="text-sm sm:text-base font-black font-mono text-indigo-600 dark:text-indigo-350 mt-2 truncate">
                   {bills.reduce((sum, b) => sum + b.subtotal, 0).toLocaleString()} <span className="text-[10px] sm:text-xs font-normal">đ</span>
                 </div>
                 <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
-                  (Tổng giá trị hóa đơn)
+                  ➜ Nhấn xem chi tiết
                 </div>
               </div>
 
               {/* Metric 4: Đã thu cash sỉ */}
-              <div className="p-3 bg-teal-500/5 dark:bg-teal-500/5 border border-teal-500/20 dark:border-teal-500/20 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-bold text-teal-600 dark:text-teal-400 block tracking-wider leading-none">
-                  4. ĐÃ THU CASH SỈ
-                </span>
+              <div 
+                onClick={() => setShowCollectedCashBreakdown(true)}
+                className="p-3 bg-teal-500/5 dark:bg-teal-500/5 border border-teal-500/20 dark:border-teal-500/20 rounded-xl shadow-2xs cursor-pointer hover:bg-teal-500/10 hover:border-teal-500/30 active:scale-[0.98] transition-all group"
+                title="Xem chi tiết lịch sử thu tiền sỉ toàn hệ thống"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-bold text-teal-600 dark:text-teal-400 block tracking-wider leading-none group-hover:underline">
+                    4. ĐÃ THU CASH SỈ
+                  </span>
+                  <History className="w-2.5 h-2.5 text-teal-500/60" />
+                </div>
                 <div className="text-sm sm:text-base font-black font-mono text-teal-600 dark:text-teal-400 mt-2 truncate">
                   {(bills.reduce((sum, b) => sum + b.paymentAmount, 0) + payments.reduce((sum, p) => sum + p.amount, 0)).toLocaleString()} <span className="text-[10px] sm:text-xs font-normal">đ</span>
                 </div>
                 <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
-                  (Trực tiếp & chuyển khoản)
+                  ➜ Nhấn xem chi tiết
                 </div>
               </div>
 
@@ -2502,6 +2540,435 @@ export default function InvoicesTab({
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* 1. Profit Breakdown Modal */}
+      <AnimatePresence>
+        {showProfitBreakdown && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+            <div className="absolute inset-0" onClick={() => setShowProfitBreakdown(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              className="w-full max-w-lg p-6 rounded-2xl shadow-2xl z-20 space-y-4 text-xs border transition bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27] max-h-[85vh] flex flex-col"
+            >
+              <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27] shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold uppercase tracking-wider font-mono text-slate-900 dark:text-white text-sm">Doanh Thu & Lợi Nhuận</h3>
+                    <p className="text-[10px] text-slate-450 dark:text-[#657f76]">
+                      Phân tích giá trị gia công tích lũy của từng khách sỉ
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setShowProfitBreakdown(false)} className="p-1 rounded-full transition text-slate-400 dark:text-[#657f76] hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a2d25]">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Total Summary banner */}
+              <div className="p-3.5 rounded-xl border bg-emerald-500/5 border-emerald-500/20 text-center shrink-0">
+                <span className="font-mono uppercase block text-[8px] tracking-wider text-emerald-600 dark:text-[#10b981] font-extrabold">Tổng Lợi Nhuận Toàn Hệ Thống</span>
+                <span className="text-xl font-black text-emerald-600 dark:text-[#10b981] font-mono mt-0.5 block">
+                  {customers.reduce((sum, c) => sum + getCustomerTotalCharges(c.id), 0).toLocaleString()}đ
+                </span>
+              </div>
+
+              {/* Breakdown list */}
+              <div className="flex-grow overflow-y-auto pr-1 space-y-2 min-h-[200px]">
+                {customers.map((c) => {
+                  const totalCharges = getCustomerTotalCharges(c.id);
+                  const billCount = bills.filter(b => b.customerId === c.id).length;
+                  return (
+                    <div 
+                      key={c.id}
+                      onClick={() => {
+                        setSelectedCustomerId(c.id);
+                        setShowProfitBreakdown(false);
+                      }}
+                      className="p-3 rounded-xl border border-slate-200 dark:border-[#1a2d24] bg-slate-50/50 dark:bg-[#101915]/30 hover:bg-emerald-500/5 dark:hover:bg-[#152720]/50 transition cursor-pointer flex items-center justify-between gap-3 group"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-black text-slate-800 dark:text-white block group-hover:text-emerald-500 transition truncate">{c.name}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-[#657f76] font-mono block mt-0.5">
+                          {billCount} hoá đơn • Dư nợ đầu kỳ: {Math.round(c.initialDebt || 0).toLocaleString()}đ
+                        </span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-black text-slate-800 dark:text-white font-mono block">
+                          {totalCharges.toLocaleString()}đ
+                        </span>
+                        <span className="text-[9px] text-emerald-500 font-bold block">
+                          Xem hồ sơ ➜
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="pt-3 border-t border-slate-150 dark:border-[#1c2d27] flex justify-between items-center shrink-0 text-[10px] text-slate-400 dark:text-[#556b62] font-mono">
+                <span>Danh sách gồm {customers.length} khách sỉ.</span>
+                <button
+                  onClick={() => setShowProfitBreakdown(false)}
+                  className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
+                >
+                  Đóng
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 2. Debt Breakdown Modal */}
+      <AnimatePresence>
+        {showDebtBreakdown && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+            <div className="absolute inset-0" onClick={() => setShowDebtBreakdown(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              className="w-full max-w-lg p-6 rounded-2xl shadow-2xl z-20 space-y-4 text-xs border transition bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27] max-h-[85vh] flex flex-col"
+            >
+              <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27] shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold uppercase tracking-wider font-mono text-slate-900 dark:text-white text-sm">Công Nợ Phải Thu</h3>
+                    <p className="text-[10px] text-slate-450 dark:text-[#657f76]">
+                      Danh sách dư nợ luỹ kế hiện tại của toàn bộ đối tác sỉ
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setShowDebtBreakdown(false)} className="p-1 rounded-full transition text-slate-400 dark:text-[#657f76] hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a2d25]">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Total Debt Summary Banner */}
+              <div className="p-3.5 rounded-xl border bg-orange-500/5 border-orange-500/20 text-center shrink-0">
+                <span className="font-mono uppercase block text-[8px] tracking-wider text-orange-600 dark:text-orange-400 font-extrabold">Tổng Tiền Nợ Cần Thu Hồi</span>
+                <span className="text-xl font-black text-orange-600 dark:text-orange-400 font-mono mt-0.5 block">
+                  {customers.reduce((sum, c) => sum + calculateCustomerCumulativeDebt(c.id), 0).toLocaleString()}đ
+                </span>
+              </div>
+
+              {/* Debt list sorted descending by debt amount */}
+              <div className="flex-grow overflow-y-auto pr-1 space-y-2 min-h-[200px]">
+                {customers
+                  .map(c => ({
+                    customer: c,
+                    debt: calculateCustomerCumulativeDebt(c.id)
+                  }))
+                  .sort((a, b) => b.debt - a.debt)
+                  .map(({ customer, debt }) => (
+                    <div 
+                      key={customer.id}
+                      onClick={() => {
+                        setSelectedCustomerId(customer.id);
+                        setShowDebtBreakdown(false);
+                      }}
+                      className="p-3 rounded-xl border border-slate-200 dark:border-[#1a2d24] bg-slate-50/50 dark:bg-[#101915]/30 hover:bg-orange-500/5 dark:hover:bg-[#152720]/50 transition cursor-pointer flex items-center justify-between gap-3 group"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-black text-slate-800 dark:text-white block group-hover:text-orange-500 transition truncate">{customer.name}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-[#657f76] font-mono block mt-0.5">
+                          {customer.phone || 'Chưa ghi nhận SĐT'}
+                        </span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`text-xs font-black font-mono block ${debt > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                          {debt.toLocaleString()}đ
+                        </span>
+                        <span className="text-[9px] text-orange-500 font-bold block">
+                          Thu nợ / Xem hồ sơ ➜
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              <div className="pt-3 border-t border-slate-150 dark:border-[#1c2d27] flex justify-between items-center shrink-0 text-[10px] text-slate-400 dark:text-[#556b62] font-mono">
+                <span>Nhấn vào khách hàng sỉ để chuyển nhanh sang lập phiếu thu nợ.</span>
+                <button
+                  onClick={() => setShowDebtBreakdown(false)}
+                  className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
+                >
+                  Đóng
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. Sales Breakdown Modal */}
+      <AnimatePresence>
+        {showSalesBreakdown && (() => {
+          // Calculate top selling models
+          const modelStats: { [model: string]: { qty: number; revenue: number } } = {};
+          bills.forEach(b => {
+            b.items.forEach(item => {
+              const model = item.mẫuMã || 'Không xác định';
+              const q = Number(item.sốLượng || 0);
+              const totalVal = Math.round(item.thànhTiền || 0);
+              if (!modelStats[model]) {
+                modelStats[model] = { qty: 0, revenue: 0 };
+              }
+              modelStats[model].qty += q;
+              modelStats[model].revenue += totalVal;
+            });
+          });
+
+          const topModels = Object.keys(modelStats)
+            .map(m => ({ modelName: m, qty: modelStats[m].qty, revenue: modelStats[m].revenue }))
+            .sort((a, b) => b.revenue - a.revenue);
+
+          return (
+            <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+              <div className="absolute inset-0" onClick={() => setShowSalesBreakdown(false)} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                className="w-full max-w-lg p-6 rounded-2xl shadow-2xl z-20 space-y-4 text-xs border transition bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27] max-h-[85vh] flex flex-col"
+              >
+                <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27] shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold uppercase tracking-wider font-mono text-slate-900 dark:text-white text-sm">Phân Tích Doanh Số</h3>
+                      <p className="text-[10px] text-slate-450 dark:text-[#657f76]">
+                        Thống kê lượng sản phẩm & doanh thu dồn từ toàn bộ hoá đơn
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowSalesBreakdown(false)} className="p-1 rounded-full transition text-slate-400 dark:text-[#657f76] hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a2d25]">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Total sales banner */}
+                <div className="grid grid-cols-2 gap-3 shrink-0">
+                  <div className="p-3 rounded-xl border bg-indigo-500/5 border-indigo-500/20 text-center">
+                    <span className="font-mono uppercase block text-[8px] tracking-wider text-indigo-600 dark:text-indigo-400 font-extrabold">Doanh số lũy kế</span>
+                    <span className="text-base font-black text-indigo-600 dark:text-indigo-400 font-mono mt-0.5 block">
+                      {bills.reduce((sum, b) => sum + b.subtotal, 0).toLocaleString()}đ
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl border bg-slate-50 dark:bg-[#111c18] border-slate-200 dark:border-[#1c2d27]/70 text-center">
+                    <span className="font-mono uppercase block text-[8px] tracking-wider text-slate-400 dark:text-[#657f76]">Tổng số hoá đơn</span>
+                    <span className="text-base font-black text-slate-800 dark:text-white font-mono mt-0.5 block">
+                      {bills.length} HD
+                    </span>
+                  </div>
+                </div>
+
+                {/* Segment: Top selling items */}
+                <div className="flex-grow overflow-y-auto pr-1 space-y-3 min-h-[220px]">
+                  <div>
+                    <h4 className="font-bold uppercase font-sans tracking-wide text-[10px] text-slate-500 dark:text-[#657f76] mb-2">Thống kê sản lượng theo mã mẫu:</h4>
+                    {topModels.length === 0 ? (
+                      <p className="text-slate-400 italic text-center py-4">Chưa có dữ liệu sản phẩm trong hóa đơn.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {topModels.map(m => (
+                          <div key={m.modelName} className="p-2.5 rounded-lg border border-slate-150 dark:border-[#1b2c24]/50 bg-slate-50/40 dark:bg-[#111c18]/30 flex justify-between items-center gap-2">
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-800 dark:text-white block font-mono">{m.modelName}</span>
+                              <span className="text-[10px] text-slate-450 dark:text-[#556d62]">{m.qty.toLocaleString()} sản phẩm sỉ</span>
+                            </div>
+                            <span className="font-mono text-slate-700 dark:text-slate-200 font-black">{m.revenue.toLocaleString()}đ</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-150 dark:border-[#1c2d27] flex justify-between items-center shrink-0 text-[10px] text-slate-400 dark:text-[#556b62] font-mono">
+                  <span>Thống kê từ {topModels.length} mã hàng khác nhau.</span>
+                  <button
+                    onClick={() => setShowSalesBreakdown(false)}
+                    className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* 4. Cash Collected Breakdown Modal */}
+      <AnimatePresence>
+        {showCollectedCashBreakdown && (() => {
+          const list: {
+            id: string;
+            type: 'independent' | 'bill';
+            customerName: string;
+            amount: number;
+            date: string;
+            note: string;
+            createdAt: number;
+            ref: any;
+          }[] = [];
+
+          // Add independent payments
+          payments.forEach(p => {
+            const cust = customers.find(c => c.id === p.customerId);
+            list.push({
+              id: p.id,
+              type: 'independent',
+              customerName: cust ? cust.name : 'Khách ẩn',
+              amount: p.amount,
+              date: p.date,
+              note: p.note || 'Thanh toán sỉ dồn nợ',
+              createdAt: p.createdAt,
+              ref: p
+            });
+          });
+
+          // Add bill payments
+          bills.filter(b => b.paymentAmount > 0).forEach(b => {
+            const cust = customers.find(c => c.id === b.customerId);
+            list.push({
+              id: b.id,
+              type: 'bill',
+              customerName: cust ? cust.name : 'Khách ẩn',
+              amount: b.paymentAmount,
+              date: b.date,
+              note: `Thu kèm hoá đơn ${b.billNumber}`,
+              createdAt: b.createdAt,
+              ref: b
+            });
+          });
+
+          // Sort descending
+          const sortedAllPayments = list.sort((a, b) => b.createdAt - a.createdAt);
+
+          const sumBillPay = bills.reduce((sum, b) => sum + b.paymentAmount, 0);
+          const sumIndepPay = payments.reduce((sum, p) => sum + p.amount, 0);
+
+          return (
+            <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+              <div className="absolute inset-0" onClick={() => setShowCollectedCashBreakdown(false)} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                className="w-full max-w-lg p-6 rounded-2xl shadow-2xl z-20 space-y-4 text-xs border transition bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27] max-h-[85vh] flex flex-col"
+              >
+                <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27] shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-teal-500/10 text-teal-500">
+                      <DollarSign className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold uppercase tracking-wider font-mono text-slate-900 dark:text-white text-sm">Quỹ Tiền Thu Khách Sỉ</h3>
+                      <p className="text-[10px] text-slate-450 dark:text-[#657f76]">
+                        Tổng hợp các khoản dòng tiền mặt / chuyển khoản thu về
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowCollectedCashBreakdown(false)} className="p-1 rounded-full transition text-slate-400 dark:text-[#657f76] hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a2d25]">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Summary boxes */}
+                <div className="grid grid-cols-3 gap-2.5 shrink-0">
+                  <div className="p-2.5 rounded-xl border bg-teal-500/5 border-teal-500/20 text-center">
+                    <span className="font-mono uppercase block text-[7.5px] tracking-wider text-teal-600 dark:text-[#10b981] font-bold">Tổng Quỹ Thu</span>
+                    <span className="text-xs font-black font-mono mt-0.5 block text-teal-600 dark:text-[#10b981]">
+                      {(sumBillPay + sumIndepPay).toLocaleString()}đ
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-xl border bg-slate-50 dark:bg-[#111c18] border-slate-200 dark:border-[#1c2d27]/70 text-center">
+                    <span className="font-mono uppercase block text-[7.5px] tracking-wider text-slate-400 dark:text-[#657f76]">Qua hoá đơn</span>
+                    <span className="text-xs font-black font-mono mt-0.5 block text-slate-800 dark:text-white">
+                      {sumBillPay.toLocaleString()}đ
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-xl border bg-slate-50 dark:bg-[#111c18] border-slate-200 dark:border-[#1c2d27]/70 text-center">
+                    <span className="font-mono uppercase block text-[7.5px] tracking-wider text-slate-400 dark:text-[#657f76]">Dồn nợ sỉ</span>
+                    <span className="text-xs font-black font-mono mt-0.5 block text-slate-800 dark:text-white">
+                      {sumIndepPay.toLocaleString()}đ
+                    </span>
+                  </div>
+                </div>
+
+                {/* Timeline Feed of all payments */}
+                <div className="flex-grow overflow-y-auto pr-1 space-y-2 min-h-[220px]">
+                  {sortedAllPayments.length === 0 ? (
+                    <p className="text-slate-400 italic text-center py-10">Chưa ghi nhận dòng tiền thu nợ nào.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {sortedAllPayments.map((pay) => (
+                        <div key={`${pay.type}-${pay.id}`} className="p-3 rounded-xl border border-slate-200 dark:border-[#1b2c24]/50 bg-slate-50/50 dark:bg-[#111c18]/30 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-black text-slate-800 dark:text-white truncate max-w-[120px]">{pay.customerName}</span>
+                              <span className={`px-1 rounded text-[8px] font-bold ${
+                                pay.type === 'bill' 
+                                  ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' 
+                                  : 'bg-emerald-150 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                              }`}>
+                                {pay.type === 'bill' ? 'HD' : 'Thu rời'}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-450 dark:text-[#657f76] truncate block mt-0.5">{pay.note}</span>
+                            <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono block mt-0.5">{pay.date}</span>
+                          </div>
+                          
+                          <div className="text-right shrink-0">
+                            <span className="text-xs font-black text-emerald-600 dark:text-[#10b981] font-mono">
+                              +{pay.amount.toLocaleString()}đ
+                            </span>
+                            <span 
+                              onClick={() => {
+                                setShowCollectedCashBreakdown(false);
+                                if (pay.type === 'bill') {
+                                  setSelectedInvoiceForModal(pay.ref);
+                                } else {
+                                  setSelectedPaymentForModal(pay.ref);
+                                }
+                              }}
+                              className="text-[9px] text-indigo-500 hover:underline block cursor-pointer select-none font-bold"
+                            >
+                              Xem phiếu 📄
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-slate-150 dark:border-[#1c2d27] flex justify-between items-center shrink-0 text-[10px] text-slate-400 dark:text-[#556b62] font-mono">
+                  <span>Hiển thị tối đa {sortedAllPayments.length} giao dịch gần nhất.</span>
+                  <button
+                    onClick={() => setShowCollectedCashBreakdown(false)}
+                    className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* Invoice Detail Modal with screen snapshot export */}

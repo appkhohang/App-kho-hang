@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera, ChevronRight, Info, Calendar, CheckSquare } from 'lucide-react';
+import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera, ChevronRight, Info, Calendar, CheckSquare, TrendingUp, History } from 'lucide-react';
 import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietnameseMonthKey } from '../utils/dateUtils';
 import { exportDatabasePackage } from '../utils/storage';
@@ -154,6 +154,11 @@ export default function GoodsImportTab({
   const [laborPayNote, setLaborPayNote] = useState('');
   const [selectedLaborPaymentForModal, setSelectedLaborPaymentForModal] = useState<LaborPayment | null>(null);
 
+  // States for GoodsImport metric breakdown modals
+  const [showActualCostBreakdown, setShowActualCostBreakdown] = useState(false);
+  const [showShipCostBreakdown, setShowShipCostBreakdown] = useState(false);
+  const [showRemainingBalanceBreakdown, setShowRemainingBalanceBreakdown] = useState(false);
+
   // Selected week filter ('all' or a specific weekKey string) - Controlled with fallback
   const [localWeekFilter, setLocalWeekFilter] = useState<string>('all');
   const selectedWeekFilter = externalWeekFilter !== undefined ? externalWeekFilter : localWeekFilter;
@@ -195,6 +200,9 @@ export default function GoodsImportTab({
   useAndroidBack(selectedLaborPaymentForModal !== null, () => setSelectedLaborPaymentForModal(null));
   useAndroidBack(selectedItemForModal !== null, () => setSelectedItemForModal(null));
   useAndroidBack(isFormExpanded, () => setIsFormExpanded(false));
+  useAndroidBack(showActualCostBreakdown, () => setShowActualCostBreakdown(false));
+  useAndroidBack(showShipCostBreakdown, () => setShowShipCostBreakdown(false));
+  useAndroidBack(showRemainingBalanceBreakdown, () => setShowRemainingBalanceBreakdown(false));
   useAndroidBack(isMultiSelectMode, () => {
     setIsMultiSelectMode(false);
     setSelectedItemIds([]);
@@ -1145,29 +1153,43 @@ export default function GoodsImportTab({
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
               {/* Box 1: TỔNG CHI PHÍ THỰC TẾ */}
-              <div className="p-3 bg-emerald-500/10 dark:bg-emerald-500/10 border border-emerald-500/25 dark:border-emerald-500/20 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-extrabold text-emerald-600 dark:text-emerald-400 block tracking-wider leading-none">
-                  TỔNG CHI PHÍ THỰC TẾ
-                </span>
-                <div className="text-sm sm:text-base font-black font-mono text-emerald-650 dark:text-emerald-300 mt-2 truncate flex items-baseline gap-0.5 sm:gap-1">
+              <div 
+                onClick={() => setShowActualCostBreakdown(true)}
+                className="p-3 bg-emerald-500/10 dark:bg-emerald-500/10 border border-emerald-500/25 dark:border-emerald-500/20 rounded-xl shadow-2xs cursor-pointer hover:bg-emerald-500/15 hover:border-emerald-500/40 active:scale-[0.98] transition-all group"
+                title="Nhấn xem chi tiết phân tích chi phí may dệt"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-extrabold text-emerald-600 dark:text-emerald-400 block tracking-wider leading-none group-hover:underline">
+                    TỔNG CHI PHÍ THỰC TẾ
+                  </span>
+                  <History className="w-2.5 h-2.5 text-emerald-500/60" />
+                </div>
+                <div className="text-sm sm:text-base font-black font-mono text-emerald-655 dark:text-emerald-300 mt-2 truncate flex items-baseline gap-0.5 sm:gap-1">
                   <span>{displayedTotals.totalCost.toLocaleString()}</span>
                   <span className="text-[10px] sm:text-xs font-bold text-emerald-550/80">đ</span>
                 </div>
                 <div className="text-[8.5px] sm:text-[9px] text-slate-500 dark:text-slate-400 mt-1 font-sans truncate">
-                  (Tổng giá trị gốc lô dệt)
+                  ➜ Nhấn xem chi tiết
                 </div>
               </div>
 
               {/* Box 2: Tiền ship (vận chuyển) */}
-              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none">
-                  Tổng tiền ship (vận chuyển)
-                </span>
+              <div 
+                onClick={() => setShowShipCostBreakdown(true)}
+                className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-[0.98] transition-all group"
+                title="Nhấn xem chi tiết phân tích phí vận chuyển"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none group-hover:underline">
+                    Tổng tiền ship (vận chuyển)
+                  </span>
+                  <History className="w-2.5 h-2.5 text-rose-450/60" />
+                </div>
                 <div className="text-sm sm:text-base font-black font-mono text-rose-500 dark:text-rose-400 mt-2 truncate">
                   {displayedTotals.totalShip.toLocaleString()} <span className="text-[10px] sm:text-xs font-normal text-slate-400">đ</span>
                 </div>
-                <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
-                  (Ship TP➔ĐT - Ship ĐT➔TP)
+                <div className="text-[8.5px] sm:text-[9px] text-slate-450 dark:text-slate-500 mt-1 font-sans truncate">
+                  ➜ Nhấn xem chi tiết
                 </div>
               </div>
 
@@ -1193,15 +1215,22 @@ export default function GoodsImportTab({
               </button>
 
               {/* Box 4: Tiền hàng / thợ còn lại */}
-              <div className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs">
-                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none">
-                  Tiền hàng / thợ còn lại
-                </span>
+              <div 
+                onClick={() => setShowRemainingBalanceBreakdown(true)}
+                className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80 rounded-xl shadow-2xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-[0.98] transition-all group"
+                title="Nhấn xem chi tiết bảng tính công nợ thợ còn lại"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider leading-none group-hover:underline">
+                    Tiền hàng / thợ còn lại
+                  </span>
+                  <History className="w-2.5 h-2.5 text-indigo-500/60" />
+                </div>
                 <div className="text-sm sm:text-base font-black font-mono text-indigo-650 dark:text-indigo-400 mt-2 truncate">
                   {displayedTotals.totalGoodsAmount.toLocaleString()} <span className="text-[10px] sm:text-xs font-normal text-slate-400">đ</span>
                 </div>
-                <div className="text-[8.5px] sm:text-[9px] text-slate-400 dark:text-slate-500 mt-1 font-sans truncate">
-                  (Tiền hàng + Ship - Đã trả)
+                <div className="text-[8.5px] sm:text-[9px] text-slate-450 dark:text-slate-500 mt-1 font-sans truncate">
+                  ➜ Nhấn xem chi tiết
                 </div>
               </div>
             </div>
@@ -2456,6 +2485,342 @@ export default function GoodsImportTab({
         )}
       </AnimatePresence>
 
+      {/* 1. Actual Cost Breakdown Modal */}
+      <AnimatePresence>
+        {showActualCostBreakdown && (() => {
+          const isWeekMode = filterMode === 'week';
+          const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
+          const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
+
+          const filteredGroupKeys = Object.keys(groupData)
+            .sort((a, b) => b.localeCompare(a))
+            .filter(label => currentFilterValue === 'all' || label === currentFilterValue);
+
+          const activeItems: ImportItem[] = [];
+          filteredGroupKeys.forEach(label => {
+            const weekItems = groupData[label] || [];
+            activeItems.push(...weekItems);
+          });
+
+          // Group by Model Name
+          const modelStats: { [model: string]: { qty: number; cost: number } } = {};
+          activeItems.forEach(item => {
+            const m = item.mẫu || 'Chưa phân loại';
+            const q = item.sốLượng || 0;
+            const c = q * (item.đơnGiáMay || 0);
+            if (!modelStats[m]) {
+              modelStats[m] = { qty: 0, cost: 0 };
+            }
+            modelStats[m].qty += q;
+            modelStats[m].cost += c;
+          });
+
+          const sortedModels = Object.keys(modelStats)
+            .map(name => ({ name, qty: modelStats[name].qty, cost: modelStats[name].cost }))
+            .sort((a, b) => b.cost - a.cost);
+
+          return (
+            <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+              <div className="absolute inset-0" onClick={() => setShowActualCostBreakdown(false)} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                className="w-full max-w-lg p-6 rounded-2xl shadow-2xl z-20 space-y-4 text-xs border transition bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27] max-h-[85vh] flex flex-col text-slate-800 dark:text-slate-100"
+              >
+                <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27] shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+                      <TrendingUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold uppercase tracking-wider font-mono text-slate-900 dark:text-white text-sm">Chi Phí Nhập Hàng Gốc</h3>
+                      <p className="text-[10px] text-slate-450 dark:text-[#657f76]">
+                        Thống kê chi phí tiền may dệt gốc theo thời kỳ đang lọc ({currentFilterValue === 'all' ? 'Tất cả' : currentFilterValue})
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowActualCostBreakdown(false)} className="p-1 rounded-full transition text-slate-400 dark:text-[#657f76] hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a2d25]">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Main statistics cards */}
+                <div className="grid grid-cols-2 gap-3 shrink-0">
+                  <div className="p-3.5 rounded-xl border bg-emerald-500/5 border-emerald-500/20 text-center">
+                    <span className="font-mono uppercase block text-[8px] tracking-wider text-emerald-600 dark:text-[#10b981] font-extrabold">Tổng tiền hàng dệt</span>
+                    <span className="text-base font-black text-emerald-600 dark:text-[#10b981] font-mono mt-0.5 block">
+                      {displayedTotals.totalCost.toLocaleString()}đ
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl border bg-slate-50 dark:bg-[#111c18] border-slate-200 dark:border-[#1c2d27]/70 text-center">
+                    <span className="font-mono uppercase block text-[8px] tracking-wider text-slate-400 dark:text-[#657f76]">Tổng số lượng mã mẫu</span>
+                    <span className="text-base font-black text-slate-800 dark:text-white font-mono mt-0.5 block">
+                      {sortedModels.length} mẫu
+                    </span>
+                  </div>
+                </div>
+
+                {/* Body section: List breakdown by model */}
+                <div className="flex-grow overflow-y-auto pr-1 space-y-2.5 min-h-[220px]">
+                  <h4 className="font-extrabold uppercase text-[9.5px] text-slate-400 dark:text-slate-500 font-mono tracking-wide">Chi phí tiền may theo mã hàng:</h4>
+                  {sortedModels.length === 0 ? (
+                    <p className="text-slate-400 italic text-center py-10">Không tìm thấy dữ liệu trong kỳ.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {sortedModels.map(m => (
+                        <div key={m.name} className="p-3 rounded-xl border border-slate-150 dark:border-[#1c2d27]/65 bg-slate-50/40 dark:bg-[#111c18]/30 flex justify-between items-center gap-3">
+                          <div>
+                            <span className="font-black text-slate-850 dark:text-white block font-mono">{m.name}</span>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-0.5">Số lượng: {m.qty.toLocaleString()} chiếc</span>
+                          </div>
+                          <span className="font-mono font-black text-slate-800 dark:text-slate-100 text-xs shrink-0">{m.cost.toLocaleString()}đ</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-slate-150 dark:border-[#1c2d27] flex justify-between items-center shrink-0 text-[10px] text-slate-400 dark:text-[#556b62] font-mono">
+                  <span>Sản lượng tổng: {displayedTotals.totalQty.toLocaleString()} chiếc.</span>
+                  <button
+                    onClick={() => setShowActualCostBreakdown(false)}
+                    className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* 2. Ship Cost Breakdown Modal */}
+      <AnimatePresence>
+        {showShipCostBreakdown && (() => {
+          const isWeekMode = filterMode === 'week';
+          const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
+          const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
+
+          const filteredGroupKeys = Object.keys(groupData)
+            .sort((a, b) => b.localeCompare(a))
+            .filter(label => currentFilterValue === 'all' || label === currentFilterValue);
+
+          let totalShipTpDt_Row = 0;
+          let totalShipDtTp_Row = 0;
+          const activeShippingsList: TpDtShippingItem[] = [];
+
+          filteredGroupKeys.forEach(label => {
+            const weekItems = groupData[label] || [];
+            const weekShippings = isWeekMode 
+              ? (shippingsByWeek[label] || [])
+              : (shippingsByMonth[label] || []);
+
+            totalShipDtTp_Row += weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+            totalShipTpDt_Row += weekItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
+            activeShippingsList.push(...weekShippings);
+          });
+
+          const totalSeparateTpDt = activeShippingsList.reduce((acc, curr) => acc + curr.sốTiền, 0);
+          const grandTotalTpDt = totalShipTpDt_Row + totalSeparateTpDt;
+
+          return (
+            <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+              <div className="absolute inset-0" onClick={() => setShowShipCostBreakdown(false)} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                className="w-full max-w-lg p-6 rounded-2xl shadow-2xl z-20 space-y-4 text-xs border transition bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27] max-h-[85vh] flex flex-col text-slate-800 dark:text-slate-100"
+              >
+                <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27] shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold uppercase tracking-wider font-mono text-slate-900 dark:text-white text-sm">Phí Vận Chuyển Chi Tiết</h3>
+                      <p className="text-[10px] text-slate-450 dark:text-[#657f76]">
+                        Phân tích các dòng phí ship TP➔ĐT và ĐT➔TP trong kỳ ({currentFilterValue === 'all' ? 'Tất cả' : currentFilterValue})
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowShipCostBreakdown(false)} className="p-1 rounded-full transition text-slate-400 dark:text-[#657f76] hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a2d25]">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Summary cards block */}
+                <div className="grid grid-cols-3 gap-2.5 shrink-0">
+                  <div className="p-2 rounded-xl border bg-rose-500/5 border-rose-500/20 text-center">
+                    <span className="font-mono uppercase block text-[7.5px] tracking-wider text-rose-500 dark:text-rose-400 font-extrabold">Tổng tiền ship</span>
+                    <span className="text-[11px] font-black text-rose-600 dark:text-rose-450 font-mono mt-0.5 block">
+                      {displayedTotals.totalShip.toLocaleString()}đ
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-xl border bg-emerald-500/5 border-emerald-500/10 text-center">
+                    <span className="font-mono uppercase block text-[7.5px] tracking-wider text-emerald-600 dark:text-emerald-450">Chiều TP ➔ ĐT</span>
+                    <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-450 font-mono mt-0.5 block">
+                      {grandTotalTpDt.toLocaleString()}đ
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-xl border bg-amber-500/5 border-amber-500/10 text-center">
+                    <span className="font-mono uppercase block text-[7.5px] tracking-wider text-amber-600 dark:text-amber-450">Chiều ĐT ➔ TP</span>
+                    <span className="text-[11px] font-black text-amber-600 dark:text-amber-450 font-mono mt-0.5 block">
+                      {totalShipDtTp_Row.toLocaleString()}đ
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-section with list of separate TP ➔ ĐT shippings */}
+                <div className="flex-grow overflow-y-auto pr-1 space-y-3 min-h-[220px]">
+                  <div>
+                    <h4 className="font-extrabold uppercase text-[9.5px] text-slate-400 dark:text-slate-500 font-mono tracking-wide mb-1.5">
+                      1. Chi tiết ship TP ➔ ĐT độc lập (vải, phụ liệu, mẫu...):
+                    </h4>
+                    {activeShippingsList.length === 0 ? (
+                      <p className="text-slate-400 italic text-center py-4 bg-slate-50 dark:bg-[#111c18]/30 rounded-xl">Chưa ghi nhận chuyến ship ngoài nào.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {activeShippingsList.map(ship => (
+                          <div key={ship.id} className="p-2.5 rounded-lg border border-slate-150 dark:border-[#1c2d27]/60 bg-slate-50/40 dark:bg-[#111c18]/25 flex justify-between items-center gap-2">
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-800 dark:text-white block font-mono">{ship.nộiDung}</span>
+                              <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono block mt-0.5">{ship.ngày} • {ship.weekKey}</span>
+                            </div>
+                            <span className="font-mono font-bold text-rose-500 text-xs shrink-0">+{ship.sốTiền.toLocaleString()}đ</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#111c18]/30 border border-slate-200/60 dark:border-[#1c2d27]/60 text-[10px] text-slate-450 dark:text-[#556d62] space-y-1">
+                    <p className="font-bold">2. Ship tích hợp theo dòng (lô nhập hàng):</p>
+                    <p>• Đồng Tháp ➔ TP HCM (tiền hoàn/ĐT chịu): <span className="font-mono font-bold text-slate-700 dark:text-slate-200">{totalShipDtTp_Row.toLocaleString()}đ</span></p>
+                    <p>• TP HCM ➔ Đồng Tháp (chuyến đi dệt): <span className="font-mono font-bold text-slate-700 dark:text-slate-200">{totalShipTpDt_Row.toLocaleString()}đ</span></p>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-150 dark:border-[#1c2d27] flex justify-between items-center shrink-0 text-[10px] text-slate-400 dark:text-[#556b62] font-mono">
+                  <span>Cách tính: Tổng ship = Ship TP➔ĐT (gồm ngoài & dòng) - Ship ĐT➔TP.</span>
+                  <button
+                    onClick={() => setShowShipCostBreakdown(false)}
+                    className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* 3. Remaining Balance Breakdown Modal */}
+      <AnimatePresence>
+        {showRemainingBalanceBreakdown && (() => {
+          const isWeekMode = filterMode === 'week';
+          const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
+
+          // Gather active labor payments
+          const activeLaborPayments = isWeekMode 
+            ? laborPayments.filter(p => p.weekKey === currentFilterValue || currentFilterValue === 'all')
+            : laborPayments.filter(p => getVietnameseMonthKey(p.date) === currentFilterValue || p.weekKey === currentFilterValue || currentFilterValue === 'all');
+
+          const sortedLaborPayments = activeLaborPayments.sort((a, b) => b.createdAt - a.createdAt);
+
+          return (
+            <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+              <div className="absolute inset-0" onClick={() => setShowRemainingBalanceBreakdown(false)} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                className="w-full max-w-lg p-6 rounded-2xl shadow-2xl z-20 space-y-4 text-xs border transition bg-white dark:bg-[#0e1613] border-slate-200 dark:border-[#1c2d27] max-h-[85vh] flex flex-col text-slate-800 dark:text-slate-100"
+              >
+                <div className="pb-3 flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27] shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
+                      <Wallet className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold uppercase tracking-wider font-mono text-slate-900 dark:text-white text-sm">Công Nợ Thợ Chi Tiết</h3>
+                      <p className="text-[10px] text-slate-450 dark:text-[#657f76]">
+                        Công thức tính và lịch sử thanh toán tiền thợ trong kỳ ({currentFilterValue === 'all' ? 'Tất cả' : currentFilterValue})
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowRemainingBalanceBreakdown(false)} className="p-1 rounded-full transition text-slate-400 dark:text-[#657f76] hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a2d25]">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Formula ledger card */}
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-[#1c2d27]/70 bg-slate-50 dark:bg-[#111c18]/30 space-y-2 shrink-0">
+                  <h4 className="font-black text-slate-800 dark:text-white text-xs">CÔNG THỨC QUYẾT TOÁN CÔNG NỢ THỢ</h4>
+                  <div className="space-y-1.5 font-mono text-[11px] text-slate-600 dark:text-[#657f76]">
+                    <div className="flex justify-between">
+                      <span>1. Tổng tiền hàng gốc:</span>
+                      <span className="font-bold text-slate-800 dark:text-white">+{displayedTotals.totalCost.toLocaleString()}đ</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>2. Tổng tiền ship (vận chuyển):</span>
+                      <span className={`font-bold ${displayedTotals.totalShip >= 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                        {displayedTotals.totalShip >= 0 ? '+' : ''}{displayedTotals.totalShip.toLocaleString()}đ
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>3. Đã thanh toán cho thợ:</span>
+                      <span className="font-bold text-indigo-500">-{displayedTotals.totalLaborPaid.toLocaleString()}đ</span>
+                    </div>
+                    <hr className="border-dashed border-slate-250 dark:border-[#1c2d27]" />
+                    <div className="flex justify-between text-xs font-black text-slate-900 dark:text-white pt-1">
+                      <span>Nợ thợ còn lại (1 + 2 - 3):</span>
+                      <span className="text-indigo-600 dark:text-[#10b981] font-extrabold">{displayedTotals.totalGoodsAmount.toLocaleString()}đ</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-section: Recent labor payments */}
+                <div className="flex-grow overflow-y-auto pr-1 space-y-2 min-h-[160px]">
+                  <h4 className="font-extrabold uppercase text-[9.5px] text-slate-400 dark:text-slate-500 font-mono tracking-wide">
+                    Lịch sử chi tiền công thợ trong kỳ:
+                  </h4>
+                  {sortedLaborPayments.length === 0 ? (
+                    <p className="text-slate-400 italic text-center py-6 bg-slate-50 dark:bg-[#111c18]/30 rounded-xl border border-dashed border-slate-200">
+                      Chưa ghi nhận đợt trả tiền thợ nào trong kỳ.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {sortedLaborPayments.map(p => (
+                        <div key={p.id} className="p-2.5 rounded-xl border border-slate-150 dark:border-[#1c2d27]/60 bg-slate-50/40 dark:bg-[#111c18]/25 flex justify-between items-center gap-3">
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-850 dark:text-white block truncate">{p.note || 'Trả tiền thợ'}</span>
+                            <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono block mt-0.5">{p.date} • {p.weekKey}</span>
+                          </div>
+                          <span className="font-mono font-black text-indigo-600 dark:text-[#10b981] text-xs shrink-0">-{p.amount.toLocaleString()}đ</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-slate-150 dark:border-[#1c2d27] flex justify-between items-center shrink-0 text-[10px] text-slate-400 dark:text-[#556b62] font-mono">
+                  <span>Tổng cộng có {sortedLaborPayments.length} giao dịch trả thợ.</span>
+                  <button
+                    onClick={() => setShowRemainingBalanceBreakdown(false)}
+                    className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
 
     </div>
   );
