@@ -42,6 +42,29 @@ interface B2UploadUrlResponse {
 }
 
 /**
+ * Get API base URL depending on execution environment (Web vs Android APK)
+ */
+function getApiBaseUrl(): string {
+  // Check if a custom API Server URL is configured (e.g. from the settings tab)
+  const configuredUrl = localStorage.getItem('xuongan_api_server_url');
+  if (configuredUrl) {
+    return configuredUrl.trim().replace(/\/$/, '');
+  }
+
+  const origin = window.location.origin;
+  
+  // If we are on standard web dev (localhost:3000) or Cloud Run (run.app), we can use relative path
+  if (origin.includes('localhost:3000') || origin.includes('run.app')) {
+    return '';
+  }
+  
+  // Inside the Android APK (capacitor://localhost, https://localhost, file://, etc.)
+  // We default to the development server because it's actively updated and running during testing,
+  // but they can always change or configure it inside the App!
+  return 'https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app';
+}
+
+/**
  * Service to manage files on Backblaze B2 using server-side CORS proxies
  */
 export const B2Service = {
@@ -54,7 +77,7 @@ export const B2Service = {
     }
 
     try {
-      const res = await fetch('/api/b2/authorize', {
+      const res = await fetch(`${getApiBaseUrl()}/api/b2/authorize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -82,7 +105,7 @@ export const B2Service = {
    */
   async getUploadUrl(apiUrl: string, authToken: string, bucketId: string): Promise<B2UploadUrlResponse> {
     try {
-      const res = await fetch('/api/b2/getUploadUrl', {
+      const res = await fetch(`${getApiBaseUrl()}/api/b2/getUploadUrl`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -151,7 +174,7 @@ export const B2Service = {
 
     // 4. Upload file using proxy
     try {
-      const res = await fetch('/api/b2/uploadFile', {
+      const res = await fetch(`${getApiBaseUrl()}/api/b2/uploadFile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -195,7 +218,7 @@ export const B2Service = {
       const auth = await this.authorize(config);
 
       // 2. Call delete file version API via proxy
-      const res = await fetch('/api/b2/deleteFile', {
+      const res = await fetch(`${getApiBaseUrl()}/api/b2/deleteFile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -224,7 +247,7 @@ export const B2Service = {
   async getBucketSize(config: B2Config): Promise<{ totalSize: number; fileCount: number }> {
     try {
       const auth = await this.authorize(config);
-      const res = await fetch('/api/b2/getBucketSize', {
+      const res = await fetch(`${getApiBaseUrl()}/api/b2/getBucketSize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

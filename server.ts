@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 
 async function startServer() {
@@ -9,6 +10,14 @@ async function startServer() {
   // Add bodyParser middleware to parse JSON payloads with generous limits
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  // Enable CORS with support for all origins (including capacitor/mobile webviews)
+  app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    credentials: true
+  }));
 
   // API routes
   app.get("/api/health", (req, res) => {

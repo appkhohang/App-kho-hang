@@ -5,7 +5,7 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, ShieldCheck, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle, X, ChevronRight, Bell } from 'lucide-react';
+import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, ShieldCheck, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle, X, ChevronRight, Bell, Globe } from 'lucide-react';
 import { AppSettings, ImportItem, Customer, UserProfile, Bill, CURRENT_VERSION, AppUpdateInfo } from '../types';
 import { isNewerVersion } from '../utils/updateService';
 import { useAndroidBack } from '../hooks/useAndroidBack';
@@ -92,6 +92,10 @@ export default function SettingsTab({
   const [updateDetail, setUpdateDetail] = useState<AppUpdateInfo | null>(null);
   const [manualCheckError, setManualCheckError] = useState<string>('');
   const [latestVersionMetadata, setLatestVersionMetadata] = useState<AppUpdateInfo | null>(null);
+
+  const [apiServerUrl, setApiServerUrl] = useState(() => {
+    return localStorage.getItem("xuongan_api_server_url") || "";
+  });
 
   // Backblaze B2 metrics for exceeded warning limit
   const [b2Config, setB2Config] = useState<any>(() => {
@@ -1820,6 +1824,114 @@ export default function SettingsTab({
                   })}
                 </div>
               )}
+            </div>
+
+            {/* Cấu hình Máy chủ API cho Android APK */}
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955 space-y-3 text-left">
+              <div className="flex items-center gap-1.5">
+                <Globe className="w-4 h-4 text-indigo-500" />
+                <span className="text-[10px] font-black tracking-wider uppercase text-slate-450 dark:text-slate-400 font-mono">
+                  Cấu hình Máy chủ API (Dành cho Android APK)
+                </span>
+              </div>
+              <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                Khi chạy trên điện thoại qua ứng dụng Android APK, ứng dụng cần kết nối trực tiếp đến máy chủ để chuyển đổi lưu trữ hình ảnh Backblaze B2. Hãy chọn Máy chủ đang chạy hoặc nhập máy chủ của riêng bạn.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                <div>
+                  <label className="block text-[9.5px] font-extrabold uppercase text-slate-400 font-mono mb-1">
+                    Đường dẫn Máy chủ API
+                  </label>
+                  <input
+                    type="text"
+                    value={apiServerUrl}
+                    onChange={(e) => setApiServerUrl(e.target.value)}
+                    placeholder="Tự động (Mặc định)"
+                    className="w-full px-3 py-1.5 border border-slate-205 dark:border-slate-800 rounded-xl font-mono text-xs focus:outline-hidden focus:border-indigo-500 dark:bg-slate-950 dark:text-slate-250"
+                  />
+                </div>
+                
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiServerUrl('https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                      localStorage.setItem('xuongan_api_server_url', 'https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                      alert('Đã chọn Máy chủ Phát triển (Development Server)');
+                    }}
+                    className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 text-slate-650 dark:text-slate-300 font-bold text-[10px] transition cursor-pointer text-center"
+                  >
+                    Dev Server
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiServerUrl('https://ais-pre-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                      localStorage.setItem('xuongan_api_server_url', 'https://ais-pre-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                      alert('Đã chọn Máy chủ Chia sẻ (Preview/Shared Server)');
+                    }}
+                    className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 text-slate-650 dark:text-slate-300 font-bold text-[10px] transition cursor-pointer text-center"
+                  >
+                    Shared Server
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiServerUrl('');
+                      localStorage.removeItem('xuongan_api_server_url');
+                      alert('Đã đặt lại về cấu hình Tự động (Mặc định)');
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl border border-rose-250 bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 font-bold text-[10px] transition cursor-pointer text-center"
+                    title="Đặt lại tự động"
+                  >
+                    Tự động
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const trimmed = apiServerUrl.trim();
+                    if (trimmed) {
+                      localStorage.setItem('xuongan_api_server_url', trimmed);
+                      alert('✨ Đã lưu cấu hình máy chủ API thành công: ' + trimmed);
+                    } else {
+                      localStorage.removeItem('xuongan_api_server_url');
+                      alert('✨ Đã đặt lại cấu hình máy chủ API về Tự động.');
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider transition cursor-pointer"
+                >
+                  Lưu cấu hình máy chủ
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const baseUrl = apiServerUrl.trim().replace(/\/$/, '') || window.location.origin;
+                    try {
+                      const checkRes = await fetch(`${baseUrl}/api/health`);
+                      if (checkRes.ok) {
+                        const data = await checkRes.json();
+                        if (data.status === 'ok') {
+                          alert('✅ Kết nối Máy chủ thành công! Phản hồi: ' + JSON.stringify(data));
+                        } else {
+                          alert('⚠️ Máy chủ phản hồi nhưng trạng thái không khớp: ' + JSON.stringify(data));
+                        }
+                      } else {
+                        alert(`❌ Kết nối máy chủ thất bại với mã lỗi HTTP: ${checkRes.status}`);
+                      }
+                    } catch (e: any) {
+                      alert(`❌ Không thể kết nối đến máy chủ API: ${e.message}`);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-950/45 hover:bg-slate-50 text-slate-750 dark:text-slate-250 font-bold text-[10px] uppercase tracking-wider transition cursor-pointer"
+                >
+                  Kiểm tra kết nối
+                </button>
+              </div>
             </div>
 
             {/* Info Drawer inline */}
