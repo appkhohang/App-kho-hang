@@ -93,6 +93,43 @@ export default function SettingsTab({
   const [manualCheckError, setManualCheckError] = useState<string>('');
   const [latestVersionMetadata, setLatestVersionMetadata] = useState<AppUpdateInfo | null>(null);
 
+  // Backblaze B2 metrics for exceeded warning limit
+  const [b2Config, setB2Config] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_b2_config');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [b2StorageUsed, setB2StorageUsed] = useState<number>(() => {
+    return Number(localStorage.getItem('xuongan_b2_storage_used') || '0');
+  });
+
+  React.useEffect(() => {
+    const checkB2 = () => {
+      try {
+        const saved = localStorage.getItem('xuongan_b2_config');
+        if (saved) setB2Config(JSON.parse(saved));
+        setB2StorageUsed(Number(localStorage.getItem('xuongan_b2_storage_used') || '0'));
+      } catch (e) {
+        console.warn(e);
+      }
+    };
+    checkB2();
+    window.addEventListener('focus', checkB2);
+    return () => window.removeEventListener('focus', checkB2);
+  }, []);
+
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  };
+
   React.useEffect(() => {
     const fetchLatestVersion = async () => {
       try {
@@ -1094,6 +1131,23 @@ export default function SettingsTab({
 
   return (
     <div className="space-y-6 font-sans max-w-4xl mx-auto">
+
+      {/* B2 Near-limit capacity alert banner (Exceeds 90%) */}
+      {b2Config?.configured && b2StorageUsed >= 9 * 1024 * 1024 * 1024 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-2xl border border-rose-200 bg-rose-500/10 text-rose-700 dark:text-rose-400 flex items-start gap-3 shadow-xs text-left"
+        >
+          <AlertTriangle className="w-5 h-5 shrink-0 text-rose-500 mt-0.5 animate-bounce" />
+          <div className="flex-1 text-xs">
+            <p className="font-extrabold uppercase font-mono tracking-wider">Cảnh báo: Bộ nhớ Backblaze B2 vượt quá 90%!</p>
+            <p className="mt-1 leading-relaxed text-slate-600 dark:text-slate-300">
+              Dung lượng lưu trữ Backblaze B2 của bạn đã sử dụng <b>{formatBytes(b2StorageUsed)}</b> trên tổng số tối đa <b>10 GB</b> ({((b2StorageUsed / (10 * 1024 * 1024 * 1024)) * 100).toFixed(1)}%). Vui lòng dọn dẹp các tệp mẫu cũ không cần thiết trong mục "Kho hình mẫu" hoặc nâng cấp gói lưu trữ để tránh lỗi khi tải mẫu mới lên.
+            </p>
+          </div>
+        </motion.div>
+      )}
       
       {/* Settings Tab Introduce */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs text-left">

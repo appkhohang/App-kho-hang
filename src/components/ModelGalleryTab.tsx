@@ -10,7 +10,7 @@ import {
   Settings, Eye, Info, ChevronRight, X, AlertCircle, Sparkles, Filter, 
   Upload, Download, Copy, Check, EyeOff, Loader2, DollarSign, Tag, 
   FileText, ArrowRight, RotateCw, Trash, Calendar, Edit2, Share2, ZoomIn, ShieldCheck,
-  Maximize2, ChevronLeft, ZoomOut, LayoutGrid
+  Maximize2, ChevronLeft, ZoomOut, LayoutGrid, Square, SquareCheck
 } from 'lucide-react';
 import { ModelSample, B2Config } from '../types';
 import { db, getNamespaceCollection } from '../utils/firebase';
@@ -18,6 +18,42 @@ import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'fire
 import { B2Service, base64ToBlob } from '../utils/b2Service';
 import { compressBase64Image } from '../utils/imageUtils';
 import { useAndroidBack } from '../hooks/useAndroidBack';
+
+// --- Lazy-loaded Image with Shimmer/Skeleton Placeholder Component ---
+function ModelImage({ 
+  src, 
+  alt, 
+  className, 
+  layout 
+}: { 
+  src: string; 
+  alt: string; 
+  className?: string; 
+  layout: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
+      {!loaded && (
+        <div className="absolute inset-0 bg-slate-200 dark:bg-emerald-950/20 animate-pulse flex flex-col items-center justify-center gap-1.5 p-3">
+          <Loader2 className="w-5 h-5 animate-spin text-teal-600 dark:text-emerald-500" />
+          <span className="text-[8px] font-mono font-bold uppercase text-slate-400 dark:text-[#527065] tracking-wider text-center">
+            Đang tải ảnh...
+          </span>
+        </div>
+      )}
+      <img 
+        src={src} 
+        alt={alt} 
+        referrerPolicy="no-referrer"
+        onLoad={() => setLoaded(true)}
+        className={`${className} transition-all duration-300 ${loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+        loading="lazy"
+      />
+    </div>
+  );
+}
 
 interface ModelGalleryTabProps {
   resolvedTheme?: 'light' | 'dark';
@@ -99,6 +135,11 @@ export default function ModelGalleryTab({
     return Number(localStorage.getItem('xuongan_b2_file_count') || '0');
   });
   const [loadingStorageInfo, setLoadingStorageInfo] = useState<boolean>(false);
+
+  // Bulk selection and deletion states
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedSampleIds, setSelectedSampleIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Add/Edit Model Sample Modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -635,6 +676,68 @@ export default function ModelGalleryTab({
     } catch (err: any) {
       console.error(err);
       alert(`Lỗi khi xóa mẫu: ${err.message}`);
+    }
+  };
+
+  const handleBulkDeleteSamples = async () => {
+    if (selectedSampleIds.length === 0) {
+      alert('Vui lòng chọn ít nhất một ảnh mẫu để xóa.');
+      return;
+    }
+
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedSampleIds.length} ảnh mẫu đã chọn? Hành động này sẽ xóa vĩnh viễn dữ liệu trên thiết bị và Backblaze B2.`)) {
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      const selectedSamples = samples.filter(s => selectedSampleIds.includes(s.id));
+      
+      // 1. Delete on Backblaze B2 for all selected samples that have B2 info
+      if (b2Config.configured) {
+        for (const sample of selectedSamples) {
+          if (sample.b2FileId && sample.b2FilePath) {
+            try {
+              await B2Service.deleteFile(b2Config, sample.b2FileId, sample.b2FilePath);
+              console.log('Successfully deleted B2 file in bulk:', sample.b2FilePath);
+            } catch (b2Err) {
+              console.warn(`Failed to delete B2 file for sample ${sample.id} (${sample.modelName}):`, b2Err);
+            }
+          }
+        }
+      }
+
+      // 2. Delete in Firestore
+      for (const sample of selectedSamples) {
+        try {
+          const docRef = doc(db, getNamespaceCollection('model_samples'), sample.id);
+          await deleteDoc(docRef);
+        } catch (dbErr) {
+          console.error(`Failed to delete Firestore doc for sample ${sample.id}:`, dbErr);
+        }
+      }
+
+      // Update local state
+      setSamples(prev => {
+        const filtered = prev.filter(s => !selectedSampleIds.includes(s.id));
+        localStorage.setItem('xuongan_model_samples', JSON.stringify(filtered));
+        return filtered;
+      });
+
+      // Refresh B2 capacity info
+      if (b2Config.configured) {
+        fetchB2StorageInfo(b2Config);
+      }
+
+      setSelectedSample(null);
+      setSelectedSampleIds([]);
+      setBulkSelectMode(false);
+      alert('Đã xóa hàng loạt các mẫu thiết kế thành công.');
+    } catch (err: any) {
+      console.error(err);
+      alert(`Lỗi khi xóa hàng loạt mẫu: ${err.message}`);
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -1217,7 +1320,11 @@ export default function ModelGalleryTab({
 
               {/* Quick Edit Toggle button */}
               <button
-                onClick={() => setQuickEditEnabled(!quickEditEnabled)}
+                onClick={() => {
+                  setQuickEditEnabled(!quickEditEnabled);
+                  setBulkSelectMode(false);
+                  setSelectedSampleIds([]);
+                }}
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border font-bold text-[9px] md:text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                   quickEditEnabled
                     ? 'bg-amber-500 border-amber-500 text-white shadow-xs hover:bg-amber-600'
@@ -1227,6 +1334,24 @@ export default function ModelGalleryTab({
               >
                 <Edit2 className="w-3.5 h-3.5" />
                 <span>{quickEditEnabled ? 'Tắt sửa nhanh' : 'Sửa nhanh'}</span>
+              </button>
+
+              {/* Bulk Select Mode toggle button */}
+              <button
+                onClick={() => {
+                  setBulkSelectMode(!bulkSelectMode);
+                  setSelectedSampleIds([]);
+                  setQuickEditEnabled(false);
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border font-bold text-[9px] md:text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                  bulkSelectMode
+                    ? 'bg-rose-600 border-rose-600 text-white shadow-xs hover:bg-rose-700'
+                    : 'bg-slate-50 dark:bg-[#111c18]/40 border-slate-200 dark:border-[#1c2d27]/75 text-slate-500 dark:text-[#657f76] hover:bg-slate-100 dark:hover:bg-[#111c18]/65'
+                }`}
+                title="Bật/Tắt chế độ chọn xóa hàng loạt mẫu thiết kế"
+              >
+                {bulkSelectMode ? <SquareCheck className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                <span>{bulkSelectMode ? 'Hủy chọn nhiều' : 'Chọn nhiều'}</span>
               </button>
 
               <button 
@@ -1255,6 +1380,62 @@ export default function ModelGalleryTab({
               >
                 Thoát chế độ
               </button>
+            </motion.div>
+          )}
+
+          {bulkSelectMode && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/25 text-teal-850 dark:text-teal-400 text-[11px] font-semibold text-left"
+            >
+              <div className="flex items-center gap-2">
+                <SquareCheck className="w-4 h-4 shrink-0 text-teal-600 dark:text-emerald-500" />
+                <span>
+                  <b>Chế độ chọn hàng loạt Đang Bật</b>: Bạn đã chọn{' '}
+                  <span className="font-mono bg-teal-600 text-white dark:bg-emerald-600 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 mr-1">
+                    {selectedSampleIds.length}
+                  </span>{' '}
+                  mẫu.
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button 
+                  onClick={() => {
+                    const allFilteredIds = filteredSamples.map(s => s.id);
+                    const allSelected = allFilteredIds.every(id => selectedSampleIds.includes(id));
+                    if (allSelected) {
+                      setSelectedSampleIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
+                    } else {
+                      setSelectedSampleIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition font-bold text-[10px] cursor-pointer"
+                >
+                  {filteredSamples.every(s => selectedSampleIds.includes(s.id)) ? 'Hủy chọn tất cả' : 'Chọn tất cả'}
+                </button>
+                <button 
+                  onClick={handleBulkDeleteSamples}
+                  disabled={selectedSampleIds.length === 0 || bulkDeleting}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                >
+                  {bulkDeleting ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3 h-3" />
+                  )}
+                  Xóa hàng loạt ({selectedSampleIds.length})
+                </button>
+                <button 
+                  onClick={() => {
+                    setBulkSelectMode(false);
+                    setSelectedSampleIds([]);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-[#1a2d25] text-slate-700 dark:text-[#a3b8cc] hover:bg-slate-300 dark:hover:bg-[#253e33] transition font-bold text-[10px] cursor-pointer"
+                >
+                  Thoát
+                </button>
+              </div>
             </motion.div>
           )}
 
@@ -1310,31 +1491,67 @@ export default function ModelGalleryTab({
                       : 'text-[8.5px]';
 
                 const badgeSpacing = gridCols >= 6 ? 'top-1 left-1 gap-0.5' : 'top-2 left-2 gap-1';
+                const isSelected = selectedSampleIds.includes(sample.id);
 
                 return (
                   <motion.div
                     key={sample.id}
                     layoutId={`sample-card-${sample.id}`}
-                    onClick={() => setSelectedSample(sample)}
-                    className="group bg-white dark:bg-[#0c1310] rounded-2xl overflow-hidden border border-slate-200/75 dark:border-[#1c2d27]/70 shadow-xs hover:shadow-lg hover:scale-103 hover:border-teal-500/40 dark:hover:border-emerald-500/40 transition-all duration-300 cursor-pointer flex flex-col relative w-full"
+                    onClick={(e) => {
+                      if (bulkSelectMode) {
+                        e.stopPropagation();
+                        setSelectedSampleIds(prev => 
+                          prev.includes(sample.id)
+                            ? prev.filter(id => id !== sample.id)
+                            : [...prev, sample.id]
+                        );
+                      } else {
+                        setSelectedSample(sample);
+                      }
+                    }}
+                    className={`group bg-white dark:bg-[#0c1310] rounded-2xl overflow-hidden border transition-all duration-300 cursor-pointer flex flex-col relative w-full ${
+                      bulkSelectMode
+                        ? isSelected
+                          ? 'border-teal-600 dark:border-emerald-500 ring-2 ring-teal-500/20 dark:ring-emerald-500/20 scale-102 shadow-md'
+                          : 'border-slate-200/75 dark:border-[#1c2d27]/70 opacity-80 hover:opacity-100 hover:border-slate-350 dark:hover:border-[#1c2d27] hover:scale-101'
+                        : 'border-slate-200/75 dark:border-[#1c2d27]/70 shadow-xs hover:shadow-lg hover:scale-103 hover:border-teal-500/40 dark:hover:border-emerald-500/40'
+                    }`}
                   >
-                    {/* B2 Cloud badge flag or Quick Edit flag */}
+                    {/* B2 Cloud badge flag or Quick Edit flag or Bulk Select checkbox */}
                     <div className={`absolute z-10 flex flex-col items-start ${badgeSpacing}`}>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider text-white shadow-xs ${
-                        isB2 ? 'bg-teal-600 dark:bg-emerald-600' : 'bg-slate-500/85'
-                      }`}>
-                        {isB2 ? 'B2' : 'Offline'}
-                      </span>
-                      {quickEditEnabled && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider bg-amber-500 text-white shadow-xs flex items-center gap-0.5">
-                          <Edit2 className="w-1.5 h-1.5 animate-pulse" />
-                          Sửa
-                        </span>
+                      {bulkSelectMode ? (
+                        <div 
+                          className={`p-1 rounded-xl border bg-white dark:bg-slate-900 shadow-md transition-all duration-200 ${
+                            isSelected 
+                              ? 'border-teal-500 text-teal-600 dark:border-emerald-500 dark:text-emerald-500 bg-teal-50 dark:bg-emerald-950/20 scale-110' 
+                              : 'border-slate-250 dark:border-[#1c2d27] text-slate-400 hover:scale-110'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <SquareCheck className="w-4 h-4 font-black" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider text-white shadow-xs ${
+                            isB2 ? 'bg-teal-600 dark:bg-emerald-600' : 'bg-slate-500/85'
+                          }`}>
+                            {isB2 ? 'B2' : 'Offline'}
+                          </span>
+                          {quickEditEnabled && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider bg-amber-500 text-white shadow-xs flex items-center gap-0.5">
+                              <Edit2 className="w-1.5 h-1.5 animate-pulse" />
+                              Sửa
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
 
                     {/* Quick Edit Action Buttons (Top-Right on card) */}
-                    {quickEditEnabled && (
+                    {quickEditEnabled && !bulkSelectMode && (
                       <div className={`absolute z-20 flex gap-1 bg-white/95 dark:bg-slate-900/95 p-0.5 rounded-lg shadow-md border border-amber-500/30 ${gridCols >= 6 ? 'top-1 right-1' : 'top-2 right-2'}`}>
                         <button
                           title="Sửa mẫu thiết kế"
@@ -1368,16 +1585,15 @@ export default function ModelGalleryTab({
                         : 'h-auto'
                     }`}>
                       {imgSource ? (
-                        <img 
+                        <ModelImage 
                           src={imgSource} 
                           alt={sample.modelName} 
-                          referrerPolicy="no-referrer"
+                          layout={galleryLayout}
                           className={`w-full transition-transform duration-300 group-hover:scale-106 ${
                             galleryLayout === 'natural' 
                               ? 'h-auto max-h-[350px] object-cover' 
                               : 'h-full object-cover'
                           }`}
-                          loading="lazy"
                         />
                       ) : (
                         <div className="text-slate-350 dark:text-slate-600 text-center flex flex-col items-center p-4">
