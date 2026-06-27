@@ -45,22 +45,26 @@ interface B2UploadUrlResponse {
  * Get API base URL depending on execution environment (Web vs Android APK)
  */
 function getApiBaseUrl(): string {
-  // Check if a custom API Server URL is configured (e.g. from the settings tab)
+  const isCapacitor = typeof window !== 'undefined' && (
+    (window as any).Capacitor || 
+    window.location.protocol === 'capacitor:' ||
+    // If it's localhost but NOT port 3000, it's likely a native webview container or mobile frame
+    (window.location.hostname === 'localhost' && window.location.port !== '3000')
+  );
+
+  // For standard web environments (browsers), we should ALWAYS use relative paths so that it queries
+  // the exact same server hosting the frontend. This avoids CORS, SSL, and stale URL issues entirely.
+  if (!isCapacitor) {
+    return '';
+  }
+
+  // Check if a custom API Server URL is configured (specifically for the Android APK)
   const configuredUrl = localStorage.getItem('xuongan_api_server_url');
   if (configuredUrl) {
     return configuredUrl.trim().replace(/\/$/, '');
   }
-
-  const origin = window.location.origin;
   
-  // If we are on standard web dev (localhost:3000) or Cloud Run (run.app), we can use relative path
-  if (origin.includes('localhost:3000') || origin.includes('run.app')) {
-    return '';
-  }
-  
-  // Inside the Android APK (capacitor://localhost, https://localhost, file://, etc.)
-  // We default to the development server because it's actively updated and running during testing,
-  // but they can always change or configure it inside the App!
+  // Default fallback for APK connecting back to development workspace server
   return 'https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app';
 }
 

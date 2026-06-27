@@ -27,6 +27,8 @@ service cloud.firestore {
              colName == 'material_recipes' || 
              colName == 'production_batches' || 
              colName == 'material_reimports' || 
+             colName == 'material_logs' || 
+             colName == 'model_samples' || 
              colName == 'login_notifications' || 
              colName == 'settings' || 
              colName == 'tasks' || 

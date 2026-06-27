@@ -252,6 +252,44 @@
         "allowedTabs": { "type": "array" }
       },
       "required": ["id", "email", "role", "createdAt", "active"]
+    },
+    "MaterialLog": {
+      "title": "MaterialLog",
+      "description": "Nhật ký xuất nhập kho nguyên vật liệu",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "materialId": { "type": "string" },
+        "materialName": { "type": "string" },
+        "type": { "type": "string" },
+        "quantity": { "type": "number" },
+        "balanceBefore": { "type": "number" },
+        "balanceAfter": { "type": "number" },
+        "operator": { "type": "string" },
+        "date": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["id", "materialId", "type", "quantity"]
+    },
+    "ModelSample": {
+      "title": "ModelSample",
+      "description": "Ảnh mẫu sản phẩm của xưởng",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "modelName": { "type": "string" },
+        "folder": { "type": "string" },
+        "b2Url": { "type": "string" },
+        "b2FileId": { "type": "string" },
+        "b2FilePath": { "type": "string" },
+        "localBase64": { "type": "string" },
+        "price": { "type": "number" },
+        "material": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["id", "modelName", "folder", "createdAt"]
     }
   },
   "firestore": {
@@ -322,6 +360,14 @@
     "user_profiles/{id}": {
       "schema": "UserProfile",
       "description": "Danh sách tài khoản phụ và phân quyền thành viên"
+    },
+    "material_logs/{id}": {
+      "schema": "MaterialLog",
+      "description": "Nhật ký biến động kho thô"
+    },
+    "model_samples/{id}": {
+      "schema": "ModelSample",
+      "description": "Kho lưu trữ mẫu và định dạng ảnh thô"
     }
   }
 }
