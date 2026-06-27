@@ -234,8 +234,27 @@ export interface AppUpdateInfo {
   critical: boolean;
   changelog: string[];
   apkUrl: string;
+}export interface B2Config {
+  applicationKeyId: string;
+  applicationKey: string;
+  bucketId: string;
+  bucketName: string;
+  configured: boolean;
 }
 
-
+export interface ModelSample {
+  id: string;
+  modelName: string;
+  folder: string; // Thư mục phân loại (e.g., "Mẫu váy", "Áo thun")
+  b2Url?: string; // Backblaze B2 public URL
+  b2FileId?: string; // B2 File ID (for deletion)
+  b2FilePath?: string; // B2 original file path
+  localBase64?: string; // Base64 backup for offline or B2 fallback
+  price?: number; // Giá mẫu dự kiến
+  material?: string; // Chất liệu / Phụ liệu
+  description?: string; // Ghi chú mô tả mẫu
+  createdAt: number;
+  updatedAt?: number;
+}
 
 

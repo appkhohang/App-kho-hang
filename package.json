@@ -1,16 +1,17 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "1.0.38",
+  "version": "1.0.63",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "node scripts/bump-version.js && vite build",
+    "dev": "tsx server.ts",
+    "build": "node scripts/bump-version.js && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "bump-version": "node scripts/bump-version.js",
     "build:mobile": "node scripts/bump-version.js && VITE_BASE_URL=./ vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "start": "node dist/server.cjs",
     "capgo-push": "node scripts/bump-version.js && npm run build && npx @capgo/cli bundle upload -c production com.xuongan.quanlykho"
   },
   "dependencies": {

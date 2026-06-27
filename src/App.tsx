@@ -16,17 +16,20 @@ import ReportTab from './components/ReportTab';
 import SettingsTab from './components/SettingsTab';
 import ProfitEstimatorTab from './components/ProfitEstimatorTab';
 import GalleryTab from './components/GalleryTab';
+import ModelGalleryTab from './components/ModelGalleryTab';
 import InvoicesTab from './components/InvoicesTab';
 import ReportInventoryDetail from './components/ReportInventoryDetail';
 import FloatingStats from './components/FloatingStats';
 import CameraCapture from './components/CameraCapture';
-import { CURRENT_VERSION, ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo } from './types';
+import { CURRENT_VERSION, ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo, ModelSample } from './types';
 import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage, DatabasePackage } from './utils/storage';
 import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncService';
 import { useRealtimeSync } from './utils/realtimeSync';
-import { auth, db } from './utils/firebase';
+import { auth, db, getNamespaceCollection } from './utils/firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { B2Service } from './utils/b2Service';
+import { compressBase64Image } from './utils/imageUtils';
 import { formatVietnameseDate, getCurrentDateStr, getVietnameseWeekKey } from './utils/dateUtils';
 import { useAndroidBack } from './hooks/useAndroidBack';
 import { checkAppUpdate, isNewerVersion } from './utils/updateService';
@@ -106,6 +109,15 @@ export default function App() {
     return localStorage.getItem('xuongan_fast_edit_mode') === 'true';
   });
   const [isQuickPricingModalOpen, setIsQuickPricingModalOpen] = useState<boolean>(false);
+  const [isQuickAddModelOpen, setIsQuickAddModelOpen] = useState<boolean>(false);
+  const [quickModelName, setQuickModelName] = useState<string>('');
+  const [quickModelPhoto, setQuickModelPhoto] = useState<string>('');
+  const [quickModelFolder, setQuickModelFolder] = useState<string>('Chưa phân loại');
+  const [quickModelPrice, setQuickModelPrice] = useState<string>('');
+  const [quickModelMaterial, setQuickModelMaterial] = useState<string>('');
+  const [quickModelDescription, setQuickModelDescription] = useState<string>('');
+  const [quickModelUploadProgress, setQuickModelUploadProgress] = useState<'idle' | 'compressing' | 'authorizing' | 'uploading' | 'saving' | 'success' | 'error'>('idle');
+  const [quickModelStatusMsg, setQuickModelStatusMsg] = useState<string>('');
   const [quickDefaultLabor, setQuickDefaultLabor] = useState<number>(() => {
     return Number(localStorage.getItem('xuongan_default_labor_cost') || '15000');
   });
@@ -179,6 +191,53 @@ export default function App() {
       exportFormat: saved.exportFormat || 'xlsx'
     };
   });
+
+  const [latestModelSample, setLatestModelSample] = useState<ModelSample | null>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_model_samples');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const valid = parsed.filter(Boolean);
+          if (valid.length > 0) return valid[0];
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading xuongan_model_samples from local storage:', e);
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (!authState.isAuthenticated) return;
+    const collName = getNamespaceCollection('model_samples');
+    const q = query(
+      collection(db, collName),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const docObj = snapshot.docs[0];
+        setLatestModelSample({ id: docObj.id, ...docObj.data() } as ModelSample);
+      } else {
+        setLatestModelSample(null);
+      }
+    }, (error) => {
+      console.warn('Firestore subscription error for latest model_sample:', error);
+      try {
+        const saved = localStorage.getItem('xuongan_model_samples');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const valid = parsed.filter(Boolean);
+            if (valid.length > 0) setLatestModelSample(valid[0]);
+          }
+        }
+      } catch {}
+    });
+    return () => unsubscribe();
+  }, [authState.isAuthenticated]);
 
   // Production Management States
   const [operationBreakdowns, setOperationBreakdowns] = useState<ModelOperationBreakdown[]>(() => getSavedArray("xuongan_operation_breakdowns", []));
@@ -287,7 +346,8 @@ export default function App() {
 
 
   // Active Tab state
-  const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery' | 'inventory' | 'profit_estimator'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery' | 'inventory' | 'profit_estimator' | 'model_gallery'>('home');
+  const [isModelGalleryQuickEdit, setIsModelGalleryQuickEdit] = useState(false);
   
   // States for Notifications multi-select and account filtering
   const [notifAccountFilter, setNotifAccountFilter] = useState<string>('all');
@@ -309,15 +369,22 @@ export default function App() {
   const [enabledHomeFeatures, setEnabledHomeFeatures] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('xuongan_enabled_home_features');
-      return saved ? JSON.parse(saved) : ['import', 'invoices', 'report', 'production', 'materials', 'gallery', 'inventory', 'profit_estimator'];
+      return saved ? JSON.parse(saved) : ['import', 'invoices', 'report', 'production', 'materials', 'gallery', 'inventory', 'profit_estimator', 'model_gallery'];
     } catch (e) {
-      return ['import', 'invoices', 'report', 'production', 'materials', 'gallery', 'inventory', 'profit_estimator'];
+      return ['import', 'invoices', 'report', 'production', 'materials', 'gallery', 'inventory', 'profit_estimator', 'model_gallery'];
     }
   });
 
   useEffect(() => {
     localStorage.setItem('xuongan_enabled_home_features', JSON.stringify(enabledHomeFeatures));
   }, [enabledHomeFeatures]);
+
+  // Ensure model_gallery is auto-migrated/added to home features on launch
+  useEffect(() => {
+    if (enabledHomeFeatures && !enabledHomeFeatures.includes('model_gallery')) {
+      setEnabledHomeFeatures(prev => [...prev, 'model_gallery']);
+    }
+  }, []);
 
   // Custom Home Categories state
   interface CustomHomeFeature {
@@ -587,7 +654,7 @@ export default function App() {
   const getUserRole = (): 'admin' | 'staff' | 'viewer' => {
     const email = authState.email?.toLowerCase().trim();
     if (!email) return 'viewer';
-    if (email === 'vukuli.123@gmail.com' || email === 'vukuli123@gmail.com') {
+    if (email === 'vukuli.123@gmail.com' || email === 'vukuli123@gmail.com' || email === 'xuongan@an.com') {
       return 'admin';
     }
     const profile = userProfiles.find(p => p.email?.toLowerCase().trim() === email);
@@ -601,24 +668,24 @@ export default function App() {
 
   const getUserAllowedTabs = (): string[] => {
     const email = authState.email?.toLowerCase().trim();
-    const allTabs = ['home', 'import', 'invoices', 'production', 'inventory', 'report', 'settings', 'gallery', 'profit_estimator'];
+    const allTabs = ['home', 'import', 'invoices', 'production', 'inventory', 'report', 'settings', 'gallery', 'profit_estimator', 'model_gallery'];
     if (!email) {
       return ['home'];
     }
-    if (email === 'vukuli.123@gmail.com' || email === 'vukuli123@gmail.com') {
+    if (email === 'vukuli.123@gmail.com' || email === 'vukuli123@gmail.com' || email === 'xuongan@an.com') {
       return allTabs;
     }
     const profile = userProfiles.find(p => p.email?.toLowerCase().trim() === email);
     if (profile) {
+      if (profile.role === 'admin') {
+        return allTabs;
+      }
       if (profile.allowedTabs && Array.isArray(profile.allowedTabs) && profile.allowedTabs.length > 0) {
         const tabs = [...profile.allowedTabs];
         if (!tabs.includes('home')) {
           tabs.unshift('home');
         }
         return tabs;
-      }
-      if (profile.role === 'admin') {
-        return allTabs;
       }
       return ['home']; // fallback for staff/viewers without assigned tabs
     }
@@ -1465,6 +1532,167 @@ export default function App() {
       alert("Đồng bộ hóa khôi phục Cơ sở dữ liệu xưởng thành công!");
     } else {
       alert("Lỗi! File khôi phục không đúng định dạng chuẩn của Xưởng An.");
+    }
+  };
+
+  const handleQuickPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setQuickModelPhoto(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleQuickSaveModel = async () => {
+    if (!quickModelName.trim()) {
+      alert('Vui lòng nhập Mã/Tên mẫu.');
+      return;
+    }
+    if (!quickModelPhoto) {
+      alert('Vui lòng chụp ảnh hoặc tải lên 1 ảnh mẫu.');
+      return;
+    }
+
+    try {
+      const sampleId = 'sample_' + Date.now();
+      const isNewUploadNeeded = quickModelPhoto.startsWith('data:image');
+
+      let finalB2Url = '';
+      let finalB2FileId = '';
+      let finalB2FilePath = '';
+      let finalLocalBase64 = quickModelPhoto;
+
+      // Load B2 configuration from localStorage
+      let b2Config = {
+        applicationKeyId: '005251130ea50380000000001',
+        applicationKey: 'K005iZwTYwOzUWgGhTE4ZJtaJdPYjI0',
+        bucketId: '02a5a151e3e00e7a95f00318',
+        bucketName: 'anh-mau-xuong-an',
+        configured: true
+      };
+      try {
+        const savedB2 = localStorage.getItem('xuongan_b2_config');
+        if (savedB2) {
+          const parsed = JSON.parse(savedB2);
+          b2Config = {
+            applicationKeyId: parsed.applicationKeyId || b2Config.applicationKeyId,
+            applicationKey: parsed.applicationKey || b2Config.applicationKey,
+            bucketId: parsed.bucketId || b2Config.bucketId,
+            bucketName: parsed.bucketName || b2Config.bucketName,
+            configured: parsed.configured !== undefined ? parsed.configured : b2Config.configured
+          };
+        }
+      } catch (err) {
+        console.warn('Error reading B2 config from localStorage:', err);
+      }
+
+      // 1. Compression and Upload to B2 if configured and image is new
+      if (isNewUploadNeeded) {
+        setQuickModelUploadProgress('compressing');
+        setQuickModelStatusMsg('Đang tối ưu dung lượng ảnh mẫu...');
+        
+        // Compress image to around 1000px max dimensions for efficient storage
+        const compressedBase64 = await compressBase64Image(quickModelPhoto, 1000, 1000, 0.75);
+        finalLocalBase64 = compressedBase64;
+
+        if (b2Config.configured && b2Config.applicationKeyId && b2Config.applicationKey) {
+          setQuickModelUploadProgress('authorizing');
+          setQuickModelStatusMsg('Đang xác thực với Backblaze B2...');
+          
+          try {
+            await B2Service.authorize(b2Config);
+            
+            setQuickModelUploadProgress('uploading');
+            setQuickModelStatusMsg('Đang tải ảnh trực tiếp lên Backblaze B2 Cloud...');
+            
+            // Upload to B2
+            const uploadResult = await B2Service.uploadFile(
+              b2Config,
+              compressedBase64,
+              `${quickModelName.trim()}.jpg`,
+              'image/jpeg'
+            );
+
+            finalB2Url = uploadResult.fileUrl;
+            finalB2FileId = uploadResult.fileId;
+            finalB2FilePath = uploadResult.filePath;
+            
+            // Try to store a 150px lightweight thumbnail in localBase64 for offline loads
+            try {
+              finalLocalBase64 = await compressBase64Image(compressedBase64, 150, 150, 0.5);
+            } catch {
+              // Keep compressedBase64 if thumbnailing fails
+            }
+          } catch (uploadErr: any) {
+            console.error('B2 Upload failure, falling back to database-only storage:', uploadErr);
+            alert(`⚠️ Không thể tải lên B2: ${uploadErr.message}. Ảnh mẫu sẽ tạm thời được lưu trữ ngoại tuyến trên thiết bị.`);
+            finalB2Url = '';
+            finalB2FileId = '';
+            finalB2FilePath = '';
+          }
+        }
+      }
+
+      // 2. Save metadata to Firestore and Local Storage
+      setQuickModelUploadProgress('saving');
+      setQuickModelStatusMsg('Đang lưu thông tin mẫu thiết kế...');
+
+      const sampleObj: ModelSample = {
+        id: sampleId,
+        modelName: quickModelName.trim(),
+        folder: quickModelFolder,
+        price: quickModelPrice ? Number(quickModelPrice) : undefined,
+        material: quickModelMaterial.trim() || undefined,
+        description: quickModelDescription.trim() || undefined,
+        b2Url: finalB2Url || undefined,
+        b2FileId: finalB2FileId || undefined,
+        b2FilePath: finalB2FilePath || undefined,
+        localBase64: finalLocalBase64,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      // Write to Firestore namespace
+      const cleanSampleObj = Object.fromEntries(
+        Object.entries(sampleObj).filter(([_, v]) => v !== undefined)
+      );
+      const docRef = doc(db, getNamespaceCollection('model_samples'), sampleId);
+      await setDoc(docRef, cleanSampleObj);
+
+      // Add to local state of model samples so it updates instantly
+      try {
+        const saved = localStorage.getItem('xuongan_model_samples');
+        const currentSamples = saved ? JSON.parse(saved) : [];
+        const filtered = currentSamples.filter((s: any) => s && s.id !== sampleId);
+        const updatedSamples = [sampleObj, ...filtered];
+        localStorage.setItem('xuongan_model_samples', JSON.stringify(updatedSamples));
+      } catch (err) {
+        console.warn('Error saving to local storage:', err);
+      }
+
+      // Success
+      setQuickModelUploadProgress('success');
+      setQuickModelStatusMsg('Đã lưu mẫu thành công!');
+      
+      setTimeout(() => {
+        setIsQuickAddModelOpen(false);
+        setQuickModelName('');
+        setQuickModelPhoto('');
+        setQuickModelFolder('Chưa phân loại');
+        setQuickModelPrice('');
+        setQuickModelMaterial('');
+        setQuickModelDescription('');
+        setQuickModelUploadProgress('idle');
+        setQuickModelStatusMsg('');
+      }, 1000);
+
+    } catch (err: any) {
+      console.error('Quick Add Model error:', err);
+      setQuickModelUploadProgress('error');
+      setQuickModelStatusMsg(`Lỗi khi lưu: ${err.message || err}`);
     }
   };
 
@@ -2356,6 +2584,109 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* Card 7: Kho mẫu thiết kế Backblaze B2 */}
+          {allowedTabs.includes('model_gallery') && enabledHomeFeatures.includes('model_gallery') && (
+            <motion.div 
+              id="home_card_model_gallery"
+              onClick={() => setActiveTab('model_gallery')}
+              whileHover={{ 
+                scale: 1.015,
+                y: -4,
+                boxShadow: "0 20px 25px -5px rgba(20, 184, 166, 0.15), 0 8px 10px -6px rgba(20, 184, 166, 0.15)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className={`group relative bg-white dark:bg-[#0c1310] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-[#1c2d27]/60 hover:border-teal-500/50 dark:hover:border-[#10b981]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[175px] shadow-xs hover:shadow-lg hover:shadow-teal-500/5 col-span-1`}
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="w-11 h-11 rounded-xl bg-teal-600 dark:bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Image className="w-5 h-5 text-white font-black" />
+                  </div>
+                  <div className="truncate min-w-0 pr-1 text-left">
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight flex items-center gap-1">
+                      Kho hình mẫu
+                    </h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">
+                      Quản lý thiết kế, xem ảnh rập B2 Cloud
+                    </p>
+                  </div>
+                </div>
+                <Image className="w-4 h-4 text-teal-500 dark:text-emerald-450 group-hover:scale-125 transition-transform shrink-0 mt-1" />
+              </div>
+
+              {/* Mobile/Tablet mini description line */}
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5 text-left">
+                Kho hình mẫu lưu trữ B2 Cloud
+              </p>
+
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
+
+              <div className="flex justify-between items-end">
+                <div className="text-left flex items-center gap-2.5 min-w-0 mr-2">
+                  {latestModelSample && (
+                    <div className="relative shrink-0 w-10 h-10 rounded-lg overflow-hidden border border-slate-150 dark:border-[#1c2d27]/80 shadow-xs">
+                      <img 
+                        src={latestModelSample.b2Url || latestModelSample.localBase64 || ''} 
+                        alt={latestModelSample.modelName} 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-teal-600 dark:text-emerald-400 truncate">
+                      {latestModelSample ? `Mẫu: ${latestModelSample.modelName}` : 'Xem & quản lý kho rập'}
+                    </p>
+                    <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                      {latestModelSample ? 'Ảnh rập mới nhất' : 'Lưu Backblaze B2 Cloud'}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 select-none">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsQuickAddModelOpen(true);
+                    }}
+                    className="flex items-center gap-1 p-2 sm:px-2.5 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md transition-all duration-300 text-[9px] md:text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                    title="Tạo mẫu mới"
+                  >
+                    <Plus className="w-3.5 h-3.5 font-bold" />
+                    <span className="hidden sm:inline">Tạo mẫu</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsModelGalleryQuickEdit(true);
+                      setActiveTab('model_gallery');
+                    }}
+                    className="flex items-center gap-1 p-2 sm:px-2.5 sm:py-1.5 bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white rounded-xl shadow-md transition-all duration-300 text-[9px] md:text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                    title="Chỉnh sửa nhanh tất cả các mẫu thiết kế"
+                  >
+                    <Edit className="w-3.5 h-3.5 font-bold" />
+                    <span className="hidden sm:inline">Sửa nhanh</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsModelGalleryQuickEdit(false);
+                      setActiveTab('model_gallery');
+                    }}
+                    className="flex items-center gap-1 sm:gap-1.5 p-2 sm:px-3 sm:py-1.5 bg-teal-50 dark:bg-emerald-500/10 text-teal-600 dark:text-emerald-400 hover:bg-teal-100 dark:hover:bg-emerald-500/20 rounded-xl border border-teal-100 dark:border-emerald-500/25 transition-all duration-300 text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider cursor-pointer"
+                    title="Mở kho mẫu thiết kế"
+                  >
+                    <Image className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                    <span className="hidden sm:inline">Mở kho</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* Custom Feature Categories dynamically created by user */}
           {customHomeFeatures.map((feat) => {
             const isChecked = enabledHomeFeatures.includes(feat.id);
@@ -2457,6 +2788,8 @@ export default function App() {
           })}
         </div>
 
+
+
         {/* If no feature is enabled, show an instructive alert card */}
         {enabledHomeFeatures.length === 0 && (
           <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center space-y-4 shadow-inner">
@@ -2519,6 +2852,23 @@ export default function App() {
                   >
                     <FileText className="w-4 h-4 text-white" />
                     <span>Viết bill hóa đơn</span>
+                  </motion.button>
+                )}
+
+                {/* Option 3: Thêm ảnh mẫu */}
+                {allowedTabs.includes('model_gallery') && (
+                  <motion.button
+                    initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 15, scale: 0.9 }}
+                    onClick={() => {
+                      setIsHomeFabOpen(false);
+                      setIsQuickAddModelOpen(true);
+                    }}
+                    className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-black shadow-2xl border border-teal-500/20 active:scale-95 transition cursor-pointer"
+                  >
+                    <Image className="w-4 h-4 text-white animate-pulse" />
+                    <span>Thêm ảnh mẫu</span>
                   </motion.button>
                 )}
               </div>
@@ -2720,7 +3070,7 @@ export default function App() {
                     <span>Cài đặt</span>
                   </button>
                 )}
-                {allowedTabs.includes('gallery') && (
+                 {allowedTabs.includes('gallery') && (
                   <button
                     id="tab_gallery_btn"
                     onClick={() => setActiveTab('gallery')}
@@ -2728,6 +3078,16 @@ export default function App() {
                   >
                     <Image className="w-3.5 h-3.5 text-indigo-505" />
                     <span>Thư viện ảnh</span>
+                  </button>
+                )}
+                {allowedTabs.includes('model_gallery') && (
+                  <button
+                    id="tab_model_gallery_btn"
+                    onClick={() => setActiveTab('model_gallery')}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'model_gallery' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                  >
+                    <Image className="w-3.5 h-3.5 text-teal-500 animate-pulse" />
+                    <span>Kho hình mẫu</span>
                   </button>
                 )}
               </nav>
@@ -3037,6 +3397,22 @@ export default function App() {
                            </button>
                          )}
 
+                         {/* Tab Model Gallery button link */}
+                         {allowedTabs.includes('model_gallery') && (
+                           <button
+                             onClick={() => {
+                               setActiveTab('model_gallery');
+                               setIsMobileMenuOpen(false);
+                             }}
+                             className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === 'model_gallery' ? 'bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300' : 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold'}`}
+                           >
+                             <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === 'model_gallery' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400'}`}>
+                               <Image className="w-4 h-4 text-teal-500 animate-pulse" />
+                             </div>
+                             <span>{t('Kho hình mẫu', 'Model Catalog')}</span>
+                           </button>
+                         )}
+
                          {/* Tab Gallery button link */}
                          {allowedTabs.includes('gallery') && (
                            <button
@@ -3244,9 +3620,10 @@ export default function App() {
                                 { id: 'profit_estimator', label: '6. Giá thành & lợi nhuận', desc: 'Dự phóng chi phí & biên lãi sỉ', color: 'text-indigo-500' },
                                 { id: 'materials', label: '7. Định mức', desc: 'Định mức nhiên liệu vật tư', color: 'text-teal-500' },
                                 { id: 'gallery', label: '8. Thư viện ảnh', desc: 'Hình ảnh đính kèm sản phẩm', color: 'text-indigo-500' },
+                                { id: 'model_gallery', label: '9. Kho hình mẫu', desc: 'Ảnh rập phân loại lưu trên Backblaze B2', color: 'text-teal-500' },
                                 ...customHomeFeatures.map((cf, index) => ({
                                   id: cf.id,
-                                  label: `${9 + index}. ${cf.label}`,
+                                  label: `${10 + index}. ${cf.label}`,
                                   desc: cf.desc,
                                   color: cf.color || 'text-indigo-500',
                                   isCustom: true
@@ -3818,6 +4195,22 @@ export default function App() {
                     customers={customers}
                     setActiveTab={setActiveTab}
                     resolvedTheme={resolvedTheme}
+                  />
+                </Suspense>
+              </motion.div>
+            </div>
+
+            <div className={activeTab === 'model_gallery' ? '' : 'hidden'}>
+              <motion.div
+                animate={activeTab === 'model_gallery' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <ModelGalleryTab
+                    resolvedTheme={resolvedTheme}
+                    isQuickEditMode={isModelGalleryQuickEdit}
+                    onChangeQuickEditMode={setIsModelGalleryQuickEdit}
                   />
                 </Suspense>
               </motion.div>
@@ -4428,6 +4821,209 @@ export default function App() {
                 </button>
               </div>
             </motion.form>
+          </div>
+        )}
+
+        {isQuickAddModelOpen && (
+          <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fade-in">
+            <div className="absolute inset-0" onClick={() => { if (quickModelUploadProgress === 'idle') setIsQuickAddModelOpen(false); }} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 10 }}
+              className={`max-w-md w-full p-6 shadow-2xl rounded-3xl z-20 space-y-4 border text-left max-h-[90vh] overflow-y-auto ${
+                resolvedTheme === 'dark' 
+                  ? 'bg-[#101424] border-slate-850 text-white shadow-indigo-950/30' 
+                  : 'bg-white border-slate-150 text-slate-800 shadow-slate-200'
+              }`}
+            >
+              <div className={`pb-3 flex justify-between items-center border-b ${resolvedTheme === 'dark' ? 'border-slate-850' : 'border-slate-150'}`}>
+                <div>
+                  <h3 className="text-sm font-black tracking-wider uppercase font-sans flex items-center gap-1.5 text-teal-600 dark:text-teal-400">
+                    ✨ THÊM ẢNH MẪU
+                  </h3>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-400 mt-0.5 leading-snug">
+                    Lưu trữ & phân loại mẫu rập thiết kế trực tiếp từ trang chủ
+                  </p>
+                </div>
+                {quickModelUploadProgress === 'idle' && (
+                  <button 
+                    type="button" 
+                    onClick={() => setIsQuickAddModelOpen(false)} 
+                    className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition p-1 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+
+              {quickModelUploadProgress !== 'idle' ? (
+                <div className="py-8 flex flex-col items-center justify-center text-center space-y-4">
+                  {quickModelUploadProgress === 'success' ? (
+                    <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center text-3xl animate-bounce">
+                      ✓
+                    </div>
+                  ) : quickModelUploadProgress === 'error' ? (
+                    <div className="w-16 h-16 bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center text-3xl">
+                      ✗
+                    </div>
+                  ) : (
+                    <div className="relative w-14 h-14">
+                      <span className="absolute inset-0 border-4 border-teal-500/20 rounded-full" />
+                      <span className="absolute inset-0 border-4 border-t-teal-500 rounded-full animate-spin" />
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                      {quickModelUploadProgress === 'compressing' && 'Tối ưu ảnh'}
+                      {quickModelUploadProgress === 'authorizing' && 'Kết nối B2'}
+                      {quickModelUploadProgress === 'uploading' && 'Đang tải lên'}
+                      {quickModelUploadProgress === 'saving' && 'Lưu cơ sở dữ liệu'}
+                      {quickModelUploadProgress === 'success' && 'Hoàn thành'}
+                      {quickModelUploadProgress === 'error' && 'Đã xảy ra lỗi'}
+                    </p>
+                    <p className="text-[10.5px] text-slate-500 dark:text-slate-450 max-w-xs leading-relaxed">
+                      {quickModelStatusMsg}
+                    </p>
+                  </div>
+                  {quickModelUploadProgress === 'error' && (
+                    <button
+                      onClick={() => setQuickModelUploadProgress('idle')}
+                      className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition cursor-pointer"
+                    >
+                      Thử lại
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4 text-xs">
+                  {/* Model Name Input */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-450 mb-1.5 tracking-wider">
+                      Tên mẫu thiết kế *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ví dụ: AT-204, Đầm voan cổ vuông, v.v."
+                      value={quickModelName}
+                      onChange={e => setQuickModelName(e.target.value)}
+                      className={`w-full border rounded-2xl py-2.5 px-3.5 outline-none focus:border-teal-500 transition font-bold text-xs ${
+                        resolvedTheme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-slate-50 border-slate-200'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Classification folder */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-450 mb-1.5 tracking-wider">
+                      Thư mục phân loại
+                    </label>
+                    <select
+                      value={quickModelFolder}
+                      onChange={e => setQuickModelFolder(e.target.value)}
+                      className={`w-full border rounded-2xl py-2.5 px-3.5 outline-none focus:border-teal-500 transition font-bold text-xs cursor-pointer ${
+                        resolvedTheme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      {['Áo thun', 'Đầm váy', 'Áo khoác', 'Quần', 'Đồ bộ', 'Chưa phân loại'].map((f) => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Price */}
+                    <div>
+                      <label className="block text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-450 mb-1.5 tracking-wider">
+                        Đơn giá (VNĐ)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="Không bắt buộc"
+                        value={quickModelPrice}
+                        onChange={e => setQuickModelPrice(e.target.value)}
+                        className={`w-full border rounded-2xl py-2.5 px-3.5 outline-none focus:border-teal-500 transition font-mono font-bold text-xs ${
+                          resolvedTheme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Material */}
+                    <div>
+                      <label className="block text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-450 mb-1.5 tracking-wider">
+                        Định mức vải dệt
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="VD: Cotton 2 chiều"
+                        value={quickModelMaterial}
+                        onChange={e => setQuickModelMaterial(e.target.value)}
+                        className={`w-full border rounded-2xl py-2.5 px-3.5 outline-none focus:border-teal-500 transition font-bold text-xs ${
+                          resolvedTheme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Photo area */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-extrabold text-slate-500 dark:text-slate-450 mb-1.5 tracking-wider">
+                      Thêm ảnh từ thư viện *
+                    </label>
+
+                    {quickModelPhoto ? (
+                      <div className="relative group rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 h-44 bg-slate-100 dark:bg-slate-950 flex items-center justify-center">
+                        <img src={quickModelPhoto} alt="Quick preview" className="h-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => setQuickModelPhoto('')}
+                          className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-md cursor-pointer transition active:scale-90"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-400 rounded-2xl h-44 cursor-pointer transition bg-slate-50/50 dark:bg-slate-900/20 select-none group">
+                        <Image className="w-8 h-8 text-slate-400 group-hover:text-teal-500 group-hover:scale-110 transition duration-300" />
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 mt-2">Thêm ảnh từ thư viện hoặc chụp ảnh</span>
+                        <span className="text-[9.5px] text-slate-400 dark:text-slate-500 mt-1">Hỗ trợ định dạng ảnh rập PNG, JPG, JPEG</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleQuickPhotoChange}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsQuickAddModelOpen(false)}
+                      className="w-1/2 py-2.5 border border-slate-200 text-slate-500 dark:text-slate-400 dark:border-slate-850 rounded-2xl font-bold cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleQuickSaveModel}
+                      disabled={!quickModelName.trim() || !quickModelPhoto}
+                      className={`w-1/2 text-white py-2.5 rounded-2xl font-bold transition active:scale-[0.98] cursor-pointer shadow-md flex items-center justify-center gap-1.5 ${
+                        (!quickModelName.trim() || !quickModelPhoto)
+                          ? 'bg-slate-300 dark:bg-slate-800 cursor-not-allowed text-slate-500 dark:text-slate-500'
+                          : 'bg-teal-600 hover:bg-teal-700 shadow-teal-550/20'
+                      }`}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Lưu Mẫu Ảnh
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           </div>
         )}
 
