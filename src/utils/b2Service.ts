@@ -45,15 +45,6 @@ interface B2UploadUrlResponse {
  * Get API base URL depending on execution environment (Web vs Android APK)
  */
 export function getApiBaseUrl(): string {
-  // Check if a custom API Server URL is configured (specifically set by user in Settings)
-  // If configured, we should ALWAYS honor it first (both on Web and Capacitor/mobile)
-  if (typeof window !== 'undefined') {
-    const configuredUrl = localStorage.getItem('xuongan_api_server_url');
-    if (configuredUrl) {
-      return configuredUrl.trim().replace(/\/$/, '');
-    }
-  }
-
   const isCapacitor = typeof window !== 'undefined' && (
     (window as any).Capacitor || 
     window.location.protocol === 'capacitor:' ||
@@ -65,6 +56,14 @@ export function getApiBaseUrl(): string {
   // the exact same server hosting the frontend. This avoids CORS, SSL, and stale URL issues entirely.
   if (!isCapacitor) {
     return '';
+  }
+
+  // Only if running inside Capacitor (Android/iOS native app), we check and return the configured absolute URL
+  if (typeof window !== 'undefined') {
+    const configuredUrl = localStorage.getItem('xuongan_api_server_url');
+    if (configuredUrl) {
+      return configuredUrl.trim().replace(/\/$/, '');
+    }
   }
 
   // Fallback to the synced web origin of the production/deployed application from local settings
