@@ -64,6 +64,11 @@ export default function SettingsTab({
   const [isPwdOpen, setIsPwdOpen] = useState(false);
   const [isGroupOpen, setIsGroupOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isApiServerOpen, setIsApiServerOpen] = useState(false);
+  const [isCustomFirebaseOpen, setIsCustomFirebaseOpen] = useState(false);
+  const [customFirebaseConfig, setCustomFirebaseConfig] = useState(() => {
+    return localStorage.getItem("xuongan_custom_firebase_config") || "";
+  });
   const [notifPermission, setNotifPermission] = useState<string>(() => {
     return typeof Notification !== 'undefined' ? Notification.permission : 'default';
   });
@@ -1193,11 +1198,13 @@ export default function SettingsTab({
               setIsGroupOpen(false);
               setIsUsersOpen(false);
               setIsNotifOpen(false);
+              setIsApiServerOpen(false);
+              setIsCustomFirebaseOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isThemeOpen
                 ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
             }`}
           >
             <div className={`p-2 rounded-lg shrink-0 ${isThemeOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
@@ -1225,11 +1232,13 @@ export default function SettingsTab({
               setIsGroupOpen(false);
               setIsUsersOpen(false);
               setIsNotifOpen(false);
+              setIsApiServerOpen(false);
+              setIsCustomFirebaseOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isDbOpen
                 ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
             }`}
           >
             <div className={`p-2 rounded-lg shrink-0 ${isDbOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
@@ -1257,11 +1266,13 @@ export default function SettingsTab({
               setIsGroupOpen(false);
               setIsUsersOpen(false);
               setIsNotifOpen(false);
+              setIsApiServerOpen(false);
+              setIsCustomFirebaseOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isGpsOpen
                 ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
             }`}
           >
             <div className={`p-2 rounded-lg shrink-0 ${isGpsOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
@@ -1289,11 +1300,13 @@ export default function SettingsTab({
               setIsGroupOpen(false);
               setIsUsersOpen(false);
               setIsNotifOpen(false);
+              setIsApiServerOpen(false);
+              setIsCustomFirebaseOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isUpdatesOpen
                 ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
             }`}
           >
             <div className={`p-2 rounded-lg shrink-0 ${isUpdatesOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
@@ -1321,11 +1334,13 @@ export default function SettingsTab({
               setIsUpdatesOpen(false);
               setIsUsersOpen(false);
               setIsNotifOpen(false);
+              setIsApiServerOpen(false);
+              setIsCustomFirebaseOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isGroupOpen
                 ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
             }`}
           >
             <div className={`p-2 rounded-lg shrink-0 ${isGroupOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
@@ -1353,11 +1368,13 @@ export default function SettingsTab({
               setIsUpdatesOpen(false);
               setIsGroupOpen(false);
               setIsNotifOpen(false);
+              setIsApiServerOpen(false);
+              setIsCustomFirebaseOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isUsersOpen
                 ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
             }`}
           >
             <div className={`p-2 rounded-lg shrink-0 ${isUsersOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
@@ -1374,39 +1391,75 @@ export default function SettingsTab({
             )}
           </button>
 
-          {/* Tile 6: Security Members & Roles */}
+          {/* Tile 7: API Server Configuration (Dành cho Android APK) */}
           <button
             type="button"
             onClick={() => {
-              setIsUsersOpen(!isUsersOpen);
+              setIsApiServerOpen(!isApiServerOpen);
               setIsThemeOpen(false);
               setIsDbOpen(false);
               setIsGpsOpen(false);
               setIsUpdatesOpen(false);
               setIsGroupOpen(false);
+              setIsUsersOpen(false);
               setIsNotifOpen(false);
+              setIsCustomFirebaseOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
-              isUsersOpen
-                ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+              isApiServerOpen
+                ? 'bg-indigo-550/10 dark:bg-indigo-950/20 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
             }`}
           >
-            <div className={`p-2 rounded-lg shrink-0 ${isUsersOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
-              <Users className="w-4 h-4" />
+            <div className={`p-2 rounded-lg shrink-0 ${isApiServerOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <Globe className="w-4 h-4 text-indigo-500" />
             </div>
             <div className="space-y-0.5 min-w-0">
-              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Thành viên xưởng</span>
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Máy chủ API</span>
               <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
-                {userProfiles.length || 0} thành viên
+                {apiServerUrl ? 'Cấu hình riêng' : 'Tự động (Mặc định)'}
               </span>
             </div>
-            {isUsersOpen && (
+            {isApiServerOpen && (
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
             )}
           </button>
 
-          {/* Tile 7: Notification Permissions & Bells */}
+          {/* Tile 7b: Secondary Firebase Configuration (Cấu hình Firebase thứ 2) */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsCustomFirebaseOpen(!isCustomFirebaseOpen);
+              setIsApiServerOpen(false);
+              setIsThemeOpen(false);
+              setIsDbOpen(false);
+              setIsGpsOpen(false);
+              setIsUpdatesOpen(false);
+              setIsGroupOpen(false);
+              setIsUsersOpen(false);
+              setIsNotifOpen(false);
+            }}
+            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
+              isCustomFirebaseOpen
+                ? 'bg-indigo-550/10 dark:bg-indigo-950/20 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
+            }`}
+          >
+            <div className={`p-2 rounded-lg shrink-0 ${isCustomFirebaseOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
+              <Cloud className="w-4 h-4 text-indigo-500" />
+            </div>
+            <div className="space-y-0.5 min-w-0">
+              <span className="block text-[11px] font-black text-slate-755 dark:text-slate-200 uppercase tracking-wide truncate">Lưu trữ Firebase 2</span>
+              <span className="block text-[10px] font-mono text-slate-400 font-bold truncate">
+                {localStorage.getItem("xuongan_custom_firebase_config") ? 'Lưu trữ qua Firebase 2' : 'Mặc định (Dự án xưởng)'}
+              </span>
+            </div>
+            {isCustomFirebaseOpen && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+            )}
+          </button>
+
+          {/* Tile 8: Notification Permissions & Bells */}
           <button
             type="button"
             onClick={() => {
@@ -1417,11 +1470,13 @@ export default function SettingsTab({
               setIsUpdatesOpen(false);
               setIsGroupOpen(false);
               setIsUsersOpen(false);
+              setIsApiServerOpen(false);
+              setIsCustomFirebaseOpen(false);
             }}
             className={`p-3 rounded-xl border text-left flex items-start gap-3 transition relative group cursor-pointer select-none active:scale-[0.98] ${
               isNotifOpen
                 ? 'bg-indigo-50/25 dark:bg-indigo-950/10 border-indigo-502 dark:border-indigo-900 ring-4 ring-indigo-500/[0.04]'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 hover:border-indigo-400'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-955/40 hover:border-indigo-400'
             }`}
           >
             <div className={`p-2 rounded-lg shrink-0 ${isNotifOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400'}`}>
@@ -1827,114 +1882,6 @@ export default function SettingsTab({
               )}
             </div>
 
-            {/* Cấu hình Máy chủ API cho Android APK */}
-            <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955 space-y-3 text-left">
-              <div className="flex items-center gap-1.5">
-                <Globe className="w-4 h-4 text-indigo-500" />
-                <span className="text-[10px] font-black tracking-wider uppercase text-slate-450 dark:text-slate-400 font-mono">
-                  Cấu hình Máy chủ API (Dành cho Android APK)
-                </span>
-              </div>
-              <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                Khi chạy trên điện thoại qua ứng dụng Android APK, ứng dụng cần kết nối trực tiếp đến máy chủ để chuyển đổi lưu trữ hình ảnh Backblaze B2. Hãy chọn Máy chủ đang chạy hoặc nhập máy chủ của riêng bạn.
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
-                <div>
-                  <label className="block text-[9.5px] font-extrabold uppercase text-slate-400 font-mono mb-1">
-                    Đường dẫn Máy chủ API
-                  </label>
-                  <input
-                    type="text"
-                    value={apiServerUrl}
-                    onChange={(e) => setApiServerUrl(e.target.value)}
-                    placeholder="Tự động (Mặc định)"
-                    className="w-full px-3 py-1.5 border border-slate-205 dark:border-slate-800 rounded-xl font-mono text-xs focus:outline-hidden focus:border-indigo-500 dark:bg-slate-950 dark:text-slate-250"
-                  />
-                </div>
-                
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setApiServerUrl('https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
-                      localStorage.setItem('xuongan_api_server_url', 'https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
-                      alert('Đã chọn Máy chủ Phát triển (Development Server)');
-                    }}
-                    className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 text-slate-650 dark:text-slate-300 font-bold text-[10px] transition cursor-pointer text-center"
-                  >
-                    Dev Server
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setApiServerUrl('https://ais-pre-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
-                      localStorage.setItem('xuongan_api_server_url', 'https://ais-pre-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
-                      alert('Đã chọn Máy chủ Chia sẻ (Preview/Shared Server)');
-                    }}
-                    className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 text-slate-650 dark:text-slate-300 font-bold text-[10px] transition cursor-pointer text-center"
-                  >
-                    Shared Server
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setApiServerUrl('');
-                      localStorage.removeItem('xuongan_api_server_url');
-                      alert('Đã đặt lại về cấu hình Tự động (Mặc định)');
-                    }}
-                    className="px-2.5 py-1.5 rounded-xl border border-rose-250 bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 font-bold text-[10px] transition cursor-pointer text-center"
-                    title="Đặt lại tự động"
-                  >
-                    Tự động
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const trimmed = apiServerUrl.trim();
-                    if (trimmed) {
-                      localStorage.setItem('xuongan_api_server_url', trimmed);
-                      alert('✨ Đã lưu cấu hình máy chủ API thành công: ' + trimmed);
-                    } else {
-                      localStorage.removeItem('xuongan_api_server_url');
-                      alert('✨ Đã đặt lại cấu hình máy chủ API về Tự động.');
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider transition cursor-pointer"
-                >
-                  Lưu cấu hình máy chủ
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const baseUrl = apiServerUrl.trim().replace(/\/$/, '') || getApiBaseUrl() || window.location.origin;
-                    try {
-                      const checkRes = await fetch(`${baseUrl}/api/health`);
-                      if (checkRes.ok) {
-                        const data = await checkRes.json();
-                        if (data.status === 'ok') {
-                          alert('✅ Kết nối Máy chủ thành công! Phản hồi: ' + JSON.stringify(data));
-                        } else {
-                          alert('⚠️ Máy chủ phản hồi nhưng trạng thái không khớp: ' + JSON.stringify(data));
-                        }
-                      } else {
-                        alert(`❌ Kết nối máy chủ thất bại với mã lỗi HTTP: ${checkRes.status}`);
-                      }
-                    } catch (e: any) {
-                      alert(`❌ Không thể kết nối đến máy chủ API: ${e.message}`);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-950/45 hover:bg-slate-50 text-slate-750 dark:text-slate-250 font-bold text-[10px] uppercase tracking-wider transition cursor-pointer"
-                >
-                  Kiểm tra kết nối
-                </button>
-              </div>
-            </div>
-
             {/* Info Drawer inline */}
             <AnimatePresence>
               {showCloudInfo && (
@@ -1989,6 +1936,290 @@ export default function SettingsTab({
               )}
             </AnimatePresence>
 
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* CẤU HÌNH MÁY CHỦ API COLLAPSIBLE CARD */}
+      <AnimatePresence initial={false}>
+        {isApiServerOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            className="overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4 text-left"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                  <Globe className="w-4 h-4 text-indigo-500 animate-pulse" />
+                  <span>Cấu hình Máy chủ API (Dành cho Android APK)</span>
+                </h3>
+                <p className="text-xs text-slate-450 mt-1">Khi chạy trên điện thoại qua ứng dụng Android APK, ứng dụng cần kết nối trực tiếp đến máy chủ để chuyển đổi lưu trữ hình ảnh Backblaze B2.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsApiServerOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition shrink-0 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-[10.5px] text-slate-500 leading-relaxed">
+              Hãy chọn Máy chủ đang chạy bên dưới hoặc tự nhập địa chỉ máy chủ tùy chỉnh của bạn. Khi cấu hình đúng, bạn có thể thực hiện tải ảnh, lưu ảnh rập và xem trực tiếp trên ứng dụng.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+              <div>
+                <label className="block text-[9.5px] font-extrabold uppercase text-slate-400 font-mono mb-1">
+                  Đường dẫn Máy chủ API
+                </label>
+                <input
+                  type="text"
+                  value={apiServerUrl}
+                  onChange={(e) => setApiServerUrl(e.target.value)}
+                  placeholder="Tự động (Mặc định)"
+                  className="w-full px-3 py-1.5 border border-slate-205 dark:border-slate-800 rounded-xl font-mono text-xs focus:outline-hidden focus:border-indigo-500 dark:bg-slate-950 dark:text-slate-250"
+                />
+              </div>
+              
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApiServerUrl('https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                    localStorage.setItem('xuongan_api_server_url', 'https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                    alert('Đã chọn Máy chủ Phát triển (Development Server)');
+                  }}
+                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 text-slate-650 dark:text-slate-300 font-bold text-[10px] transition cursor-pointer text-center"
+                >
+                  Dev Server
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApiServerUrl('https://ais-pre-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                    localStorage.setItem('xuongan_api_server_url', 'https://ais-pre-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                    alert('Đã chọn Máy chủ Chia sẻ (Preview/Shared Server)');
+                  }}
+                  className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 text-slate-650 dark:text-slate-300 font-bold text-[10px] transition cursor-pointer text-center"
+                >
+                  Shared Server
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApiServerUrl('');
+                    localStorage.removeItem('xuongan_api_server_url');
+                    alert('Đã đặt lại về cấu hình Tự động (Mặc định)');
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl border border-rose-250 bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 font-bold text-[10px] transition cursor-pointer text-center"
+                  title="Đặt lại tự động"
+                >
+                  Tự động
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const trimmed = apiServerUrl.trim();
+                  if (trimmed) {
+                    localStorage.setItem('xuongan_api_server_url', trimmed);
+                    alert('✨ Đã lưu cấu hình máy chủ API thành công: ' + trimmed);
+                  } else {
+                    localStorage.removeItem('xuongan_api_server_url');
+                    alert('✨ Đã đặt lại cấu hình máy chủ API về Tự động.');
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider transition cursor-pointer"
+              >
+                Lưu cấu hình máy chủ
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const baseUrl = apiServerUrl.trim().replace(/\/$/, '') || getApiBaseUrl() || window.location.origin;
+                  try {
+                    const checkRes = await fetch(`${baseUrl}/api/health`);
+                    if (checkRes.ok) {
+                      const data = await checkRes.json();
+                      if (data.status === 'ok') {
+                        alert('✅ Kết nối Máy chủ thành công! Phản hồi: ' + JSON.stringify(data));
+                      } else {
+                        alert('⚠️ Máy chủ phản hồi nhưng trạng thái không khớp: ' + JSON.stringify(data));
+                      }
+                    } else {
+                      alert(`❌ Kết nối máy chủ thất bại với mã lỗi HTTP: ${checkRes.status}`);
+                    }
+                  } catch (e: any) {
+                    alert(`❌ Không thể kết nối đến máy chủ API: ${e.message}`);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl border border-slate-205 dark:border-slate-800 bg-white dark:bg-slate-900/45 hover:bg-slate-50 text-slate-750 dark:text-slate-250 font-bold text-[10px] uppercase tracking-wider transition cursor-pointer"
+              >
+                Kiểm tra kết nối
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* CẤU HÌNH FIREBASE THỨ 2 COLLAPSIBLE CARD */}
+      <AnimatePresence initial={false}>
+        {isCustomFirebaseOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -10, height: 0 }}
+            className="overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4 text-left"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                  <Cloud className="w-4 h-4 text-indigo-500 animate-pulse" />
+                  <span>Cấu hình Firebase 2 - Lưu trữ Hình ảnh</span>
+                </h3>
+                <p className="text-xs text-slate-450 mt-1">
+                  Sử dụng dự án Firebase cá nhân của bạn làm Cloud Storage để lưu trữ hình ảnh mẫu, giúp tối ưu dung lượng và băng thông.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCustomFirebaseOpen(false)}
+                className="p-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition shrink-0 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-[10.5px] text-slate-500 leading-relaxed">
+              Dán toàn bộ đoạn mã cấu hình JSON của Firebase (lấy từ mục Cài đặt dự án trên Firebase Console) vào khung bên dưới. Ứng dụng sẽ đồng bộ nhập liệu qua <strong>Firebase 1</strong>, nhưng lưu trữ tất cả hình ảnh/mẫu mã thiết kế trực tiếp lên Cloud Storage của <strong>Firebase 2</strong> này. Vui lòng đảm bảo bạn đã kích hoạt dịch vụ <strong>Storage</strong> trong dự án Firebase 2 của mình.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[9.5px] font-extrabold uppercase text-slate-400 font-mono">
+                    Mã Cấu hình Firebase JSON
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sample = {
+                        apiKey: "AIzaSy...",
+                        authDomain: "your-app-id.firebaseapp.com",
+                        projectId: "your-app-id",
+                        storageBucket: "your-app-id.firebasestorage.app",
+                        messagingSenderId: "123456789",
+                        appId: "1:123456789:web:abcdef",
+                        firestoreDatabaseId: ""
+                      };
+                      setCustomFirebaseConfig(JSON.stringify(sample, null, 2));
+                    }}
+                    className="text-[9.5px] text-indigo-500 hover:text-indigo-600 font-bold transition font-mono"
+                  >
+                    [Tải mẫu JSON]
+                  </button>
+                </div>
+                <textarea
+                  value={customFirebaseConfig}
+                  onChange={(e) => setCustomFirebaseConfig(e.target.value)}
+                  placeholder='Dán đoạn mã cấu hình JSON ở đây... Ví dụ: {"apiKey": "...", "projectId": "..."}'
+                  rows={5}
+                  className="w-full px-3 py-2 border border-slate-205 dark:border-slate-800 rounded-xl font-mono text-xs focus:outline-hidden focus:border-indigo-500 dark:bg-slate-950 dark:text-slate-250 resize-y"
+                />
+              </div>
+
+              {/* Phân tích trạng thái JSON */}
+              {customFirebaseConfig.trim() && (
+                <div className="p-3 rounded-xl border text-xs font-mono space-y-1 bg-slate-50/50 dark:bg-slate-955 border-slate-200 dark:border-slate-800/80">
+                  <div className="text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Trạng thái cấu hình nhập vào:</div>
+                  {(() => {
+                    try {
+                      const obj = JSON.parse(customFirebaseConfig);
+                      if (!obj.apiKey || !obj.projectId) {
+                        return (
+                          <span className="text-amber-500 font-bold flex items-center gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            Thiếu trường apiKey hoặc projectId bắt buộc!
+                          </span>
+                        );
+                      }
+                      return (
+                        <div className="space-y-0.5 text-[10.5px] text-slate-600 dark:text-slate-450">
+                          <div className="text-emerald-500 font-bold flex items-center gap-1 mb-1">
+                            <Check className="w-3.5 h-3.5 shrink-0" />
+                            Cấu hình JSON hợp lệ và sẵn sàng lưu.
+                          </div>
+                          <div>• Dự án ID: <strong className="text-slate-800 dark:text-slate-200">{obj.projectId}</strong></div>
+                          <div>• API Key: <strong className="text-slate-800 dark:text-slate-200">{obj.apiKey.substring(0, 10)}...</strong></div>
+                          <div>• Database ID: <strong className="text-indigo-500">{obj.firestoreDatabaseId || "(default)"}</strong></div>
+                        </div>
+                      );
+                    } catch (e: any) {
+                      return (
+                        <span className="text-rose-500 font-bold flex items-center gap-1">
+                          <X className="w-3.5 h-3.5 shrink-0" />
+                          Lỗi cú pháp JSON: {e.message}
+                        </span>
+                      );
+                    }
+                  })()}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const trimmed = customFirebaseConfig.trim();
+                    if (!trimmed) {
+                      alert("⚠️ Vui lòng nhập dữ liệu cấu hình JSON Firebase.");
+                      return;
+                    }
+                    try {
+                      const parsed = JSON.parse(trimmed);
+                      if (!parsed.apiKey || !parsed.projectId) {
+                        alert("❌ Cấu hình thiếu các trường bắt buộc như apiKey hoặc projectId.");
+                        return;
+                      }
+                      localStorage.setItem('xuongan_custom_firebase_config', JSON.stringify(parsed));
+                      alert('✨ Đã lưu cấu hình Firebase thứ 2 thành công! Ứng dụng sẽ khởi động lại để áp dụng kết nối mới.');
+                      window.location.reload();
+                    } catch (e: any) {
+                      alert('❌ Định dạng JSON không hợp lệ: ' + e.message);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Lưu cấu hình & Khởi động lại
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (localStorage.getItem('xuongan_custom_firebase_config')) {
+                      localStorage.removeItem('xuongan_custom_firebase_config');
+                      setCustomFirebaseConfig('');
+                      alert('✨ Đã khôi phục về Firebase Mặc định của xưởng. Ứng dụng sẽ khởi động lại.');
+                      window.location.reload();
+                    } else {
+                      setCustomFirebaseConfig('');
+                      alert('Đã xóa dữ liệu nháp.');
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl border border-rose-250 bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 font-bold text-[10px] uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Dùng Firebase Mặc Định / Xóa
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

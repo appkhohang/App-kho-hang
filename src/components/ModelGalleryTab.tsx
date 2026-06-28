@@ -13,7 +13,7 @@ import {
   Maximize2, ChevronLeft, ZoomOut, LayoutGrid, Square, SquareCheck
 } from 'lucide-react';
 import { ModelSample, B2Config } from '../types';
-import { db, getNamespaceCollection } from '../utils/firebase';
+import { db, getNamespaceCollection, isUsingCustomFirebase, uploadImageToFirebase, deleteImageFromFirebase } from '../utils/firebase';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { B2Service, base64ToBlob } from '../utils/b2Service';
 import { compressBase64Image } from '../utils/imageUtils';
@@ -539,46 +539,42 @@ export default function ModelGalleryTab({
           const compressedBase64 = await compressBase64Image(item.base64, 1000, 1000, 0.75);
           finalLocalBase64 = compressedBase64;
 
-          if (b2Config.configured && b2Status === 'connected') {
+          try {
+            setUploadProgress('uploading');
+            const isCustom = isUsingCustomFirebase;
+            setUploadStatusMsg(`[${stepNum}/${totalSteps}] Đang tải ảnh trực tiếp lên ${isCustom ? 'Firebase 2' : 'Firebase 1'} Cloud Storage...`);
+            
+            const cleanFileName = finalModelName.replace(/[^a-zA-Z0-9-_.]/g, '_');
+            const uploadResult = await uploadImageToFirebase(
+              compressedBase64,
+              `${cleanFileName}_${Date.now()}.jpg`
+            );
+
+            finalB2Url = uploadResult.fileUrl;
+            finalB2FileId = 'firebase_storage'; // Marker for firebase storage deletion
+            finalB2FilePath = uploadResult.filePath;
+            
+            // Store highly compressed thumbnail locally
             try {
-              setUploadProgress('uploading');
-              setUploadStatusMsg(`[${stepNum}/${totalSteps}] Đang tải ảnh trực tiếp lên Backblaze B2 Cloud...`);
-              
-              // Upload to B2
-              const cleanFileName = finalModelName.replace(/[^a-zA-Z0-9-_]/g, '_');
-              const uploadResult = await B2Service.uploadFile(
-                b2Config,
-                compressedBase64,
-                `${cleanFileName}_${Date.now()}.jpg`,
-                'image/jpeg'
-              );
-
-              finalB2Url = uploadResult.fileUrl;
-              finalB2FileId = uploadResult.fileId;
-              finalB2FilePath = uploadResult.filePath;
-              
-              // Once uploaded to B2, store a highly compressed micro-thumbnail (150px) locally
-              try {
-                finalLocalBase64 = await compressBase64Image(compressedBase64, 150, 150, 0.5);
-              } catch {
-                finalLocalBase64 = ''; // Clear fallback if compression fails
-              }
-
-              // Delete old B2 file if editing and a new photo was uploaded
-              if (editingSample && editingSample.b2FileId && editingSample.b2FilePath && i === 0) {
-                B2Service.deleteFile(b2Config, editingSample.b2FileId, editingSample.b2FilePath).catch(err => {
-                  console.warn('Could not clean up old B2 file version:', err);
-                });
-              }
-            } catch (uploadErr: any) {
-              console.error('B2 Upload failure, falling back to database-only storage:', uploadErr);
-              if (totalSteps === 1) {
-                alert(`⚠️ Không thể tải lên B2: ${uploadErr.message}. Ảnh mẫu sẽ tạm thời được lưu trữ ngoại tuyến trên thiết bị.`);
-              }
-              finalB2Url = '';
-              finalB2FileId = '';
-              finalB2FilePath = '';
+              finalLocalBase64 = await compressBase64Image(compressedBase64, 150, 150, 0.5);
+            } catch {
+              finalLocalBase64 = '';
             }
+
+            // Clean up old Firebase Storage file if editing and a new photo was uploaded
+            if (editingSample && editingSample.b2FilePath && editingSample.b2FileId === 'firebase_storage' && i === 0) {
+              deleteImageFromFirebase(editingSample.b2FilePath).catch(err => {
+                console.warn('Could not clean up old Firebase Storage file version:', err);
+              });
+            }
+          } catch (uploadErr: any) {
+            console.error('Firebase Storage Upload failure, falling back to database-only storage:', uploadErr);
+            if (totalSteps === 1) {
+              alert(`⚠️ Không thể tải lên Firebase Storage: ${uploadErr.message}. Ảnh mẫu sẽ tạm thời được lưu trữ ngoại tuyến trên thiết bị.`);
+            }
+            finalB2Url = '';
+            finalB2FileId = '';
+            finalB2FilePath = '';
           }
         }
 
@@ -654,13 +650,22 @@ export default function ModelGalleryTab({
     }
 
     try {
-      // 1. Delete on Backblaze B2 if configured
-      if (sample.b2FileId && sample.b2FilePath && b2Config.configured) {
-        try {
-          await B2Service.deleteFile(b2Config, sample.b2FileId, sample.b2FilePath);
-          console.log('Successfully deleted file on B2:', sample.b2FilePath);
-        } catch (b2Err) {
-          console.warn('Failed to delete file on B2 (might already be deleted):', b2Err);
+      // 1. Delete on Firebase Storage or Backblaze B2 if configured
+      if (sample.b2FilePath) {
+        if (sample.b2FileId === 'firebase_storage') {
+          try {
+            await deleteImageFromFirebase(sample.b2FilePath);
+            console.log('Successfully deleted file on Firebase Storage:', sample.b2FilePath);
+          } catch (storageErr) {
+            console.warn('Failed to delete file on Firebase Storage:', storageErr);
+          }
+        } else if (sample.b2FileId && b2Config.configured) {
+          try {
+            await B2Service.deleteFile(b2Config, sample.b2FileId, sample.b2FilePath);
+            console.log('Successfully deleted file on B2:', sample.b2FilePath);
+          } catch (b2Err) {
+            console.warn('Failed to delete file on B2 (might already be deleted):', b2Err);
+          }
         }
       }
 
@@ -702,10 +707,17 @@ export default function ModelGalleryTab({
     try {
       const selectedSamples = samples.filter(s => selectedSampleIds.includes(s.id));
       
-      // 1. Delete on Backblaze B2 for all selected samples that have B2 info
-      if (b2Config.configured) {
-        for (const sample of selectedSamples) {
-          if (sample.b2FileId && sample.b2FilePath) {
+      // 1. Delete on Firebase Storage or Backblaze B2 for all selected samples
+      for (const sample of selectedSamples) {
+        if (sample.b2FilePath) {
+          if (sample.b2FileId === 'firebase_storage') {
+            try {
+              await deleteImageFromFirebase(sample.b2FilePath);
+              console.log('Successfully deleted Firebase Storage file in bulk:', sample.b2FilePath);
+            } catch (storageErr) {
+              console.warn(`Failed to delete Firebase Storage file for sample ${sample.id}:`, storageErr);
+            }
+          } else if (sample.b2FileId && b2Config.configured) {
             try {
               await B2Service.deleteFile(b2Config, sample.b2FileId, sample.b2FilePath);
               console.log('Successfully deleted B2 file in bulk:', sample.b2FilePath);
@@ -875,38 +887,26 @@ export default function ModelGalleryTab({
       
       {/* 1. Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-5 rounded-2xl border bg-white dark:bg-[#0c1310] border-slate-200/60 dark:border-[#1c2d27]/60 shadow-xs relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-12 -translate-y-6 w-36 h-36 bg-teal-500/5 dark:bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute right-0 top-0 translate-x-12 -translate-y-6 w-36 h-36 bg-indigo-500/5 dark:bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
         
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-teal-500/10 text-teal-600 dark:text-[#10b981]">
+          <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-[#818cf8]">
             <ImageIcon className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-base font-black tracking-tight uppercase text-slate-900 dark:text-white">Kho hình mẫu</h1>
             <p className="text-[10px] text-slate-400 dark:text-[#657f76]">
-              Lưu trữ mẫu rập dệt, catalog, ảnh thợ may dệt trực tiếp lên <span className="font-bold text-teal-600">Backblaze B2</span> và đồng bộ thời gian thực.
+              Lưu trữ mẫu rập dệt, catalog, ảnh thợ may dệt trực tiếp lên <span className="font-bold text-indigo-600 dark:text-indigo-450">Firebase Cloud Storage</span> và đồng bộ thời gian thực.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {/* Status Badge */}
-          <button 
-            onClick={() => setShowConfig(!showConfig)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono font-bold transition text-[10px] cursor-pointer ${
-              b2Status === 'connected' 
-                ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-450' 
-                : b2Status === 'error'
-                ? 'bg-rose-500/10 border border-rose-500/30 text-rose-500'
-                : 'bg-slate-100 dark:bg-[#111c18] border border-slate-200 dark:border-[#1c2d27] text-slate-500 dark:text-slate-400'
-            }`}
-          >
-            <span className={`w-2 h-2 rounded-full ${
-              b2Status === 'connected' ? 'bg-emerald-500' : b2Status === 'error' ? 'bg-rose-500' : 'bg-slate-400'
-            } animate-pulse`} />
-            B2 Cloud: {b2Status === 'connected' ? 'Sẵn sàng' : b2Status === 'error' ? 'Lỗi kết nối' : 'Cấu hình ngay'}
-            <Settings className="w-3.5 h-3.5 ml-1" />
-          </button>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono font-bold text-[10px] bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+            Lưu trữ: {isUsingCustomFirebase ? 'Firebase 2 (Riêng)' : 'Firebase 1 (Mặc định)'}
+          </div>
 
           {/* Plus icon button inside the header */}
           <button 
@@ -918,206 +918,6 @@ export default function ModelGalleryTab({
           </button>
         </div>
       </div>
-
-      {/* 2. B2 Configuration Panel */}
-      <AnimatePresence>
-        {showConfig && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="p-5 rounded-2xl border border-slate-200 dark:border-[#1c2d27] bg-slate-50/70 dark:bg-[#111c18]/30 space-y-4">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-150 dark:border-[#1c2d27]">
-                <div className="flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-teal-600 dark:text-emerald-500" />
-                  <span className="font-extrabold uppercase font-mono tracking-wider">Cấu hình bộ lưu trữ Backblaze B2 (Miễn phí 10GB trọn đời)</span>
-                </div>
-                <button 
-                  onClick={() => setShowConfig(false)}
-                  className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-[#1a2d25]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* B2 Capacity Metrics & Warning */}
-              {b2Config.configured && b2Status === 'connected' && (
-                <div className="p-4 rounded-xl bg-white dark:bg-[#0c1411] border border-slate-150 dark:border-[#192a24] space-y-2.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
-                      Dung lượng lưu trữ Backblaze B2:
-                    </span>
-                    <button 
-                      onClick={() => fetchB2StorageInfo(b2Config)}
-                      disabled={loadingStorageInfo}
-                      className="p-1 text-teal-600 dark:text-emerald-450 hover:text-teal-700 disabled:opacity-50 transition cursor-pointer flex items-center gap-1 font-bold text-[10px]"
-                      title="Cập nhật dung lượng"
-                    >
-                      <RotateCw className={`w-3 h-3 ${loadingStorageInfo ? 'animate-spin' : ''}`} />
-                      Cập nhật dung lượng
-                    </button>
-                  </div>
-                  
-                  <div className="w-full bg-slate-100 dark:bg-[#1a2d25] h-3 rounded-full overflow-hidden relative">
-                    <div 
-                      className={`h-full transition-all duration-500 ${
-                        (b2StorageUsed / (10 * 1024 * 1024 * 1024)) >= 0.9 
-                          ? 'bg-rose-500' 
-                          : (b2StorageUsed / (10 * 1024 * 1024 * 1024)) >= 0.75 
-                          ? 'bg-amber-500' 
-                          : 'bg-teal-500 dark:bg-emerald-500'
-                      }`}
-                      style={{ width: `${Math.min(100, Math.max(0.5, (b2StorageUsed / (10 * 1024 * 1024 * 1024)) * 100))}%` }}
-                    />
-                  </div>
-
-                  <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                    <span>Đã dùng: <b>{formatBytes(b2StorageUsed)}</b> ({((b2StorageUsed / (10 * 1024 * 1024 * 1024)) * 100).toFixed(2)}%)</span>
-                    <span>Tối đa: <b>10 GB</b> (Gói miễn phí)</span>
-                  </div>
-                  
-                  <div className="text-[10px] text-slate-400 dark:text-[#527065] flex justify-between">
-                    <span>Tổng số lượng tệp tin: <b>{b2FileCount} tệp</b></span>
-                    {((b2StorageUsed / (10 * 1024 * 1024 * 1024)) >= 0.85) && (
-                      <span className="text-rose-500 dark:text-rose-400 font-extrabold animate-pulse">
-                        ⚠️ Gần đầy bộ nhớ! Hãy dọn dẹp bớt tệp cũ.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[10px] font-extrabold uppercase text-slate-400 font-mono mb-1">Key ID (applicationKeyId)</label>
-                    <input 
-                      type="text" 
-                      value={b2Config.applicationKeyId}
-                      onChange={e => setB2Config(prev => ({ ...prev, applicationKeyId: e.target.value.trim() }))}
-                      placeholder="0046e7f23c910000000000001"
-                      className="w-full px-3 py-2 border rounded-xl font-mono focus:outline-hidden focus:border-teal-500 dark:bg-[#0e1613] dark:border-[#1c2d27]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-extrabold uppercase text-slate-400 font-mono mb-1 flex justify-between items-center">
-                      <span>Application Key (Mật mã kết nối)</span>
-                      <button 
-                        type="button" 
-                        onClick={() => setShowKeys(!showKeys)}
-                        className="text-teal-600 flex items-center gap-1 font-sans font-bold hover:underline"
-                      >
-                        {showKeys ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        {showKeys ? 'Ẩn' : 'Hiện'}
-                      </button>
-                    </label>
-                    <input 
-                      type={showKeys ? 'text' : 'password'} 
-                      value={b2Config.applicationKey}
-                      onChange={e => setB2Config(prev => ({ ...prev, applicationKey: e.target.value.trim() }))}
-                      placeholder="K0046bK49f82G7A0a68d8ef53d9e3bc"
-                      className="w-full px-3 py-2 border rounded-xl font-mono focus:outline-hidden focus:border-teal-500 dark:bg-[#0e1613] dark:border-[#1c2d27]"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[10px] font-extrabold uppercase text-slate-400 font-mono mb-1">Bucket ID</label>
-                    <input 
-                      type="text" 
-                      value={b2Config.bucketId}
-                      onChange={e => setB2Config(prev => ({ ...prev, bucketId: e.target.value.trim() }))}
-                      placeholder="6ee7f23c91a02100a0000001"
-                      className="w-full px-3 py-2 border rounded-xl font-mono focus:outline-hidden focus:border-teal-500 dark:bg-[#0e1613] dark:border-[#1c2d27]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-extrabold uppercase text-slate-400 font-mono mb-1">Tên Bucket (Bucket Name)</label>
-                    <input 
-                      type="text" 
-                      value={b2Config.bucketName}
-                      onChange={e => setB2Config(prev => ({ ...prev, bucketName: e.target.value.trim() }))}
-                      placeholder="anh-mau-xuong-an"
-                      className="w-full px-3 py-2 border rounded-xl font-mono focus:outline-hidden focus:border-teal-500 dark:bg-[#0e1613] dark:border-[#1c2d27]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {b2ErrorMsg && (
-                <div className="p-3 rounded-xl border border-rose-200 bg-rose-500/5 text-rose-500 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold">Lỗi kết nối:</p>
-                    <p className="text-[10px] font-mono leading-relaxed">{b2ErrorMsg}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Helpful S3/CORS B2 documentation */}
-              <div className="p-4 rounded-xl bg-teal-500/5 dark:bg-emerald-500/5 border border-teal-500/10 dark:border-emerald-500/10 text-[10px] text-slate-600 dark:text-[#657f76] space-y-1.5 leading-relaxed">
-                <span className="font-extrabold uppercase font-mono tracking-wider flex items-center gap-1 text-teal-600 dark:text-[#10b981]">
-                  <Info className="w-3.5 h-3.5" /> HƯỚNG DẪN CẤU HÌNH CORS CHO BACKBLAZE B2 BUCKET
-                </span>
-                <p>Để ứng dụng tải ảnh trực tiếp từ trình duyệt / điện thoại của bạn mà không bị chặn, hãy thiết lập chính sách CORS cho bucket trên Backblaze:</p>
-                <code className="block p-2 rounded-lg bg-white dark:bg-[#0b0f0d] border border-slate-150 dark:border-[#1c2d27] font-mono text-[9px] text-slate-700 dark:text-[#10b981] break-all">
-                  {`b2 update-bucket --corsRules '[{"corsRuleName":"AllowAppUpload","allowedOrigins":["*"],"allowedHeaders":["*"],"allowedOperations":["b2_upload_file","b2_upload_part"],"maxHeaderInfo":3600}]' "${b2Config.bucketName || 'TÊN_BUCKET'}"`}
-                </code>
-                <p>💡 <i>Gợi ý:</i> Bạn có thể cài đặt CLI này trên máy tính để thiết lập một lần duy nhất, hoặc cấu hình trong mục CORS Rules tại giao diện quản trị Backblaze B2 console.</p>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1">
-                {b2Config.configured && (
-                  <button 
-                    onClick={handleClearConfig}
-                    className="px-4 py-2 border border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 text-rose-500 font-bold rounded-xl transition cursor-pointer"
-                  >
-                    Gỡ bỏ cấu hình
-                  </button>
-                )}
-                <button 
-                  onClick={handleSaveConfig}
-                  disabled={testingConnection}
-                  className="px-5 py-2 bg-teal-600 hover:bg-teal-700 dark:bg-[#10b981] dark:hover:bg-emerald-600 text-white font-extrabold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-55"
-                >
-                  {testingConnection ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                  Lưu cấu hình & Kết nối thử
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* B2 Near-limit capacity alert banner */}
-      {b2Config.configured && b2Status === 'connected' && (b2StorageUsed / (10 * 1024 * 1024 * 1024)) >= 0.85 && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-2xl border border-rose-200 bg-rose-500/10 text-rose-700 dark:text-rose-400 flex items-start gap-3 shadow-xs mb-4"
-        >
-          <AlertCircle className="w-5 h-5 shrink-0 text-rose-500 mt-0.5 animate-bounce" />
-          <div className="flex-1 text-xs">
-            <p className="font-extrabold uppercase font-mono tracking-wider">Cảnh báo: Sắp hết dung lượng lưu trữ Backblaze B2!</p>
-            <p className="mt-1 leading-relaxed text-slate-600 dark:text-slate-300">
-              Bộ lưu trữ miễn phí Backblaze B2 của bạn đã sử dụng <b>{formatBytes(b2StorageUsed)}</b> trên tổng số tối đa <b>10 GB</b> ({((b2StorageUsed / (10 * 1024 * 1024 * 1024)) * 100).toFixed(1)}%). Vui lòng dọn dẹp các tệp cũ hoặc nâng cấp gói của bạn trên bảng điều khiển Backblaze B2 để tránh bị lỗi tải lên mẫu mới.
-            </p>
-          </div>
-          <button 
-            onClick={() => fetchB2StorageInfo(b2Config)}
-            className="px-3 py-1.5 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition font-extrabold flex items-center gap-1.5 self-center cursor-pointer text-[11px]"
-          >
-            <RotateCw className={`w-3.5 h-3.5 ${loadingStorageInfo ? 'animate-spin' : ''}`} />
-            Kiểm tra lại
-          </button>
-        </motion.div>
-      )}
 
       {/* 3. Main Catalog View */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 items-start">
@@ -1464,7 +1264,7 @@ export default function ModelGalleryTab({
               // Internal Card Renderer Helper for both grid and masonry layouts
               const renderCard = (sample: ModelSample) => {
                 const imgSource = sample.b2Url || sample.localBase64 || '';
-                const isB2 = !!sample.b2Url;
+                const isCloud = !!sample.b2Url;
 
                 // Dynamic styles based on column count (2, 4, 6, 8 columns)
                 const cardPadding = gridCols === 2 
@@ -1545,9 +1345,9 @@ export default function ModelGalleryTab({
                       ) : (
                         <>
                           <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider text-white shadow-xs ${
-                            isB2 ? 'bg-teal-600 dark:bg-emerald-600' : 'bg-slate-500/85'
+                            isCloud ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-slate-500/85'
                           }`}>
-                            {isB2 ? 'B2' : 'Offline'}
+                            {isCloud ? 'Firebase' : 'Offline'}
                           </span>
                           {quickEditEnabled && (
                             <span className="px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider bg-amber-500 text-white shadow-xs flex items-center gap-0.5">

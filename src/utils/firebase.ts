@@ -6,9 +6,50 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, setLogLevel } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
+// Authentication and Firestore ALWAYS run on the default Firebase 1 project
 const app = initializeApp(firebaseConfig);
+
+// Dynamically read custom Firebase config from localStorage if present FOR STORAGE ONLY (Firebase 2)
+let storageInstance: any = null;
+export let isUsingCustomFirebase = false;
+
+if (typeof window !== 'undefined') {
+  const savedCustom = localStorage.getItem('xuongan_custom_firebase_config');
+  if (savedCustom) {
+    try {
+      const parsed = JSON.parse(savedCustom);
+      if (parsed && parsed.apiKey && parsed.projectId) {
+        isUsingCustomFirebase = true;
+        console.log("[Firebase 2 Storage] Initializing custom storage app with project:", parsed.projectId);
+        try {
+          // Initialize named secondary app to prevent clashes with the primary app
+          const customApp = initializeApp(parsed, "custom_storage_app");
+          storageInstance = getStorage(customApp);
+          console.log("[Firebase 2 Storage] Storage initialized successfully on secondary project.");
+        } catch (storageInitErr) {
+          console.error("[Firebase 2 Storage] Failed to initialize custom storage app:", storageInitErr);
+        }
+      }
+    } catch (e) {
+      console.error("[Firebase] Failed to parse custom Firebase configuration:", e);
+    }
+  }
+}
+
+// Fallback: If no custom config or storage initialization fails, use standard Firebase 1 Storage
+if (!storageInstance) {
+  try {
+    storageInstance = getStorage(app);
+    console.log("[Firebase 1 Storage] Default storage initialized successfully.");
+  } catch (e) {
+    console.warn("[Firebase 1 Storage] Failed to initialize default storage:", e);
+  }
+}
+
+export const storage = storageInstance;
 
 // CRITICAL: The app will break without passing firestoreDatabaseId if specified
 const dbId = (firebaseConfig as any).firestoreDatabaseId;
@@ -179,5 +220,75 @@ export function sanitizeDataForFirestore<T>(data: T): T {
     return sanitizedObj as T;
   }
   return data;
+}
+
+/**
+ * Convert base64 data URL to standard Blob
+ */
+function base64ToBlob(base64Data: string, contentType: string = 'image/jpeg'): Blob {
+  const sliceSize = 512;
+  const base64Clean = base64Data.includes(';base64,') 
+    ? base64Data.split(';base64,')[1] 
+    : base64Data;
+    
+  const byteCharacters = atob(base64Clean);
+  const byteArrays = [];
+
+  for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+    const slice = byteCharacters.slice(offset, offset + sliceSize);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+
+  return new Blob(byteArrays, { type: contentType });
+}
+
+/**
+ * Upload an image (base64 string or Blob) directly to Firebase Cloud Storage (Firebase 2)
+ */
+export async function uploadImageToFirebase(
+  fileData: string | Blob,
+  fileName: string
+): Promise<{ fileUrl: string; filePath: string }> {
+  if (!storage) {
+    throw new Error("Dịch vụ lưu trữ Firebase Storage chưa được khởi tạo. Vui lòng kiểm tra lại cấu hình.");
+  }
+
+  let blob: Blob;
+  if (typeof fileData === 'string') {
+    const mimeMatch = fileData.match(/^data:([^;]+);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    blob = base64ToBlob(fileData, mimeType);
+  } else {
+    blob = fileData;
+  }
+
+  // Sanitize file name
+  const cleanFileName = fileName.replace(/[^a-zA-Z0-9-_.]/g, '_');
+  const filePath = `xuongan_samples/${Date.now()}_${cleanFileName}`;
+  
+  const storageRef = ref(storage, filePath);
+  const snapshot = await uploadBytes(storageRef, blob);
+  const fileUrl = await getDownloadURL(snapshot.ref);
+  
+  return { fileUrl, filePath };
+}
+
+/**
+ * Delete an image from Firebase Cloud Storage by its file path
+ */
+export async function deleteImageFromFirebase(filePath: string): Promise<void> {
+  if (!storage || !filePath) return;
+  try {
+    const storageRef = ref(storage, filePath);
+    await deleteObject(storageRef);
+    console.log("[Firebase Storage] Deleted old file successfully:", filePath);
+  } catch (err) {
+    console.warn("[Firebase Storage] Failed to delete file at path:", filePath, err);
+  }
 }
 

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode, FolderPlus, ExternalLink, Sparkles, Share2 } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode, FolderPlus, ExternalLink, Sparkles, Share2, Globe } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Statically imported child components/tabs to prevent hook errors and version mismatch bugs
@@ -25,10 +25,10 @@ import { CURRENT_VERSION, ImportItem, LaborPayment, Customer, Bill, PaymentRecor
 import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage, DatabasePackage } from './utils/storage';
 import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncService';
 import { useRealtimeSync } from './utils/realtimeSync';
-import { auth, db, getNamespaceCollection } from './utils/firebase';
+import { auth, db, getNamespaceCollection, isUsingCustomFirebase, uploadImageToFirebase } from './utils/firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { B2Service } from './utils/b2Service';
+import { B2Service, getApiBaseUrl } from './utils/b2Service';
 import { compressBase64Image } from './utils/imageUtils';
 import { formatVietnameseDate, getCurrentDateStr, getVietnameseWeekKey } from './utils/dateUtils';
 import { useAndroidBack } from './hooks/useAndroidBack';
@@ -364,6 +364,10 @@ export default function App() {
 
   // Active settings tab state inside the hamburger drawer
   const [settingsActiveTab, setSettingsActiveTab] = useState<'backup' | 'theme' | 'features' | 'guide'>('backup');
+
+  const [apiServerUrl, setApiServerUrl] = useState(() => {
+    return localStorage.getItem("xuongan_api_server_url") || "";
+  });
 
   // Customize which features/cards are shown on the home screen
   const [enabledHomeFeatures, setEnabledHomeFeatures] = useState<string[]>(() => {
@@ -1607,7 +1611,7 @@ export default function App() {
         console.warn('Error reading B2 config from localStorage:', err);
       }
 
-      // 1. Compression and Upload to B2 if configured and image is new
+      // 1. Compression and Upload to Firebase Storage if image is new
       if (isNewUploadNeeded) {
         setQuickModelUploadProgress('compressing');
         setQuickModelStatusMsg('Đang tối ưu dung lượng ảnh mẫu...');
@@ -1616,41 +1620,31 @@ export default function App() {
         const compressedBase64 = await compressBase64Image(quickModelPhoto, 1000, 1000, 0.75);
         finalLocalBase64 = compressedBase64;
 
-        if (b2Config.configured && b2Config.applicationKeyId && b2Config.applicationKey) {
-          setQuickModelUploadProgress('authorizing');
-          setQuickModelStatusMsg('Đang xác thực với Backblaze B2...');
+        setQuickModelUploadProgress('uploading');
+        const isCustom = isUsingCustomFirebase;
+        setQuickModelStatusMsg(`Đang tải ảnh trực tiếp lên ${isCustom ? 'Firebase 2' : 'Firebase 1'} Cloud Storage...`);
+        
+        try {
+          const uploadResult = await uploadImageToFirebase(
+            compressedBase64,
+            `${quickModelName.trim()}_${Date.now()}.jpg`
+          );
+
+          finalB2Url = uploadResult.fileUrl;
+          finalB2FileId = 'firebase_storage';
+          finalB2FilePath = uploadResult.filePath;
           
           try {
-            await B2Service.authorize(b2Config);
-            
-            setQuickModelUploadProgress('uploading');
-            setQuickModelStatusMsg('Đang tải ảnh trực tiếp lên Backblaze B2 Cloud...');
-            
-            // Upload to B2
-            const uploadResult = await B2Service.uploadFile(
-              b2Config,
-              compressedBase64,
-              `${quickModelName.trim()}.jpg`,
-              'image/jpeg'
-            );
-
-            finalB2Url = uploadResult.fileUrl;
-            finalB2FileId = uploadResult.fileId;
-            finalB2FilePath = uploadResult.filePath;
-            
-            // Try to store a 150px lightweight thumbnail in localBase64 for offline loads
-            try {
-              finalLocalBase64 = await compressBase64Image(compressedBase64, 150, 150, 0.5);
-            } catch {
-              // Keep compressedBase64 if thumbnailing fails
-            }
-          } catch (uploadErr: any) {
-            console.error('B2 Upload failure, falling back to database-only storage:', uploadErr);
-            alert(`⚠️ Không thể tải lên B2: ${uploadErr.message}. Ảnh mẫu sẽ tạm thời được lưu trữ ngoại tuyến trên thiết bị.`);
-            finalB2Url = '';
-            finalB2FileId = '';
-            finalB2FilePath = '';
+            finalLocalBase64 = await compressBase64Image(compressedBase64, 150, 150, 0.5);
+          } catch {
+            // Ignore compression fallback issues
           }
+        } catch (uploadErr: any) {
+          console.error('Firebase Storage Upload failure, falling back to database-only storage:', uploadErr);
+          alert(`⚠️ Không thể tải lên Firebase Storage: ${uploadErr.message}. Ảnh mẫu sẽ tạm thời được lưu trữ ngoại tuyến trên thiết bị.`);
+          finalB2Url = '';
+          finalB2FileId = '';
+          finalB2FilePath = '';
         }
       }
 
@@ -3906,6 +3900,106 @@ export default function App() {
                               <Trash2 className="w-3 h-3" />
                               <span>Xoá Toàn Bộ Dữ Liệu Xưởng</span>
                             </button>
+
+                            <hr className="border-slate-150 dark:border-slate-800 my-1.5" />
+
+                            <div className="p-3 bg-white dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 text-left">
+                              <div className="flex items-center gap-1">
+                                <Globe className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                                <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 font-mono">
+                                  Máy chủ API (Android APK)
+                                </span>
+                              </div>
+                              <p className="text-[9.5px] text-slate-450 dark:text-slate-500 leading-normal font-sans">
+                                Điều chỉnh đường dẫn máy chủ API dùng để đồng bộ ảnh B2 trên các thiết bị Android APK.
+                              </p>
+                              <div>
+                                <input
+                                  type="text"
+                                  value={apiServerUrl}
+                                  onChange={(e) => setApiServerUrl(e.target.value)}
+                                  placeholder="Tự động (Mặc định)"
+                                  className="w-full px-2.5 py-1 border border-slate-200 dark:border-slate-850 rounded-lg font-mono text-[10px] focus:outline-hidden dark:bg-slate-900 dark:text-slate-200"
+                                />
+                              </div>
+                              <div className="grid grid-cols-3 gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setApiServerUrl('https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                                    localStorage.setItem('xuongan_api_server_url', 'https://ais-dev-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                                    alert('Đã chọn Máy chủ Phát triển (Dev Server)');
+                                  }}
+                                  className="px-1.5 py-1 text-[9px] rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 text-slate-650 dark:bg-slate-900 dark:text-slate-350 font-bold transition cursor-pointer text-center truncate"
+                                >
+                                  Dev
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setApiServerUrl('https://ais-pre-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                                    localStorage.setItem('xuongan_api_server_url', 'https://ais-pre-gnu3s25fcxu6b3imyaqf2k-718976700880.asia-southeast1.run.app');
+                                    alert('Đã chọn Máy chủ Chia sẻ (Shared Server)');
+                                  }}
+                                  className="px-1.5 py-1 text-[9px] rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 text-slate-650 dark:bg-slate-900 dark:text-slate-350 font-bold transition cursor-pointer text-center truncate"
+                                >
+                                  Shared
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setApiServerUrl('');
+                                    localStorage.removeItem('xuongan_api_server_url');
+                                    alert('Đã đặt lại về Tự động (Mặc định)');
+                                  }}
+                                  className="px-1.5 py-1 text-[9px] rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-650 dark:border-rose-900/30 dark:bg-rose-950/15 dark:text-rose-400 font-bold transition cursor-pointer text-center truncate"
+                                >
+                                  Tự động
+                                </button>
+                              </div>
+                              <div className="flex gap-1.5 pt-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const trimmed = apiServerUrl.trim();
+                                    if (trimmed) {
+                                      localStorage.setItem('xuongan_api_server_url', trimmed);
+                                      alert('✨ Đã lưu cấu hình máy chủ: ' + trimmed);
+                                    } else {
+                                      localStorage.removeItem('xuongan_api_server_url');
+                                      alert('✨ Đã đặt lại cấu hình máy chủ về Tự động.');
+                                    }
+                                  }}
+                                  className="flex-1 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[9px] uppercase tracking-wider transition cursor-pointer text-center"
+                                >
+                                  Lưu
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const baseUrl = apiServerUrl.trim().replace(/\/$/, '') || getApiBaseUrl() || window.location.origin;
+                                    try {
+                                      const checkRes = await fetch(`${baseUrl}/api/health`);
+                                      if (checkRes.ok) {
+                                        const data = await checkRes.json();
+                                        if (data.status === 'ok') {
+                                          alert('✅ Kết nối Máy chủ thành công!');
+                                        } else {
+                                          alert('⚠️ Máy chủ phản hồi nhưng trạng thái không khớp: ' + JSON.stringify(data));
+                                        }
+                                      } else {
+                                        alert(`❌ Kết nối thất bại với mã lỗi: ${checkRes.status}`);
+                                      }
+                                    } catch (e: any) {
+                                      alert(`❌ Không thể kết nối: ${e.message}`);
+                                    }
+                                  }}
+                                  className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 text-slate-705 dark:text-slate-300 font-bold text-[9px] uppercase tracking-wider transition cursor-pointer text-center"
+                                >
+                                  Kiểm tra
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         )}
 

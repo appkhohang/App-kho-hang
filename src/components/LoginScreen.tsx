@@ -12,9 +12,12 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   signInWithEmailAndPassword, 
-  signOut 
+  signOut,
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
-import { auth } from '../utils/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db, getNamespaceCollection, isUsingCustomFirebase } from '../utils/firebase';
+import { User, ClipboardCheck, ArrowLeft, Cloud } from 'lucide-react';
 
 interface LoginScreenProps {
   authState: AuthState;
@@ -33,6 +36,12 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
   const [showPasswordToggle, setShowPasswordToggle] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+
+  // Registration Mode States (especially useful for custom blank secondary Firebase projects)
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [registerDisplayName, setRegisterDisplayName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [registerLoading, setRegisterLoading] = useState(false);
 
   // Simulated OTP secrets
   const [mfaSecret, setMfaSecret] = useState('XUONG_AN_MFA_KEY_779');
@@ -148,6 +157,76 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
     }
   };
 
+  const handleEmailRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password || !registerDisplayName.trim()) {
+      setErrorMessage('Vui lòng nhập đầy đủ Họ tên, Email và Mật khẩu.');
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMessage('Mật khẩu tối thiểu phải từ 6 ký tự.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMessage('Mật khẩu xác nhận không trùng khớp.');
+      return;
+    }
+
+    setRegisterLoading(true);
+    setErrorMessage('');
+
+    try {
+      // 1. Create authentication user in Firebase
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const user = userCredential.user;
+
+      if (user && user.email) {
+        const activeEmail = user.email.toLowerCase().trim();
+        
+        // 2. Create matching UserProfile record in Firestore
+        const profileId = activeEmail; // Doc ID is email
+        const newProfile: UserProfile = {
+          id: profileId,
+          email: activeEmail,
+          displayName: registerDisplayName.trim(),
+          role: 'admin', // First register/owner on custom database gets Admin role
+          createdAt: Date.now(),
+          active: true,
+          allowedTabs: ['home', 'orders', 'products', 'debts', 'settings', 'gps'] // Standard modules
+        };
+
+        // Write to Firestore path
+        const profileColRef = getNamespaceCollection('user_profiles');
+        await setDoc(doc(db, profileColRef, profileId), newProfile);
+
+        const updatedAuth = {
+          ...authState,
+          isAuthenticated: true,
+          email: activeEmail,
+          displayName: registerDisplayName.trim(),
+          verified2FA: false
+        };
+        
+        setRegisterLoading(false);
+        setAuthState(updatedAuth);
+        triggerSecurityNotification(activeEmail);
+        onLoginSuccess();
+      }
+    } catch (err: any) {
+      setRegisterLoading(false);
+      console.error("Firebase Registration Error: ", err);
+      let localizedMsg = err.message || 'Đăng ký thất bại';
+      if (err.code === 'auth/email-already-in-use') {
+        localizedMsg = 'Email này đã được đăng ký tài khoản trước đó!';
+      } else if (err.code === 'auth/invalid-email') {
+        localizedMsg = 'Định dạng Email không hợp lệ.';
+      } else if (err.code === 'auth/weak-password') {
+        localizedMsg = 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
+      }
+      setErrorMessage(`Lỗi đăng ký tài khoản mới: ${localizedMsg}`);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setErrorMessage('');
@@ -213,7 +292,13 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
         errStr.includes('popup-closed-by-user') ||
         errStr.includes('cancelled-by-user');
 
-      if (isSandboxIssue) {
+      const isUnauthorizedDomain = 
+        err.code === 'auth/unauthorized-domain' || 
+        errStr.includes('unauthorized-domain');
+
+      if (isUnauthorizedDomain) {
+        setErrorMessage(`⚠️ Lỗi Tên miền Chưa được Ủy quyền (Unauthorized Domain):\n\nTên miền hiện tại chưa được đăng ký trong cài đặt Firebase Authentication của dự án Firebase thứ 2.\n\n👉 Cách khắc phục:\n1. Truy cập Firebase Console của dự án thứ 2.\n2. Vào mục Authentication -> Settings -> Authorized domains.\n3. Thêm tên miền này: "${window.location.hostname}" vào danh sách.\n4. Hoặc sử dụng phương thức đăng nhập/đăng ký bằng Email & Mật khẩu bên dưới (khuyên dùng vì nhanh và tiện lợi hơn khi chạy APK).`);
+      } else if (isSandboxIssue) {
         setErrorMessage('⚠️ Lỗi kết nối Google Auth (Hạn chế Iframe Sandbox/Trình duyệt).\n\nDo chính sách bảo mật, cửa sổ xem thử (Iframe) chặn popup hoặc cookie bên thứ ba. Để xử lý, bạn hãy:\n1. Bấm nút "Mở trong tab mới" (ở phía góc trên bên phải màn hình AI Studio) rồi thực hiện đăng nhập lại.\n2. Hoặc đăng nhập trực tiếp bằng tài khoản Email & Mật khẩu phụ.');
       } else {
         setErrorMessage(`Lỗi đăng nhập Google: ${err.message || 'Hủy bỏ phiên hạch toán'}`);
@@ -282,85 +367,243 @@ export default function LoginScreen({ authState, setAuthState, userProfiles = []
         <AnimatePresence mode="wait">
           {step === 'login' && (
             <motion.div
-              key="login-step"
+              key={isRegisterMode ? "register-step" : "login-step"}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               className="space-y-6"
             >
-              <form onSubmit={handleEmailLogin} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-650 dark:text-slate-300 uppercase tracking-wider mb-2 font-mono">
-                    Email đăng nhập
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@gmail.com"
-                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-800 dark:text-slate-200 outline-none transition shadow-2xs"
-                    />
+              {/* Custom Firebase Storage Active Badge & Info */}
+              {isUsingCustomFirebase && (
+                <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900 rounded-xl text-left space-y-1.5 shadow-2xs">
+                  <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10.5px] uppercase tracking-wider font-mono">
+                    <Cloud className="w-4 h-4 text-indigo-500 animate-pulse shrink-0" />
+                    <span>Lưu trữ ảnh qua Firebase 2</span>
                   </div>
+                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-relaxed font-sans">
+                    ✨ Đã kích hoạt cấu hình lai: Ứng dụng đang dùng <strong>Firebase 1</strong> làm mặc định để đồng bộ hóa dữ liệu nhập liệu ổn định, và tự động lưu trữ hình ảnh trực tiếp lên Cloud Storage của dự án <strong>Firebase 2</strong> cá nhân của bạn. Không cần đăng ký lại tài khoản!
+                  </p>
                 </div>
+              )}
 
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-xs font-semibold text-slate-650 dark:text-slate-300 uppercase tracking-wider font-mono">
+              {/* Navigation Tabs between Login and Signup */}
+              <div className="flex border-b border-slate-150 dark:border-slate-800 pb-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegisterMode(false);
+                    setErrorMessage('');
+                  }}
+                  className={`flex-1 pb-2 text-center text-[11.5px] font-extrabold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                    !isRegisterMode
+                      ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 font-black'
+                      : 'text-slate-400 hover:text-slate-600 dark:text-slate-500'
+                  }`}
+                >
+                  Đăng nhập
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegisterMode(true);
+                    setErrorMessage('');
+                  }}
+                  className={`flex-1 pb-2 text-center text-[11.5px] font-extrabold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                    isRegisterMode
+                      ? 'border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 font-black'
+                      : 'text-slate-400 hover:text-slate-600 dark:text-slate-500'
+                  }`}
+                >
+                  Đăng ký tài khoản
+                </button>
+              </div>
+
+              {!isRegisterMode ? (
+                // 1. LOGIN FORM
+                <form onSubmit={handleEmailLogin} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-650 dark:text-slate-300 uppercase tracking-wider mb-2 font-mono text-left">
+                      Email đăng nhập
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@gmail.com"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-800 dark:text-slate-200 outline-none transition shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-xs font-semibold text-slate-650 dark:text-slate-300 uppercase tracking-wider font-mono text-left">
+                        Mật khẩu bảo mật
+                      </label>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 rounded-lg py-2.5 pl-10 pr-10 text-sm text-slate-800 dark:text-slate-200 outline-none transition shadow-2xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {errorMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-650 dark:text-red-400 flex items-start gap-2 text-left shadow-2xs"
+                    >
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 space-y-1 overflow-hidden">
+                        {errorMessage.split('\n').map((line, idx) => (
+                          <p key={idx} className="font-sans leading-relaxed break-words">{line}</p>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  <button
+                    id="email_login_btn"
+                    type="submit"
+                    disabled={emailLoading}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.98] shadow-sm font-bold"
+                  >
+                    {emailLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    ) : (
+                      <>
+                        <Key className="w-4 h-4" />
+                        <span>Xác thực & Vào hệ thống</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                // 2. REGISTRATION FORM (SIGN UP)
+                <form onSubmit={handleEmailRegister} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-650 dark:text-slate-300 uppercase tracking-wider mb-2 font-mono text-left">
+                      Họ tên của bạn
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        value={registerDisplayName}
+                        onChange={(e) => setRegisterDisplayName(e.target.value)}
+                        placeholder="Ví dụ: Sếp An, Quản lý Vũ Kuli"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-800 dark:text-slate-200 outline-none transition shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-650 dark:text-slate-300 uppercase tracking-wider mb-2 font-mono text-left">
+                      Email đăng ký
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="your-email@gmail.com"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-800 dark:text-slate-200 outline-none transition shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-650 dark:text-slate-300 uppercase tracking-wider mb-2 font-mono text-left">
                       Mật khẩu bảo mật
                     </label>
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 rounded-lg py-2.5 pl-10 pr-10 text-sm text-slate-800 dark:text-slate-200 outline-none transition shadow-2xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {errorMessage && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-650 dark:text-red-400 flex items-start gap-2 text-left"
-                  >
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1 space-y-1">
-                      {errorMessage.split('\n').map((line, idx) => (
-                        <p key={idx} className="font-sans leading-relaxed">{line}</p>
-                      ))}
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Mật khẩu tối thiểu 6 ký tự"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 rounded-lg py-2.5 pl-10 pr-10 text-sm text-slate-800 dark:text-slate-200 outline-none transition shadow-2xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
-                  </motion.div>
-                )}
+                  </div>
 
-                <button
-                  id="email_login_btn"
-                  type="submit"
-                  disabled={emailLoading}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.98] shadow-sm"
-                >
-                  {emailLoading ? (
-                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                  ) : (
-                    <>
-                      <Key className="w-4 h-4" />
-                      <span>Xác thực & Vào hệ thống</span>
-                    </>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-650 dark:text-slate-300 uppercase tracking-wider mb-2 font-mono text-left">
+                      Xác nhận mật khẩu
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Nhập lại mật khẩu"
+                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 rounded-lg py-2.5 pl-10 pr-10 text-sm text-slate-800 dark:text-slate-200 outline-none transition shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  {errorMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-650 dark:text-red-400 flex items-start gap-2 text-left shadow-2xs"
+                    >
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 space-y-1 overflow-hidden">
+                        {errorMessage.split('\n').map((line, idx) => (
+                          <p key={idx} className="font-sans leading-relaxed break-words">{line}</p>
+                        ))}
+                      </div>
+                    </motion.div>
                   )}
-                </button>
-              </form>
+
+                  <button
+                    type="submit"
+                    disabled={registerLoading}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.98] shadow-sm font-black uppercase tracking-wider"
+                  >
+                    {registerLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    ) : (
+                      <>
+                        <ClipboardCheck className="w-4 h-4" />
+                        <span>Khởi tạo & Đăng nhập</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
 
               {/* Divider */}
               <div className="relative flex py-2 items-center">
