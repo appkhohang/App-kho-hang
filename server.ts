@@ -12,8 +12,10 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // Enable CORS with support for all origins (including capacitor/mobile webviews)
+  // We use origin: true to dynamically echo back the exact requester's origin
+  // (e.g. capacitor://localhost), which is required when credentials: true is set
   app.use(cors({
-    origin: '*',
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
     credentials: true
@@ -25,7 +27,7 @@ async function startServer() {
   });
 
   // B2 Proxy endpoints to bypass browser CORS constraints
-  app.post("/api/b2/authorize", async (req, res) => {
+  app.post("/api/media-sync/authorize", async (req, res) => {
     const { applicationKeyId, applicationKey } = req.body;
     if (!applicationKeyId || !applicationKey) {
       return res.status(400).json({ message: "Thiếu Application Key ID hoặc Application Key." });
@@ -59,7 +61,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/b2/getUploadUrl", async (req, res) => {
+  app.post("/api/media-sync/getUploadUrl", async (req, res) => {
     const { apiUrl, authorizationToken, bucketId } = req.body;
     if (!apiUrl || !authorizationToken || !bucketId) {
       return res.status(400).json({ message: "Thiếu thông tin kết nối hoặc bucketId" });
@@ -88,7 +90,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/b2/uploadFile", async (req, res) => {
+  app.post("/api/media-sync/uploadFile", async (req, res) => {
     const { uploadUrl, authorizationToken, filePath, fileType, fileBase64 } = req.body;
     if (!uploadUrl || !authorizationToken || !filePath || !fileBase64) {
       return res.status(400).json({ message: "Thiếu dữ liệu tải lên." });
@@ -121,7 +123,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/b2/deleteFile", async (req, res) => {
+  app.post("/api/media-sync/deleteFile", async (req, res) => {
     const { apiUrl, authorizationToken, fileId, fileName } = req.body;
     if (!apiUrl || !authorizationToken || !fileId || !fileName) {
       return res.status(400).json({ message: "Thiếu dữ liệu để xóa file." });
@@ -153,7 +155,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/b2/getBucketSize", async (req, res) => {
+  app.post("/api/media-sync/getBucketSize", async (req, res) => {
     const { apiUrl, authorizationToken, bucketId } = req.body;
     if (!apiUrl || !authorizationToken || !bucketId) {
       return res.status(400).json({ message: "Thiếu thông tin kết nối hoặc bucketId" });

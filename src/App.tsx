@@ -1382,6 +1382,24 @@ export default function App() {
     saveState("xuongan_auth", authState);
   }, [authState]);
 
+  // Auto-detect and save standard web origin into cloud-synced settings so that the Android APK can auto-connect
+  useEffect(() => {
+    const isCapacitor = typeof window !== 'undefined' && (
+      (window as any).Capacitor || 
+      window.location.protocol === 'capacitor:' ||
+      (window.location.hostname === 'localhost' && window.location.port !== '3000')
+    );
+    if (typeof window !== 'undefined' && !isCapacitor) {
+      const currentOrigin = window.location.origin;
+      if (currentOrigin && currentOrigin.startsWith('http') && currentOrigin !== settings.lastWebOrigin) {
+        setSettings(prev => ({
+          ...prev,
+          lastWebOrigin: currentOrigin
+        }));
+      }
+    }
+  }, [settings.lastWebOrigin]);
+
   useEffect(() => {
     saveState("xuongan_settings", settings);
     

@@ -106,6 +106,8 @@ export interface AppSettings {
   exportFormat: 'xlsx' | 'csv';
   primaryColor?: 'green' | 'blue' | 'purple' | 'red' | 'orange' | 'cyan' | 'pink' | 'amber' | 'indigo' | 'custom';
   customColorHex?: string;
+  lastWebOrigin?: string;
+  apiServerUrl?: string;
 }
 
 export interface ProcessOperation {

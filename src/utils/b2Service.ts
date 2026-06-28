@@ -44,7 +44,16 @@ interface B2UploadUrlResponse {
 /**
  * Get API base URL depending on execution environment (Web vs Android APK)
  */
-function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string {
+  // Check if a custom API Server URL is configured (specifically set by user in Settings)
+  // If configured, we should ALWAYS honor it first (both on Web and Capacitor/mobile)
+  if (typeof window !== 'undefined') {
+    const configuredUrl = localStorage.getItem('xuongan_api_server_url');
+    if (configuredUrl) {
+      return configuredUrl.trim().replace(/\/$/, '');
+    }
+  }
+
   const isCapacitor = typeof window !== 'undefined' && (
     (window as any).Capacitor || 
     window.location.protocol === 'capacitor:' ||
@@ -58,10 +67,17 @@ function getApiBaseUrl(): string {
     return '';
   }
 
-  // Check if a custom API Server URL is configured (specifically for the Android APK)
-  const configuredUrl = localStorage.getItem('xuongan_api_server_url');
-  if (configuredUrl) {
-    return configuredUrl.trim().replace(/\/$/, '');
+  // Fallback to the synced web origin of the production/deployed application from local settings
+  const settingsStr = localStorage.getItem("xuongan_settings");
+  if (settingsStr) {
+    try {
+      const parsed = JSON.parse(settingsStr);
+      if (parsed && parsed.lastWebOrigin) {
+        return parsed.lastWebOrigin.trim().replace(/\/$/, '');
+      }
+    } catch (e) {
+      // ignore
+    }
   }
   
   // Default fallback for APK connecting back to development workspace server
@@ -81,7 +97,7 @@ export const B2Service = {
     }
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/b2/authorize`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/media-sync/authorize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -109,7 +125,7 @@ export const B2Service = {
    */
   async getUploadUrl(apiUrl: string, authToken: string, bucketId: string): Promise<B2UploadUrlResponse> {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/b2/getUploadUrl`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/media-sync/getUploadUrl`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -178,7 +194,7 @@ export const B2Service = {
 
     // 4. Upload file using proxy
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/b2/uploadFile`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/media-sync/uploadFile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -222,7 +238,7 @@ export const B2Service = {
       const auth = await this.authorize(config);
 
       // 2. Call delete file version API via proxy
-      const res = await fetch(`${getApiBaseUrl()}/api/b2/deleteFile`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/media-sync/deleteFile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -251,7 +267,7 @@ export const B2Service = {
   async getBucketSize(config: B2Config): Promise<{ totalSize: number; fileCount: number }> {
     try {
       const auth = await this.authorize(config);
-      const res = await fetch(`${getApiBaseUrl()}/api/b2/getBucketSize`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/media-sync/getBucketSize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -22,7 +22,7 @@ export default defineConfig(() => {
         configureServer(server) {
           server.middlewares.use((req, res, next) => {
             const url = req.url ? req.url.split('?')[0] : '';
-            if (url.startsWith('/api/b2/')) {
+            if (url.startsWith('/api/media-sync/')) {
               let bodyStr = '';
               req.on('data', chunk => {
                 bodyStr += chunk;
@@ -35,7 +35,7 @@ export default defineConfig(() => {
 
                 res.setHeader('Content-Type', 'application/json');
 
-                if (url === '/api/b2/authorize') {
+                if (url === '/api/media-sync/authorize') {
                   const { applicationKeyId, applicationKey } = body;
                   if (!applicationKeyId || !applicationKey) {
                     res.statusCode = 400;
@@ -60,7 +60,7 @@ export default defineConfig(() => {
                   }
                 }
 
-                if (url === '/api/b2/getUploadUrl') {
+                if (url === '/api/media-sync/getUploadUrl') {
                   const { apiUrl, authorizationToken, bucketId } = body;
                   if (!apiUrl || !authorizationToken || !bucketId) {
                     res.statusCode = 400;
@@ -84,7 +84,7 @@ export default defineConfig(() => {
                   }
                 }
 
-                if (url === '/api/b2/uploadFile') {
+                if (url === '/api/media-sync/uploadFile') {
                   const { uploadUrl, authorizationToken, filePath, fileType, fileBase64 } = body;
                   if (!uploadUrl || !authorizationToken || !filePath || !fileBase64) {
                     res.statusCode = 400;
@@ -111,7 +111,7 @@ export default defineConfig(() => {
                   }
                 }
 
-                if (url === '/api/b2/deleteFile') {
+                if (url === '/api/media-sync/deleteFile') {
                   const { apiUrl, authorizationToken, fileId, fileName } = body;
                   if (!apiUrl || !authorizationToken || !fileId || !fileName) {
                     res.statusCode = 400;
@@ -135,7 +135,7 @@ export default defineConfig(() => {
                   }
                 }
 
-                if (url === '/api/b2/getBucketSize') {
+                if (url === '/api/media-sync/getBucketSize') {
                   const { apiUrl, authorizationToken, bucketId } = body;
                   if (!apiUrl || !authorizationToken || !bucketId) {
                     res.statusCode = 400;

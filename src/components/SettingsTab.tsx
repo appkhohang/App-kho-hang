@@ -9,6 +9,7 @@ import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, 
 import { AppSettings, ImportItem, Customer, UserProfile, Bill, CURRENT_VERSION, AppUpdateInfo } from '../types';
 import { isNewerVersion } from '../utils/updateService';
 import { useAndroidBack } from '../hooks/useAndroidBack';
+import { getApiBaseUrl } from '../utils/b2Service';
 import { Capacitor } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 
@@ -1910,7 +1911,7 @@ export default function SettingsTab({
                 <button
                   type="button"
                   onClick={async () => {
-                    const baseUrl = apiServerUrl.trim().replace(/\/$/, '') || window.location.origin;
+                    const baseUrl = apiServerUrl.trim().replace(/\/$/, '') || getApiBaseUrl() || window.location.origin;
                     try {
                       const checkRes = await fetch(`${baseUrl}/api/health`);
                       if (checkRes.ok) {

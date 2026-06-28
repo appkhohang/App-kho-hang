@@ -286,9 +286,18 @@ export default function ModelGalleryTab({
     } catch (err: any) {
       console.error(err);
       setB2Status('error');
-      setB2ErrorMsg(err.message || 'Lỗi không xác định.');
+      
+      let rawMsg = err.message || 'Lỗi không xác định.';
+      let displayMsg = rawMsg;
+      
+      // Provide user-friendly troubleshooting guide for "Failed to fetch" errors
+      if (rawMsg.toLowerCase().includes('failed to fetch') || rawMsg.toLowerCase().includes('networkerror')) {
+        displayMsg = `${rawMsg}\n\n💡 GỢI Ý KHẮC PHỤC:\n1. Tắt Brave Shields (nếu dùng trình duyệt Brave) hoặc các tiện ích chặn quảng cáo (Adblocker).\n2. Nếu bạn đang cấu hình thủ công "Máy chủ API" trong phần Cài đặt, hãy đảm bảo máy chủ đó đang hoạt động và địa chỉ chính xác.\n3. Nếu chạy bản web thông thường, hãy đặt "Máy chủ API" về "Tự động" trong Cài đặt để ứng dụng tự động gọi về đúng địa chỉ web hiện tại.`;
+      }
+      
+      setB2ErrorMsg(displayMsg);
       if (!silent) {
-        alert(`❌ Kết nối thất bại: ${err.message}`);
+        alert(`❌ Kết nối thất bại: ${displayMsg}`);
       }
       return false;
     } finally {
