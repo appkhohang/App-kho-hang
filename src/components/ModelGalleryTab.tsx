@@ -22,11 +22,13 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 // --- Lazy-loaded Image with Shimmer/Skeleton Placeholder Component ---
 function ModelImage({ 
   src, 
+  thumbnailSrc,
   alt, 
   className, 
   layout 
 }: { 
   src: string; 
+  thumbnailSrc?: string;
   alt: string; 
   className?: string; 
   layout: string;
@@ -35,11 +37,18 @@ function ModelImage({
 
   return (
     <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
-      {!loaded && (
+      {!loaded && thumbnailSrc && (
+        <img 
+          src={thumbnailSrc} 
+          alt="thumbnail"
+          className={`${className} filter blur-[4px] opacity-70 scale-100 transition-opacity duration-300`}
+        />
+      )}
+      {!loaded && !thumbnailSrc && (
         <div className="absolute inset-0 bg-slate-200 dark:bg-emerald-950/20 animate-pulse flex flex-col items-center justify-center gap-1.5 p-3">
-          <Loader2 className="w-5 h-5 animate-spin text-teal-600 dark:text-emerald-500" />
+          <Loader2 className="w-5 h-5 animate-spin text-indigo-600 dark:text-indigo-400" />
           <span className="text-[8px] font-mono font-bold uppercase text-slate-400 dark:text-[#527065] tracking-wider text-center">
-            Đang tải ảnh...
+            Đang tải...
           </span>
         </div>
       )}
@@ -48,7 +57,7 @@ function ModelImage({
         alt={alt} 
         referrerPolicy="no-referrer"
         onLoad={() => setLoaded(true)}
-        className={`${className} transition-all duration-300 ${loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+        className={`${className} transition-all duration-300 ${loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95 absolute'}`}
         loading="lazy"
       />
     </div>
@@ -232,17 +241,6 @@ export default function ModelGalleryTab({
   useEffect(() => {
     localStorage.setItem('xuongan_model_folders', JSON.stringify(folders));
   }, [folders]);
-
-  // Test B2 Connection on mount if configured
-  useEffect(() => {
-    if (b2Config.configured && b2Config.applicationKeyId && b2Config.applicationKey) {
-      testB2Connection(b2Config, true).then((success) => {
-        if (success) {
-          fetchB2StorageInfo(b2Config);
-        }
-      });
-    }
-  }, []);
 
   // --- B2 Helper Methods ---
   const formatBytes = (bytes: number, decimals = 2) => {
@@ -535,8 +533,8 @@ export default function ModelGalleryTab({
         let finalLocalBase64 = (editingSample && i === 0) ? (editingSample.localBase64 || item.base64) : item.base64;
 
         if (isNewUploadNeeded) {
-          // Compress image to around 1000px max dimensions for efficient storage
-          const compressedBase64 = await compressBase64Image(item.base64, 1000, 1000, 0.75);
+          // Compress image to around 800px max dimensions for efficient storage & ultra-fast upload speed
+          const compressedBase64 = await compressBase64Image(item.base64, 800, 800, 0.70);
           finalLocalBase64 = compressedBase64;
 
           try {
@@ -1396,6 +1394,7 @@ export default function ModelGalleryTab({
                       {imgSource ? (
                         <ModelImage 
                           src={imgSource} 
+                          thumbnailSrc={sample.b2Url ? sample.localBase64 : undefined}
                           alt={sample.modelName} 
                           layout={galleryLayout}
                           className={`w-full transition-transform duration-300 group-hover:scale-106 ${

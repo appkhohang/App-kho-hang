@@ -1616,8 +1616,8 @@ export default function App() {
         setQuickModelUploadProgress('compressing');
         setQuickModelStatusMsg('Đang tối ưu dung lượng ảnh mẫu...');
         
-        // Compress image to around 1000px max dimensions for efficient storage
-        const compressedBase64 = await compressBase64Image(quickModelPhoto, 1000, 1000, 0.75);
+        // Compress image to around 800px max dimensions for efficient storage & ultra-fast upload speed
+        const compressedBase64 = await compressBase64Image(quickModelPhoto, 800, 800, 0.70);
         finalLocalBase64 = compressedBase64;
 
         setQuickModelUploadProgress('uploading');
