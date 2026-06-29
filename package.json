@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "1.0.71",
+  "version": "1.0.72",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -12,7 +12,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "start": "node dist/server.cjs",
-    "capgo-push": "node scripts/bump-version.js && npm run build && npx @capgo/cli bundle upload -c production com.xuongan.quanlykho"
+    "capgo-push": "node scripts/bump-version.js && npm run build && npx @capgo/cli bundle upload -c production --zip com.xuongan.quanlykho"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
