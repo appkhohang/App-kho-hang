@@ -67,25 +67,26 @@ jobs:
       - name: Build production app
         run: npx vite build
 
-      - name: Upload and deploy to Capgo
+      - name: Upload and deploy to Supabase (OTA Live Update)
         env:
-          CAPGO_TOKEN: ${{ secrets.CAPGO_API_KEY }}
+          CAPGO_SUPABASE_URL: ${{ secrets.CAPGO_SUPABASE_URL }}
+          CAPGO_SUPABASE_ANON_KEY: ${{ secrets.CAPGO_SUPABASE_ANON_KEY }}
         run: |
-          if [ -z "$CAPGO_TOKEN" ]; then
-            echo "::error::CAPGO_API_KEY secret is not configured in your GitHub repository secrets! Please set CAPGO_API_KEY in your GitHub Settings -> Secrets and variables -> Actions to enable automatic deployments."
+          if [ -z "$CAPGO_SUPABASE_URL" ] || [ -z "$CAPGO_SUPABASE_ANON_KEY" ]; then
+            echo "::error::CAPGO_SUPABASE_URL or CAPGO_SUPABASE_ANON_KEY secret is not configured in your GitHub repository secrets! Please set these in your GitHub Settings -> Secrets and variables -> Actions to enable automatic deployments."
             exit 1
           fi
           VERSION=$(node -p "require('./package.json').version")
-          echo "Uploading bundle version $VERSION to Capgo..."
+          echo "Uploading bundle version $VERSION to Supabase..."
           EXIT_CODE=0
-          OUTPUT=$(npx @capgo/cli@latest bundle upload --apikey "$CAPGO_TOKEN" -c production -b "$VERSION" --zip com.xuongan.quanlykho 2>&1) || EXIT_CODE=$?
+          OUTPUT=$(npx @capgo/cli@latest bundle upload --supa-host "$CAPGO_SUPABASE_URL" --supa-anon "$CAPGO_SUPABASE_ANON_KEY" -c production -b "$VERSION" --zip com.xuongan.quanlykho 2>&1) || EXIT_CODE=$?
           echo "$OUTPUT"
           if [ $EXIT_CODE -ne 0 ]; then
             if echo "$OUTPUT" | grep -q "already exists"; then
-              echo "::warning::Version $VERSION already exists on Capgo Cloud. Skipping upload as this bundle has already been successfully deployed."
+              echo "::warning::Version $VERSION already exists on Supabase. Skipping upload as this bundle has already been successfully deployed."
               exit 0
             else
-              echo "::error::Capgo bundle upload failed with exit code $EXIT_CODE."
+              echo "::error::Supabase bundle upload failed with exit code $EXIT_CODE."
               exit $EXIT_CODE
             fi
           fi
