@@ -228,7 +228,7 @@ export interface UserProfile {
   lastLocationTime?: string; // Thời gian cập nhật vị trí gần nhất
 }
 
-export const CURRENT_VERSION = '1.0.36';
+export const CURRENT_VERSION = '1.0.74';
 
 export interface AppUpdateInfo {
   version: string;
@@ -248,6 +248,8 @@ export interface ModelSample {
   id: string;
   modelName: string;
   folder: string; // Thư mục phân loại (e.g., "Mẫu váy", "Áo thun")
+  customerId?: string; // ID khách hàng liên kết
+  customerName?: string; // Tên khách hàng liên kết (ví dụ: Khách A, Khách B)
   b2Url?: string; // Backblaze B2 public URL
   b2FileId?: string; // B2 File ID (for deletion)
   b2FilePath?: string; // B2 original file path

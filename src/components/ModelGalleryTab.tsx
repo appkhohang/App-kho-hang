@@ -12,7 +12,7 @@ import {
   FileText, ArrowRight, RotateCw, Trash, Calendar, Edit2, Share2, ZoomIn, ShieldCheck,
   Maximize2, ChevronLeft, ZoomOut, LayoutGrid, Square, SquareCheck
 } from 'lucide-react';
-import { ModelSample, B2Config } from '../types';
+import { ModelSample, B2Config, Customer } from '../types';
 import { db, getNamespaceCollection, isUsingCustomFirebase, uploadImageToFirebase, deleteImageFromFirebase } from '../utils/firebase';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { B2Service, base64ToBlob } from '../utils/b2Service';
@@ -68,12 +68,14 @@ interface ModelGalleryTabProps {
   resolvedTheme?: 'light' | 'dark';
   isQuickEditMode?: boolean;
   onChangeQuickEditMode?: (val: boolean) => void;
+  customers?: Customer[];
 }
 
 export default function ModelGalleryTab({ 
   resolvedTheme = 'light',
   isQuickEditMode,
-  onChangeQuickEditMode
+  onChangeQuickEditMode,
+  customers = []
 }: ModelGalleryTabProps) {
   const isDark = resolvedTheme === 'dark';
 
@@ -145,6 +147,24 @@ export default function ModelGalleryTab({
   });
   const [loadingStorageInfo, setLoadingStorageInfo] = useState<boolean>(false);
 
+  // --- Folder hierarchy navigation states ---
+  const [currentLevel, setCurrentLevel] = useState<'customers' | 'models' | 'photos'>('customers');
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+
+  // Custom customer folders created directly in gallery
+  const [customCustomerFolders, setCustomCustomerFolders] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_custom_customer_folders');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+
   // Bulk selection and deletion states
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
   const [selectedSampleIds, setSelectedSampleIds] = useState<string[]>([]);
@@ -159,9 +179,11 @@ export default function ModelGalleryTab({
     price: '',
     material: '',
     description: '',
-    photo: ''
+    photo: '',
+    customerName: 'Khách hàng chung'
   });
   const [customFolderName, setCustomFolderName] = useState('');
+  const [customCustomerInput, setCustomCustomerInput] = useState('');
 
   // Multiple images state
   const [batchFiles, setBatchFiles] = useState<{ name: string; base64: string }[]>([]);
@@ -429,12 +451,13 @@ export default function ModelGalleryTab({
     setEditingSample(null);
     setBatchFiles([]);
     setFormData({
-      modelName: '',
+      modelName: selectedModel || '',
       folder: selectedFolder !== 'all' ? selectedFolder : folders[0] || 'Chưa phân loại',
       price: '',
       material: '',
       description: '',
-      photo: ''
+      photo: '',
+      customerName: selectedCustomer || 'Khách hàng chung'
     });
     setCustomFolderName('');
     setUploadProgress('idle');
@@ -452,7 +475,8 @@ export default function ModelGalleryTab({
       price: sample.price ? String(sample.price) : '',
       material: sample.material || '',
       description: sample.description || '',
-      photo: sample.b2Url || sample.localBase64 || ''
+      photo: sample.b2Url || sample.localBase64 || '',
+      customerName: sample.customerName || 'Khách hàng chung'
     });
     setCustomFolderName('');
     setUploadProgress('idle');
@@ -476,6 +500,25 @@ export default function ModelGalleryTab({
           setFolders(prev => {
             const next = [...prev.filter(f => f !== 'Chưa phân loại'), finalFolder, 'Chưa phân loại'];
             localStorage.setItem('xuongan_model_folders', JSON.stringify(next));
+            return next;
+          });
+        }
+      }
+
+      let finalCustomer = formData.customerName || 'Khách hàng chung';
+      if (formData.customerName === '__new_customer__') {
+        const trimmedCustomCustomer = customCustomerInput.trim();
+        if (!trimmedCustomCustomer) {
+          alert('Vui lòng nhập tên khách hàng mới.');
+          return;
+        }
+        finalCustomer = trimmedCustomCustomer;
+        
+        // Add to customCustomerFolders state if not exists
+        if (!customCustomerFolders.map(f => f.toLowerCase()).includes(finalCustomer.toLowerCase())) {
+          setCustomCustomerFolders(prev => {
+            const next = [...prev, finalCustomer];
+            localStorage.setItem('xuongan_custom_customer_folders', JSON.stringify(next));
             return next;
           });
         }
@@ -584,6 +627,7 @@ export default function ModelGalleryTab({
           id: sampleId,
           modelName: finalModelName,
           folder: finalFolder,
+          customerName: finalCustomer,
           price: formData.price ? Number(formData.price) : undefined,
           material: formData.material.trim() || undefined,
           description: formData.description.trim() || undefined,
@@ -808,19 +852,172 @@ export default function ModelGalleryTab({
     }
   };
 
+  // --- Customer & Model Folder Dynamic Lists ---
+  // Dynamically compute all customer folders from customers list + samples customerName field
+  const customerFolders = useMemo(() => {
+    const names = new Set<string>();
+    
+    // 1. Add official customer names from App
+    if (customers && customers.length > 0) {
+      customers.forEach(c => {
+        if (c.name) names.add(c.name.trim());
+      });
+    }
+    
+    // 2. Add custom customer names from existing samples
+    samples.forEach(s => {
+      const name = s.customerName?.trim() || 'Khách hàng chung';
+      names.add(name);
+    });
+
+    // 3. Add custom customer folders added via the UI
+    customCustomerFolders.forEach(folder => {
+      if (folder && folder.trim()) names.add(folder.trim());
+    });
+    
+    // Always guarantee 'Khách hàng chung' exists
+    names.add('Khách hàng chung');
+    
+    return Array.from(names).sort((a, b) => {
+      if (a === 'Khách hàng chung') return -1;
+      if (b === 'Khách hàng chung') return 1;
+      return a.localeCompare(b, 'vi');
+    });
+  }, [customers, samples, customCustomerFolders]);
+
+  // Group samples of the selected customer by modelName (mẫu)
+  const modelsForSelectedCustomer = useMemo(() => {
+    if (!selectedCustomer) return [];
+    
+    const customerSamples = samples.filter(s => {
+      const cName = s.customerName || 'Khách hàng chung';
+      return cName.toLowerCase().trim() === selectedCustomer.toLowerCase().trim();
+    });
+    
+    const groups: Record<string, {
+      modelName: string;
+      samples: ModelSample[];
+      latestSample: ModelSample;
+    }> = {};
+    
+    customerSamples.forEach(s => {
+      const mName = s.modelName?.trim() || 'Mẫu chưa đặt tên';
+      if (!groups[mName]) {
+        groups[mName] = {
+          modelName: mName,
+          samples: [],
+          latestSample: s
+        };
+      }
+      groups[mName].samples.push(s);
+      if (s.createdAt > groups[mName].latestSample.createdAt) {
+        groups[mName].latestSample = s;
+      }
+    });
+    
+    return Object.values(groups).sort((a, b) => b.latestSample.createdAt - a.latestSample.createdAt);
+  }, [samples, selectedCustomer]);
+
+  // Navigation handlers
+  const enterCustomer = (customerName: string) => {
+    setSelectedCustomer(customerName);
+    setSelectedModel(null);
+    setCurrentLevel('models');
+  };
+
+  const enterModel = (modelName: string) => {
+    setSelectedModel(modelName);
+    setCurrentLevel('photos');
+  };
+
+  const goBackToCustomers = () => {
+    setSelectedCustomer(null);
+    setSelectedModel(null);
+    setCurrentLevel('customers');
+  };
+
+  const goBackToModels = () => {
+    setSelectedModel(null);
+    setCurrentLevel('models');
+  };
+
+  const handleAddCustomerFolder = () => {
+    const name = newCustomerName.trim();
+    if (!name) {
+      alert('Vui lòng nhập tên khách hàng.');
+      return;
+    }
+    if (customerFolders.map(f => f.toLowerCase()).includes(name.toLowerCase())) {
+      alert('Tên khách hàng/Thư mục này đã tồn tại.');
+      return;
+    }
+    
+    const updated = [...customCustomerFolders, name];
+    setCustomCustomerFolders(updated);
+    localStorage.setItem('xuongan_custom_customer_folders', JSON.stringify(updated));
+    setNewCustomerName('');
+    setShowAddCustomer(false);
+    
+    // Instantly go inside this customer folder
+    enterCustomer(name);
+  };
+
+  const handleDeleteCustomerFolder = (customerName: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (customerName === 'Khách hàng chung') {
+      alert('Không thể xoá thư mục Khách hàng chung.');
+      return;
+    }
+    
+    const hasSamples = samples.some(s => {
+      const cName = s.customerName || 'Khách hàng chung';
+      return cName.toLowerCase().trim() === customerName.toLowerCase().trim();
+    });
+    
+    if (hasSamples) {
+      alert('Thư mục này đang chứa hình ảnh mẫu. Vui lòng xoá hoặc di chuyển tất cả hình ảnh mẫu trước khi xoá thư mục.');
+      return;
+    }
+    
+    if (confirm(`Bạn có chắc muốn xoá thư mục khách "${customerName}"?`)) {
+      const updated = customCustomerFolders.filter(f => f.toLowerCase() !== customerName.toLowerCase());
+      setCustomCustomerFolders(updated);
+      localStorage.setItem('xuongan_custom_customer_folders', JSON.stringify(updated));
+      
+      if (selectedCustomer === customerName) {
+        goBackToCustomers();
+      }
+    }
+  };
+
   // --- Filtering & Sorting ---
   const filteredSamples = useMemo(() => {
     const seen = new Set<string>();
     return samples.filter(sample => {
       if (!sample || !sample.id || seen.has(sample.id)) return false;
       seen.add(sample.id);
+      
+      // Filter by category folder if selectedFolder !== 'all'
       const matchFolder = selectedFolder === 'all' || sample.folder === selectedFolder;
-      const matchSearch = sample.modelName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      
+      // Filter by selectedCustomer if inside models or photos level
+      const sampleCustomer = sample.customerName || 'Khách hàng chung';
+      const matchCustomer = !selectedCustomer || sampleCustomer.toLowerCase().trim() === selectedCustomer.toLowerCase().trim();
+      
+      // Filter by selectedModel if inside photos level
+      const sampleModel = sample.modelName || 'Mẫu chưa đặt tên';
+      const matchModel = !selectedModel || sampleModel.toLowerCase().trim() === selectedModel.toLowerCase().trim();
+      
+      // Filter by search term
+      const matchSearch = !searchTerm || 
+                          sample.modelName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          sampleCustomer.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (sample.description && sample.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
                           (sample.material && sample.material.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchFolder && matchSearch;
+                          
+      return matchFolder && matchCustomer && matchModel && matchSearch;
     });
-  }, [samples, selectedFolder, searchTerm]);
+  }, [samples, selectedFolder, selectedCustomer, selectedModel, searchTerm]);
 
   // Fullscreen expand state
   const [fullscreenSample, setFullscreenSample] = useState<ModelSample | null>(null);
@@ -880,6 +1077,182 @@ export default function ModelGalleryTab({
     return stats;
   }, [samples]);
 
+  const renderBreadcrumbs = () => {
+    return (
+      <div className="flex items-center flex-wrap gap-1.5 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-[#111c18]/30 border border-slate-200/50 dark:border-[#1c2d27]/40 text-[11px] font-medium text-slate-500 dark:text-[#657f76]">
+        <button 
+          onClick={goBackToCustomers}
+          className="hover:text-indigo-600 dark:hover:text-[#818cf8] font-bold transition flex items-center gap-1 cursor-pointer"
+        >
+          📁 Thư mục khách hàng
+        </button>
+        {selectedCustomer && (
+          <>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-350" />
+            <button 
+              onClick={goBackToModels}
+              className={`hover:text-indigo-600 dark:hover:text-[#818cf8] font-bold transition flex items-center gap-1 cursor-pointer ${!selectedModel ? 'text-indigo-600 dark:text-[#818cf8]' : ''}`}
+            >
+              👤 {selectedCustomer}
+            </button>
+          </>
+        )}
+        {selectedModel && (
+          <>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-350" />
+            <span className="text-slate-800 dark:text-slate-200 font-extrabold flex items-center gap-1">
+              🏷️ {selectedModel}
+            </span>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const renderCustomerFolderCard = (folderName: string) => {
+    // Find latest sample for cover image
+    const customerSamples = samples.filter(s => {
+      const cName = s.customerName || 'Khách hàng chung';
+      return cName.toLowerCase().trim() === folderName.toLowerCase().trim();
+    });
+    
+    const uniqueModelCount = new Set(customerSamples.map(s => s.modelName)).size;
+    const totalPhotos = customerSamples.length;
+    const latestSample = customerSamples.length > 0 ? customerSamples[0] : null;
+    const coverImg = latestSample ? (latestSample.b2Url || latestSample.localBase64 || '') : '';
+    const isCustom = customCustomerFolders.includes(folderName);
+
+    return (
+      <motion.div
+        key={folderName}
+        whileHover={{ scale: 1.02, y: -2 }}
+        onClick={() => enterCustomer(folderName)}
+        className="group relative bg-white dark:bg-[#0c1310] rounded-2xl border border-slate-200/75 dark:border-[#1c2d27]/70 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden flex flex-col h-44"
+      >
+        {/* Cover image thumbnail or folder icon */}
+        <div className="relative h-24 bg-slate-50 dark:bg-emerald-950/10 flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-[#1c2d27]/40">
+          {coverImg ? (
+            <div className="absolute inset-0 w-full h-full">
+              <img 
+                src={coverImg} 
+                alt={folderName} 
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 filter brightness-95 dark:brightness-90"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-linear-to-t from-black/50 via-black/10 to-transparent" />
+            </div>
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-emerald-950/20 flex items-center justify-center text-indigo-500">
+              <Folder className="w-6 h-6 fill-indigo-100 dark:fill-indigo-950/10" />
+            </div>
+          )}
+          
+          {/* Folder tag overlay */}
+          <div className="absolute top-2.5 left-2.5 bg-amber-500 text-white font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+            <Folder className="w-3 h-3 fill-white/20" />
+            <span>Thư mục</span>
+          </div>
+
+          {/* Delete custom folder (only if empty and is custom) */}
+          {isCustom && totalPhotos === 0 && (
+            <button
+              onClick={(e) => handleDeleteCustomerFolder(folderName, e)}
+              className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/95 border border-rose-200/50 dark:border-rose-900/40 text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-all cursor-pointer opacity-0 group-hover:opacity-100 z-10"
+              title="Xoá thư mục trống"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Folder Meta Details */}
+        <div className="p-3.5 flex-1 flex flex-col justify-between">
+          <div>
+            <h3 className="font-extrabold text-xs text-slate-850 dark:text-slate-150 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
+              {folderName}
+            </h3>
+            <p className="text-[10px] text-slate-400 dark:text-[#657f76] mt-0.5">
+              Khách hàng
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between text-[9px] font-mono font-bold text-slate-450 dark:text-[#527065] border-t border-slate-100/60 dark:border-[#1c2d27]/30 pt-2 mt-1">
+            <span className="flex items-center gap-0.5">🏷️ {uniqueModelCount} mẫu</span>
+            <span className="flex items-center gap-0.5">🖼️ {totalPhotos} ảnh</span>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const renderModelFolderCard = (model: {
+    modelName: string;
+    samples: ModelSample[];
+    latestSample: ModelSample;
+  }) => {
+    const coverImg = model.latestSample.b2Url || model.latestSample.localBase64 || '';
+    const totalPhotos = model.samples.length;
+    const latestPrice = model.latestSample.price;
+    const latestMaterial = model.latestSample.material;
+
+    return (
+      <motion.div
+        key={model.modelName}
+        whileHover={{ scale: 1.02, y: -2 }}
+        onClick={() => enterModel(model.modelName)}
+        className="group relative bg-white dark:bg-[#0c1310] rounded-2xl border border-slate-200/75 dark:border-[#1c2d27]/70 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden flex flex-col h-48"
+      >
+        {/* Cover image (mỗi folder hiển thị hình ảnh đại cho 1 folder) */}
+        <div className="relative h-28 bg-slate-50 dark:bg-emerald-950/10 flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-[#1c2d27]/40">
+          {coverImg ? (
+            <div className="absolute inset-0 w-full h-full">
+              <img 
+                src={coverImg} 
+                alt={model.modelName} 
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 filter brightness-95 dark:brightness-90"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-linear-to-t from-black/50 via-black/10 to-transparent" />
+            </div>
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-emerald-950/20 flex items-center justify-center text-amber-500">
+              <Folder className="w-6 h-6 fill-amber-100 dark:fill-amber-950/10" />
+            </div>
+          )}
+
+          {/* Tag badge overlay */}
+          <div className="absolute top-2.5 left-2.5 bg-indigo-600 text-white font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+            <span>🏷️ Mẫu rập</span>
+          </div>
+
+          {/* Model info price on cover if exists */}
+          {latestPrice && (
+            <div className="absolute bottom-2.5 right-2.5 bg-black/60 backdrop-blur-xs text-white font-mono font-bold text-[10px] px-2 py-0.5 rounded-lg shadow-xs">
+              {latestPrice.toLocaleString()}đ
+            </div>
+          )}
+        </div>
+
+        {/* Model Meta Details */}
+        <div className="p-3.5 flex-1 flex flex-col justify-between">
+          <div>
+            <h3 className="font-extrabold text-xs text-slate-850 dark:text-slate-150 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
+              {model.modelName}
+            </h3>
+            <p className="text-[10px] text-slate-400 dark:text-[#657f76] mt-0.5 truncate">
+              {latestMaterial ? `Vải: ${latestMaterial}` : 'Chưa nhập chất liệu'}
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between text-[9px] font-mono font-bold text-slate-450 dark:text-[#527065] border-t border-slate-100/60 dark:border-[#1c2d27]/30 pt-2 mt-1">
+            <span className="flex items-center gap-0.5">🖼️ {totalPhotos} hình ảnh</span>
+            <span className="text-teal-600 dark:text-[#10b981] font-extrabold">Xem Album →</span>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
   return (
     <div className="space-y-5 pb-24 font-sans text-xs text-slate-800 dark:text-slate-100">
       
@@ -922,11 +1295,117 @@ export default function ModelGalleryTab({
         
         {/* Sidebar categories / folders */}
         <div className="space-y-3 lg:col-span-1">
+          
+          {/* A. Thư mục Khách hàng Sidebar Section */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-[#0c1310] border border-slate-200/60 dark:border-[#1c2d27]/60 shadow-xs space-y-3">
+            <div className="flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27]/50 pb-2">
+              <span className="font-extrabold uppercase font-mono tracking-wider flex items-center gap-1.5 text-indigo-600 dark:text-[#818cf8]">
+                <span>👤</span>
+                Khách hàng
+              </span>
+              <button 
+                onClick={() => setShowAddCustomer(!showAddCustomer)}
+                className="p-1 rounded-lg bg-slate-50 dark:bg-[#111c18] hover:bg-slate-100 dark:hover:bg-[#1a2d25] transition border border-slate-250/50 dark:border-[#1c2d27]/50 text-indigo-600 dark:text-[#818cf8] cursor-pointer flex items-center justify-center"
+                title="Tạo thư mục khách mới"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Inline create Customer folder */}
+            <AnimatePresence>
+              {showAddCustomer && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-1.5 pb-2 border-b border-dashed border-slate-200 dark:border-[#1c2d27] overflow-hidden"
+                >
+                  <input 
+                    type="text"
+                    value={newCustomerName}
+                    onChange={e => setNewCustomerName(e.target.value)}
+                    placeholder="Tên khách hàng mới..."
+                    onKeyDown={e => e.key === 'Enter' && handleAddCustomerFolder()}
+                    className="w-full px-2.5 py-1.5 border rounded-lg focus:outline-hidden focus:border-indigo-500 text-[11px] dark:bg-[#0e1613] dark:border-[#1c2d27]"
+                  />
+                  <div className="flex justify-end gap-1.5 text-[10px]">
+                    <button 
+                      onClick={() => setShowAddCustomer(false)}
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-[#111c18] rounded-md font-bold text-slate-500 hover:bg-slate-150 cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                    <button 
+                      onClick={handleAddCustomerFolder}
+                      className="px-3 py-1 bg-indigo-600 text-white rounded-md font-extrabold hover:bg-indigo-700 cursor-pointer"
+                    >
+                      Tạo
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1">
+              <button
+                onClick={() => {
+                  setSelectedCustomer(null);
+                  setCurrentLevel('customers');
+                }}
+                className={`w-full text-left px-3 py-1.5 rounded-xl font-bold flex justify-between items-center transition cursor-pointer ${
+                  selectedCustomer === null 
+                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-[#818cf8]' 
+                    : 'hover:bg-slate-50 dark:hover:bg-[#111c18]/50'
+                }`}
+              >
+                <span>📂 Tất cả khách hàng</span>
+                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
+                  {samples.length}
+                </span>
+              </button>
+
+              {customerFolders.map(folder => {
+                const count = samples.filter(s => {
+                  const cName = s.customerName || 'Khách hàng chung';
+                  return cName.toLowerCase().trim() === folder.toLowerCase().trim();
+                }).length;
+
+                const isSelected = selectedCustomer?.toLowerCase().trim() === folder.toLowerCase().trim();
+
+                return (
+                  <div 
+                    key={folder}
+                    className={`group w-full rounded-xl flex justify-between items-center transition ${
+                      isSelected 
+                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-[#818cf8]' 
+                        : 'hover:bg-slate-50 dark:hover:bg-[#111c18]/50'
+                    }`}
+                  >
+                    <button
+                      onClick={() => enterCustomer(folder)}
+                      className="flex-1 text-left px-3 py-1.5 font-bold flex justify-between items-center cursor-pointer min-w-0"
+                    >
+                      <span className="truncate">👤 {folder}</span>
+                    </button>
+                    
+                    <div className="flex items-center gap-1 pr-2 shrink-0">
+                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
+                        {count}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* B. Nhóm phân loại Sidebar Section (Original Folders) */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#0c1310] border border-slate-200/60 dark:border-[#1c2d27]/60 shadow-xs space-y-3.5">
             <div className="flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27]/50 pb-2">
-              <span className="font-extrabold uppercase font-mono tracking-wider flex items-center gap-1.5">
+              <span className="font-extrabold uppercase font-mono tracking-wider flex items-center gap-1.5 text-teal-600 dark:text-[#10b981]">
                 <Folder className="w-4 h-4 text-amber-500" />
-                Thư mục mẫu
+                Nhóm phân loại
               </span>
               <div className="flex items-center gap-1">
                 {/* Delete Folder Mode Toggle */}
@@ -988,17 +1467,17 @@ export default function ModelGalleryTab({
               )}
             </AnimatePresence>
 
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1">
               <button
                 onClick={() => setSelectedFolder('all')}
-                className={`w-full text-left px-3 py-2 rounded-xl font-bold flex justify-between items-center transition cursor-pointer ${
+                className={`w-full text-left px-3 py-1.5 rounded-xl font-bold flex justify-between items-center transition cursor-pointer ${
                   selectedFolder === 'all' 
                     ? 'bg-teal-500/10 text-teal-600 dark:text-[#10b981]' 
                     : 'hover:bg-slate-50 dark:hover:bg-[#111c18]/50'
                 }`}
               >
                 <span>📁 Tất cả mẫu thiết kế</span>
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
+                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
                   {samples.length}
                 </span>
               </button>
@@ -1018,13 +1497,13 @@ export default function ModelGalleryTab({
                   >
                     <button
                       onClick={() => setSelectedFolder(folder)}
-                      className="flex-1 text-left px-3 py-2 font-bold flex justify-between items-center cursor-pointer min-w-0"
+                      className="flex-1 text-left px-3 py-1.5 font-bold flex justify-between items-center cursor-pointer min-w-0"
                     >
                       <span className="truncate">📂 {folder}</span>
                     </button>
                     
                     <div className="flex items-center gap-1 pr-2 shrink-0">
-                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
+                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
                         {count}
                       </span>
                       {folder !== 'Chưa phân loại' && (
@@ -1246,18 +1725,66 @@ export default function ModelGalleryTab({
             </motion.div>
           )}
 
+          {/* Breadcrumbs for navigation */}
+          <div className="mb-4">
+            {renderBreadcrumbs()}
+          </div>
+
           {/* Grid display */}
-          {filteredSamples.length === 0 ? (
-            <div className="py-20 text-center border-2 border-dashed border-slate-200 dark:border-[#1c2d27] rounded-3xl p-10 bg-white dark:bg-[#0c1310]/50">
-              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-[#111c18] flex items-center justify-center mx-auto text-slate-400 mb-4 animate-pulse">
-                <ImageIcon className="w-6 h-6" />
+          {currentLevel === 'customers' && (
+            customerFolders.length === 0 ? (
+              <div className="py-16 text-center border-2 border-dashed border-slate-200 dark:border-[#1c2d27] rounded-3xl p-10 bg-white dark:bg-[#0c1310]/50 animate-fade-in">
+                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-[#111c18]/10 flex items-center justify-center mx-auto text-indigo-500 mb-4">
+                  <Folder className="w-6 h-6" />
+                </div>
+                <h3 className="font-extrabold text-slate-700 dark:text-slate-300">Chưa có thư mục khách hàng nào</h3>
+                <p className="text-[10px] text-slate-400 dark:text-[#556b62] mt-1 max-w-xs mx-auto">
+                  Hãy bấm nút tạo ở thanh bên hoặc thêm mẫu mới và nhập tên khách hàng mới để tạo thư mục riêng cho từng khách hàng.
+                </p>
               </div>
-              <h3 className="font-extrabold text-slate-700 dark:text-slate-300">Không tìm thấy ảnh mẫu</h3>
-              <p className="text-[10px] text-slate-400 dark:text-[#556b62] mt-1 max-w-xs mx-auto">
-                Chưa có ảnh mẫu nào được lưu trữ trong nhóm này hoặc không khớp với từ khóa tìm kiếm. Sử dụng nút dấu cộng (+) ở góc dưới bên phải màn hình để thêm mẫu mới.
-              </p>
-            </div>
-          ) : (
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 animate-fade-in">
+                {customerFolders.map(folder => renderCustomerFolderCard(folder))}
+              </div>
+            )
+          )}
+
+          {currentLevel === 'models' && (
+            modelsForSelectedCustomer.length === 0 ? (
+              <div className="py-16 text-center border-2 border-dashed border-slate-200 dark:border-[#1c2d27] rounded-3xl p-10 bg-white dark:bg-[#0c1310]/50 animate-fade-in">
+                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-[#111c18]/10 flex items-center justify-center mx-auto text-amber-500 mb-4">
+                  <Folder className="w-6 h-6" />
+                </div>
+                <h3 className="font-extrabold text-slate-700 dark:text-slate-300">Khách hàng chưa có mẫu rập nào</h3>
+                <p className="text-[10px] text-slate-400 dark:text-[#556b62] mt-1 max-w-xs mx-auto">
+                  Nhấn nút thêm mẫu thiết kế (+) và gắn tên khách hàng này để phân loại ảnh mẫu theo folder mẫu.
+                </p>
+                <button
+                  onClick={handleOpenAddModal}
+                  className="mt-4 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] transition cursor-pointer"
+                >
+                  + Thêm mẫu đầu tiên cho khách này
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 animate-fade-in">
+                {modelsForSelectedCustomer.map(model => renderModelFolderCard(model))}
+              </div>
+            )
+          )}
+
+          {currentLevel === 'photos' && (
+            filteredSamples.length === 0 ? (
+              <div className="py-20 text-center border-2 border-dashed border-slate-200 dark:border-[#1c2d27] rounded-3xl p-10 bg-white dark:bg-[#0c1310]/50 animate-fade-in">
+                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-[#111c18] flex items-center justify-center mx-auto text-slate-400 mb-4 animate-pulse">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+                <h3 className="font-extrabold text-slate-700 dark:text-slate-300">Không tìm thấy ảnh mẫu</h3>
+                <p className="text-[10px] text-slate-400 dark:text-[#556b62] mt-1 max-w-xs mx-auto">
+                  Chưa có ảnh mẫu nào được lưu trữ trong mẫu thiết kế này hoặc không khớp với từ khóa tìm kiếm.
+                </p>
+              </div>
+            ) : (
             (() => {
               // Internal Card Renderer Helper for both grid and masonry layouts
               const renderCard = (sample: ModelSample) => {
@@ -1517,7 +2044,7 @@ export default function ModelGalleryTab({
                 );
               }
             })()
-          )}
+          ))}
 
         </div>
       </div>
@@ -1728,6 +2255,41 @@ export default function ModelGalleryTab({
                         onChange={e => setCustomFolderName(e.target.value)}
                         placeholder="Nhập tên thư mục mới, ví dụ: Váy chống nắng, Áo len..."
                         className="w-full px-3 py-2 border rounded-xl focus:outline-hidden focus:border-teal-500 dark:bg-[#0a0f0d] dark:border-[#1c2d27] font-bold"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase text-slate-400 font-mono mb-1">Khách hàng liên kết *</label>
+                    <select 
+                      value={formData.customerName || 'Khách hàng chung'}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFormData(prev => ({ ...prev, customerName: val }));
+                        if (val !== '__new_customer__') {
+                          setCustomCustomerInput('');
+                        }
+                      }}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-hidden focus:border-teal-500 dark:bg-[#0a0f0d] dark:border-[#1c2d27] font-bold text-indigo-650 dark:text-indigo-400"
+                    >
+                      {customerFolders.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="__new_customer__" className="text-teal-600 dark:text-[#10b981] font-extrabold">+ Thêm khách hàng mới...</option>
+                    </select>
+                  </div>
+
+                  {formData.customerName === '__new_customer__' && (
+                    <div className="animate-fade-in p-3 bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
+                      <label className="block text-[10px] font-extrabold uppercase text-indigo-500 font-mono mb-1">
+                        👤 Tên khách hàng mới *
+                      </label>
+                      <input 
+                        type="text" 
+                        value={customCustomerInput}
+                        onChange={e => setCustomCustomerInput(e.target.value)}
+                        placeholder="Nhập tên khách hàng mới, ví dụ: Khách C..."
+                        className="w-full px-3 py-2 border rounded-xl focus:outline-hidden focus:border-indigo-500 dark:bg-[#0a0f0d] dark:border-[#1c2d27] font-bold"
                       />
                     </div>
                   )}

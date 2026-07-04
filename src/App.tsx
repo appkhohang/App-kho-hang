@@ -4323,6 +4323,7 @@ export default function App() {
                     resolvedTheme={resolvedTheme}
                     isQuickEditMode={isModelGalleryQuickEdit}
                     onChangeQuickEditMode={setIsModelGalleryQuickEdit}
+                    customers={customers}
                   />
                 </Suspense>
               </motion.div>

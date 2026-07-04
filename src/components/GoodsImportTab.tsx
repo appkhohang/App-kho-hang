@@ -15,6 +15,7 @@ import * as XLSX from 'xlsx';
 
 import LaborPaymentReceiptModal from './LaborPaymentReceiptModal';
 import CameraCapture from './CameraCapture';
+import YearGroupedMonthHistory from './YearGroupedMonthHistory';
 
 interface GoodsImportTabProps {
   items: ImportItem[];
@@ -152,6 +153,7 @@ export default function GoodsImportTab({
   const [laborPayAmount, setLaborPayAmount] = useState<number | ''>('');
   const [laborPayDate, setLaborPayDate] = useState(getCurrentDateStr());
   const [laborPayNote, setLaborPayNote] = useState('');
+  const [autoDistribute, setAutoDistribute] = useState(true);
   const [selectedLaborPaymentForModal, setSelectedLaborPaymentForModal] = useState<LaborPayment | null>(null);
 
   // States for GoodsImport metric breakdown modals
@@ -167,6 +169,36 @@ export default function GoodsImportTab({
   // Filter mode & month selection states
   const [filterMode, setFilterMode] = useState<'week' | 'month'>('month');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('all');
+
+  // States for Year-Month grouped view with Month Details Modal
+  const [selectedYear, setSelectedYear] = useState<string>('');
+  const [selectedMonthForStats, setSelectedMonthForStats] = useState<string | null>(null);
+  const [monthStatsSearchQuery, setMonthStatsSearchQuery] = useState<string>('');
+
+  // Get unique years that have import items
+  const yearsWithData = useMemo(() => {
+    const yearsSet = new Set<string>();
+    items.forEach(item => {
+      if (item && item.ngày) {
+        const parts = item.ngày.split('-');
+        if (parts[0]) {
+          yearsSet.add(parts[0]);
+        }
+      }
+    });
+    return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
+  }, [items]);
+
+  // Set selectedYear default to the latest year
+  useEffect(() => {
+    if (yearsWithData.length > 0) {
+      if (!selectedYear || !yearsWithData.includes(selectedYear)) {
+        setSelectedYear(yearsWithData[0]);
+      }
+    } else {
+      setSelectedYear('');
+    }
+  }, [yearsWithData, selectedYear]);
 
   // Track which weeks' labor details panels are expanded
   const [openLaborPanelWeeks, setOpenLaborPanelWeeks] = useState<{ [key: string]: boolean }>({});
@@ -199,6 +231,7 @@ export default function GoodsImportTab({
   useAndroidBack(activeWeekForLaborPay !== null, () => setActiveWeekForLaborPay(null));
   useAndroidBack(selectedLaborPaymentForModal !== null, () => setSelectedLaborPaymentForModal(null));
   useAndroidBack(selectedItemForModal !== null, () => setSelectedItemForModal(null));
+  useAndroidBack(selectedMonthForStats !== null, () => setSelectedMonthForStats(null));
   useAndroidBack(isFormExpanded, () => setIsFormExpanded(false));
   useAndroidBack(showActualCostBreakdown, () => setShowActualCostBreakdown(false));
   useAndroidBack(showShipCostBreakdown, () => setShowShipCostBreakdown(false));
@@ -244,7 +277,7 @@ export default function GoodsImportTab({
   };
 
   // Submit labor payment
-  const handleAddLaborPayment = (e: React.FormEvent, weekKey: string) => {
+  const handleAddLaborPayment = (e: React.FormEvent, weekKey?: string) => {
     e.preventDefault();
     if (isViewer) {
       alert("⚠️ Bạn đang đăng nhập với vai trò CHỈ XEM, không có quyền thêm phiếu thanh toán!");
@@ -255,16 +288,101 @@ export default function GoodsImportTab({
       return;
     }
 
-    const newPayment: LaborPayment = {
-      id: "lab-" + Date.now(),
-      weekKey,
-      amount: Number(laborPayAmount),
-      date: laborPayDate,
-      note: laborPayNote || "Thanh toán tiền công thợ",
-      createdAt: Date.now()
-    };
+    const typedAmount = Number(laborPayAmount);
+    const baseTimestamp = Date.now();
+    const newPayments: LaborPayment[] = [];
 
-    setLaborPayments(prev => [newPayment, ...prev]);
+    const isWeekMode = filterMode === 'week';
+    const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
+    
+    // Sort all keys chronologically (oldest first)
+    const sortedKeys = Object.keys(groupData).sort((keyA, keyB) => {
+      const itemsA = groupData[keyA] || [];
+      const itemsB = groupData[keyB] || [];
+      const minDateA = itemsA.reduce((min, item) => !min || item.ngày < min ? item.ngày : min, "");
+      const minDateB = itemsB.reduce((min, item) => !min || item.ngày < min ? item.ngày : min, "");
+      return minDateA.localeCompare(minDateB);
+    });
+
+    // Compute current debt of each period
+    const periodDebts = sortedKeys.map(k => {
+      const kItems = groupData[k] || [];
+      const kAmt = kItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+      
+      const kPayments = isWeekMode
+        ? laborPayments.filter(p => p.weekKey === k)
+        : laborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
+      const kPaid = kPayments.reduce((acc, p) => acc + p.amount, 0);
+      
+      return {
+        key: k,
+        debt: kAmt - kPaid
+      };
+    });
+
+    // Distribute payment
+    let remainingPay = typedAmount;
+    
+    periodDebts.forEach((p, idx) => {
+      if (p.debt > 0 && remainingPay > 0) {
+        const toAllocate = Math.min(p.debt, remainingPay);
+        newPayments.push({
+          id: `lab-${baseTimestamp}-${idx}`,
+          weekKey: p.key,
+          amount: toAllocate,
+          date: laborPayDate,
+          note: laborPayNote || `Trừ nợ tự động ${p.key}`,
+          createdAt: baseTimestamp + idx
+        });
+        remainingPay -= toAllocate;
+      }
+    });
+
+    // If still remaining, allocate to the newest period
+    if (remainingPay > 0) {
+      const latestPeriod = periodDebts[periodDebts.length - 1];
+      if (latestPeriod) {
+        const existing = newPayments.find(p => p.weekKey === latestPeriod.key);
+        if (existing) {
+          existing.amount += remainingPay;
+        } else {
+          newPayments.push({
+            id: `lab-${baseTimestamp}-extra`,
+            weekKey: latestPeriod.key,
+            amount: remainingPay,
+            date: laborPayDate,
+            note: laborPayNote || `Thanh toán dư kỳ ${latestPeriod.key}`,
+            createdAt: baseTimestamp + 999
+          });
+        }
+      } else {
+        // Fallback to a default key
+        const fallbackKey = isWeekMode ? getVietnameseWeekKey(laborPayDate) : getVietnameseMonthKey(laborPayDate);
+        newPayments.push({
+          id: `lab-${baseTimestamp}-fallback`,
+          weekKey: fallbackKey,
+          amount: remainingPay,
+          date: laborPayDate,
+          note: laborPayNote || "Thanh toán tiền công thợ",
+          createdAt: baseTimestamp
+        });
+      }
+    }
+
+    // Fallback if no payments were created at all (e.g. database is empty or all periods are fully paid, but they paid more anyway)
+    if (newPayments.length === 0) {
+      const fallbackKey = isWeekMode ? getVietnameseWeekKey(laborPayDate) : getVietnameseMonthKey(laborPayDate);
+      newPayments.push({
+        id: `lab-${baseTimestamp}-unallocated`,
+        weekKey: fallbackKey,
+        amount: typedAmount,
+        date: laborPayDate,
+        note: laborPayNote || "Thanh toán thợ (Không có nợ)",
+        createdAt: baseTimestamp
+      });
+    }
+
+    setLaborPayments(prev => [...newPayments, ...prev]);
 
     // Reset labor pay state
     setLaborPayAmount('');
@@ -273,7 +391,7 @@ export default function GoodsImportTab({
     setActiveWeekForLaborPay(null);
 
     // Launch beautiful receipt modal automatically
-    setSelectedLaborPaymentForModal(newPayment);
+    setSelectedLaborPaymentForModal(newPayments[0]);
   };
 
   // Delete labor payment
@@ -552,6 +670,40 @@ export default function GoodsImportTab({
     shippingsByMonth[month].push(ship);
   });
 
+  // Calculate statistics for a specific Month
+  const getMonthStats = (monthKey: string) => {
+    const monthItems = itemsByMonth[monthKey] || [];
+    const monthShippings = shippingsByMonth[monthKey] || [];
+
+    const totalQty = monthItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
+    const totalAmount = monthItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+    const totalShipĐT_TP = monthItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+    
+    const legacyShipTP_ĐT = monthItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
+    const separateShipTP_ĐT = monthShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+    const totalShipTP_ĐT = legacyShipTP_ĐT + separateShipTP_ĐT;
+    const netBackShipValue = totalShipTP_ĐT - totalShipĐT_TP;
+
+    const monthLaborPayments = laborPayments.filter(
+      p => getVietnameseMonthKey(p.date) === monthKey || p.weekKey === monthKey
+    );
+    const totalLaborPaid = monthLaborPayments.reduce((acc, p) => acc + p.amount, 0);
+    const remainingLaborDebt = totalAmount - totalLaborPaid;
+    const totalMonthAmount = totalAmount + netBackShipValue;
+
+    return {
+      totalQty,
+      totalAmount,
+      totalShipTP_ĐT,
+      totalShipĐT_TP,
+      netBackShipValue,
+      totalLaborPaid,
+      remainingLaborDebt,
+      totalMonthAmount,
+      itemsCount: monthItems.length
+    };
+  };
+
   // Calculate totals for currently displayed items
   const displayedTotals = useMemo(() => {
     const isWeekMode = filterMode === 'week';
@@ -560,7 +712,15 @@ export default function GoodsImportTab({
 
     const filteredGroupKeys = Object.keys(groupData)
       .sort((a, b) => b.localeCompare(a))
-      .filter(label => currentFilterValue === 'all' || label === currentFilterValue);
+      .filter(label => {
+        if (isWeekMode) {
+          return currentFilterValue === 'all' || label === currentFilterValue;
+        } else {
+          const belongsToSelectedYear = !selectedYear || label.endsWith(`/${selectedYear}`);
+          const matchesMonthFilter = currentFilterValue === 'all' || label === currentFilterValue;
+          return belongsToSelectedYear && matchesMonthFilter;
+        }
+      });
 
     let totalQty = 0;
     let totalBaseGoodsAmount = 0; // "tiền hàng" gốc
@@ -613,36 +773,40 @@ export default function GoodsImportTab({
       totalLaborPaid,
       totalCost: totalBaseGoodsAmount
     };
-  }, [items, tpDtShippings, laborPayments, filterMode, selectedWeekFilter, selectedMonthFilter, itemsByWeek, itemsByMonth, shippingsByWeek, shippingsByMonth]);
+  }, [items, tpDtShippings, laborPayments, filterMode, selectedWeekFilter, selectedMonthFilter, selectedYear, itemsByWeek, itemsByMonth, shippingsByWeek, shippingsByMonth]);
 
   // Reusable helper to open labor payment window for the current filtered time period
   const handleOpenLaborPay = () => {
     const isWeekMode = filterMode === 'week';
     const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
-    const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
-    const filteredGroupKeys = Object.keys(groupData)
-      .sort((a, b) => b.localeCompare(a))
-      .filter(label => currentFilterValue === 'all' || label === currentFilterValue);
     
-    const defaultLabel = filteredGroupKeys.length > 0 ? filteredGroupKeys[0] : (Object.keys(groupData).sort((a, b) => b.localeCompare(a))[0] || '');
-    
-    if (defaultLabel) {
-      setActiveWeekForLaborPay(defaultLabel);
-      
-      const weekItems = groupData[defaultLabel] || [];
-      const totalAmount = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
-      const weekLaborPayments = isWeekMode 
-        ? laborPayments.filter(p => p.weekKey === defaultLabel)
-        : laborPayments.filter(p => getVietnameseMonthKey(p.date) === defaultLabel || p.weekKey === defaultLabel);
-      const totalLaborPaid = weekLaborPayments.reduce((acc, p) => acc + p.amount, 0);
-      const remainingLaborDebt = totalAmount - totalLaborPaid;
-      
-      setLaborPayAmount(remainingLaborDebt > 0 ? remainingLaborDebt : '');
-      setLaborPayNote('Thanh toán tiền công thợ');
-      setLaborPayDate(getCurrentDateStr());
-    } else {
-      alert("Chưa có danh sách lô nhập kho nào để thực hiện thanh toán!");
-    }
+    // Compute total debt of all periods
+    const sortedKeys = Object.keys(groupData).sort((keyA, keyB) => {
+      const itemsA = groupData[keyA] || [];
+      const itemsB = groupData[keyB] || [];
+      const minDateA = itemsA.reduce((min, item) => !min || item.ngày < min ? item.ngày : min, "");
+      const minDateB = itemsB.reduce((min, item) => !min || item.ngày < min ? item.ngày : min, "");
+      return minDateA.localeCompare(minDateB);
+    });
+
+    let totalRemainingDebtAllPeriods = 0;
+    sortedKeys.forEach(k => {
+      const kItems = groupData[k] || [];
+      const kAmt = kItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+      const kPayments = isWeekMode
+        ? laborPayments.filter(p => p.weekKey === k)
+        : laborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
+      const kPaid = kPayments.reduce((acc, p) => acc + p.amount, 0);
+      const kDebt = kAmt - kPaid;
+      if (kDebt > 0) {
+        totalRemainingDebtAllPeriods += kDebt;
+      }
+    });
+
+    setActiveWeekForLaborPay('all_periods');
+    setLaborPayAmount(totalRemainingDebtAllPeriods > 0 ? totalRemainingDebtAllPeriods : '');
+    setLaborPayNote('Thanh toán tiền công thợ');
+    setLaborPayDate(getCurrentDateStr());
   };
 
   // EXCEL GENERATION LOGIC - STRICT COMPLIANCE TO USER REQUEST FORMAT:
@@ -1495,9 +1659,26 @@ export default function GoodsImportTab({
         ) : (
           (() => {
             const isWeekMode = filterMode === 'week';
-            const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
-            const currentFilterValue = isWeekMode ? selectedWeekFilter : selectedMonthFilter;
-            const setCurrentFilterValue = isWeekMode ? setSelectedWeekFilter : setSelectedMonthFilter;
+
+            if (!isWeekMode) {
+              return (
+                <YearGroupedMonthHistory
+                  itemsByMonth={itemsByMonth}
+                  shippingsByMonth={shippingsByMonth}
+                  laborPayments={laborPayments}
+                  yearsWithData={yearsWithData}
+                  selectedYear={selectedYear}
+                  setSelectedYear={setSelectedYear}
+                  setSelectedMonthForStats={setSelectedMonthForStats}
+                  setMonthStatsSearchQuery={setMonthStatsSearchQuery}
+                  getMonthStats={getMonthStats}
+                />
+              );
+            }
+
+            const groupData = itemsByWeek;
+            const currentFilterValue = selectedWeekFilter;
+            const setCurrentFilterValue = setSelectedWeekFilter;
 
             const filteredGroupKeys = Object.keys(groupData)
               .sort((a, b) => b.localeCompare(a))
@@ -1849,41 +2030,49 @@ export default function GoodsImportTab({
                     </div>
                   )}
                 </div>
-
-
               </motion.div>
             );
           });
-        })()
-      )}
+        })())}
       </div>
 
-      {/* Quick Labor Payment Dialog Modal */}
+      {/* Labor Payment Modal */}
       <AnimatePresence>
         {activeWeekForLaborPay && (() => {
           const isWeekMode = filterMode === 'week';
           const groupData = isWeekMode ? itemsByWeek : itemsByMonth;
-          const allGroupKeys = Object.keys(groupData).sort((a, b) => b.localeCompare(a));
           
-          if (allGroupKeys.length === 0) return null;
-          
-          const currentLabel = allGroupKeys.includes(activeWeekForLaborPay) ? activeWeekForLaborPay : allGroupKeys[0];
-          const weekItems = groupData[currentLabel] || [];
-          
-          // Recalculate stats for the chosen week
-          const totalQty = weekItems.reduce((acc, curr) => acc + (curr?.sốLượng || 0), 0);
-          const totalAmount = weekItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
-          
-          const weekLaborPayments = isWeekMode
-            ? laborPayments.filter(p => p.weekKey === currentLabel)
-            : laborPayments.filter(p => getVietnameseMonthKey(p.date) === currentLabel || p.weekKey === currentLabel);
+          // Sort all keys chronologically (oldest first)
+          const sortedKeysChronological = Object.keys(groupData).sort((keyA, keyB) => {
+            const itemsA = groupData[keyA] || [];
+            const itemsB = groupData[keyB] || [];
+            const minDateA = itemsA.reduce((min, item) => !min || item.ngày < min ? item.ngày : min, "");
+            const minDateB = itemsB.reduce((min, item) => !min || item.ngày < min ? item.ngày : min, "");
+            return minDateA.localeCompare(minDateB);
+          });
 
-          const totalLaborPaid = weekLaborPayments.reduce((acc, p) => acc + p.amount, 0);
-          const remainingLaborDebt = totalAmount - totalLaborPaid;
+          // Compute current debt of each period
+          const periodDebts = sortedKeysChronological.map(k => {
+            const kItems = groupData[k] || [];
+            const kAmt = kItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+            
+            const kPayments = isWeekMode
+              ? laborPayments.filter(p => p.weekKey === k)
+              : laborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
+            const kPaid = kPayments.reduce((acc, p) => acc + p.amount, 0);
+            
+            return {
+              key: k,
+              debt: kAmt - kPaid
+            };
+          });
 
-          // Calculate interactive real-time subtraction as requested
+          const totalAmountAll = items.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+          const totalLaborPaidAll = laborPayments.reduce((acc, p) => acc + p.amount, 0);
+          const totalRemainingDebtAllPeriods = Math.max(0, totalAmountAll - totalLaborPaidAll);
+
           const typedAmount = Number(laborPayAmount) || 0;
-          const dynamicRemainingDebt = Math.max(0, remainingLaborDebt - typedAmount);
+          const recentLaborPayments = laborPayments.slice(0, 10);
 
           return (
             <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
@@ -1903,7 +2092,7 @@ export default function GoodsImportTab({
                     <Wallet className="w-5 h-5 text-indigo-200" />
                     <div>
                       <h3 className="text-sm font-black tracking-tight uppercase">THANH TOÁN TIỀN THỢ</h3>
-                      <p className="text-[10px] text-indigo-200 font-black font-mono tracking-wide uppercase mt-0.5">{currentLabel}</p>
+                      <p className="text-[10px] text-indigo-200 font-bold font-mono tracking-wide uppercase mt-0.5">TỰ ĐỘNG PHÂN BỔ TRỪ NỢ CŨ ĐẾN MỚI</p>
                     </div>
                   </div>
                   <button
@@ -1916,155 +2105,166 @@ export default function GoodsImportTab({
 
                 {/* Modal Body */}
                 <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
-                  {/* Select Dropdown Week / Month Selector */}
-                  <div className="space-y-1 bg-indigo-50/10 dark:bg-slate-950/20 border border-indigo-100/30 dark:border-slate-850 p-4 rounded-2xl">
-                    <label className="block text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400 tracking-wider">
-                      Chọn kỳ thanh toán thợ ({isWeekMode ? 'Tuần' : 'Tháng'})
-                    </label>
-                    <select
-                      value={currentLabel}
-                      onChange={(e) => {
-                        const selectedVal = e.target.value;
-                        setActiveWeekForLaborPay(selectedVal);
-                        
-                        // Calculate local remaining debt for selected item to update input amount
-                        const selectedItems = groupData[selectedVal] || [];
-                        const selectedTotalAmount = selectedItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
-                        const selectedPayments = isWeekMode
-                          ? laborPayments.filter(p => p.weekKey === selectedVal)
-                          : laborPayments.filter(p => getVietnameseMonthKey(p.date) === selectedVal || p.weekKey === selectedVal);
-                        const selectedPaid = selectedPayments.reduce((acc, p) => acc + p.amount, 0);
-                        const selectedDebt = selectedTotalAmount - selectedPaid;
-                        setLaborPayAmount(selectedDebt > 0 ? selectedDebt : '');
-                      }}
-                      className="w-full text-xs font-extrabold bg-white dark:bg-slate-950 border border-slate-250 dark:border-slate-800 py-2.5 px-3 rounded-xl text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 shadow-3xs cursor-pointer"
-                    >
-                      {allGroupKeys.map(k => {
-                        const kItems = groupData[k] || [];
-                        const kAmt = kItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
-                        const kPayments = isWeekMode
-                          ? laborPayments.filter(p => p.weekKey === k)
-                          : laborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
-                        const kPaid = kPayments.reduce((acc, p) => acc + p.amount, 0);
-                        const kDebt = kAmt - kPaid;
-                        return (
-                          <option key={k} value={k}>
-                            {k} {kDebt > 0 ? `(Nợ thợ: ${kDebt.toLocaleString()}đ)` : '(Đã thanh toán hết)'}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  {/* Detailed summary blocks */}
+                  {/* Total Debt overview of all periods combined */}
                   <div className="grid grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-850 p-3.5 sm:p-4 rounded-2xl shadow-3xs">
                     <div className="space-y-1">
-                      <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase block tracking-wider leading-none">Tiền công thợ</span>
+                      <span className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase block tracking-wider leading-none">Tổng công thợ</span>
                       <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 font-mono">
-                        {totalAmount.toLocaleString()}đ
+                        {totalAmountAll.toLocaleString()}đ
                       </span>
                     </div>
                     <div className="border-l border-slate-250 dark:border-slate-800 pl-3 space-y-1">
-                      <span className="text-[8px] sm:text-[9px] text-emerald-500 font-bold uppercase block tracking-wider leading-none">Đã thanh toán</span>
-                      <span className="text-xs sm:text-sm font-black text-emerald-650 dark:text-emerald-400 font-mono">
-                        {totalLaborPaid.toLocaleString()}đ
+                      <span className="text-[8px] sm:text-[9px] text-emerald-500 font-bold uppercase block tracking-wider leading-none">Tổng đã chi</span>
+                      <span className="text-xs sm:text-sm font-black text-emerald-655 dark:text-emerald-400 font-mono">
+                        {totalLaborPaidAll.toLocaleString()}đ
                       </span>
                     </div>
                     <div className="border-l border-slate-250 dark:border-slate-800 pl-3 space-y-1">
-                      <span className="text-[8px] sm:text-[9px] text-rose-500 font-bold uppercase block tracking-wider leading-none">Số dư còn nợ</span>
-                      <span className={`text-xs sm:text-sm font-black font-mono block ${dynamicRemainingDebt > 0 ? 'text-rose-600 dark:text-rose-450' : 'text-slate-400 dark:text-slate-500'}`}>
-                        {dynamicRemainingDebt.toLocaleString()}đ
+                      <span className="text-[8px] sm:text-[9px] text-rose-500 font-bold uppercase block tracking-wider leading-none">Tổng nợ thợ còn</span>
+                      <span className="text-xs sm:text-sm font-black text-rose-655 dark:text-rose-450 font-mono">
+                        {totalRemainingDebtAllPeriods.toLocaleString()}đ
                       </span>
-                      {typedAmount > 0 && (
-                        <span className="text-[8.5px] text-slate-400 dark:text-slate-500 line-through font-mono block">
-                          Sẽ trừ thêm: -{typedAmount.toLocaleString()}đ
-                        </span>
-                      )}
                     </div>
                   </div>
 
                   {/* Payment form */}
-                  <form onSubmit={(e) => handleAddLaborPayment(e, currentLabel)} className="space-y-4">
-                    <div className="bg-indigo-50/20 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl p-4 space-y-3.5 shadow-3xs">
-                      <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-wider block font-mono">
-                        🎟️ Lập phiếu chi trả thợ mới
-                      </span>
-                      
-                      <div className="space-y-3">
+                  <form onSubmit={(e) => handleAddLaborPayment(e)} className="space-y-4">
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 tracking-wider">Số tiền thanh toán (đ) <span className="text-rose-500">*</span></label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            required
+                            min={1}
+                            placeholder="Nhập số tiền"
+                            value={laborPayAmount}
+                            onChange={e => setLaborPayAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                            className="w-full text-sm font-bold bg-white dark:bg-slate-900 border border-slate-255 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none font-mono focus:border-indigo-500 shadow-3xs"
+                          />
+                          {totalRemainingDebtAllPeriods > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setLaborPayAmount(totalRemainingDebtAllPeriods)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/85 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-400 text-[9.5px] font-extrabold rounded-md transition"
+                              title="Lấy nhanh tổng nợ thợ"
+                            >
+                              Trả hết tổng nợ
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 tracking-wider">Số tiền thanh toán (đ) <span className="text-rose-500">*</span></label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              required
-                              min={1}
-                              placeholder="Nhập số tiền"
-                              value={laborPayAmount}
-                              onChange={e => setLaborPayAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                              className="w-full text-sm font-bold bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none font-mono focus:border-indigo-500 shadow-3xs"
-                            />
-                            {remainingLaborDebt > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => setLaborPayAmount(remainingLaborDebt)}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-400 text-[10px] font-bold rounded-md transition"
-                                title="Lấy nhanh số dư còn nợ"
-                              >
-                                Trả hết nợ
-                              </button>
-                            )}
-                          </div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 tracking-wider">Ngày thanh toán</label>
+                          <input
+                            type="date"
+                            required
+                            value={laborPayDate}
+                            onChange={e => setLaborPayDate(e.target.value)}
+                            className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-255 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none font-mono focus:border-indigo-500 shadow-3xs"
+                          />
                         </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 tracking-wider">Ngày thanh toán</label>
-                            <input
-                              type="date"
-                              required
-                              value={laborPayDate}
-                              onChange={e => setLaborPayDate(e.target.value)}
-                              className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-255 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none font-mono focus:border-indigo-500 shadow-3xs"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 tracking-wider">Ghi chú thanh toán</label>
-                            <input
-                              type="text"
-                              placeholder="VD: Trả nợ công hoặc tạm ứng"
-                              value={laborPayNote}
-                              onChange={e => setLaborPayNote(e.target.value)}
-                              className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-255 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 shadow-3xs"
-                            />
-                          </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 tracking-wider">Ghi chú thanh toán</label>
+                          <input
+                            type="text"
+                            placeholder="VD: Trả nợ công thợ hoặc tạm ứng"
+                            value={laborPayNote}
+                            onChange={e => setLaborPayNote(e.target.value)}
+                            className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-255 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 shadow-3xs"
+                          />
                         </div>
                       </div>
 
-                      <div className="pt-1.5">
-                        <button
-                          type="submit"
-                          className="w-full bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 rounded-xl shadow-md cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-1.5"
-                        >
-                          <Check className="w-4 h-4" />
-                          <span>Xác nhận thanh toán & Trừ nợ thợ</span>
-                        </button>
-                      </div>
+                      {/* Real-time distribution preview */}
+                      {typedAmount > 0 && (
+                        <div className="bg-white/80 dark:bg-slate-950 p-3 rounded-xl border border-slate-200/80 dark:border-slate-850 space-y-2 shadow-3xs">
+                          <span className="text-[9px] font-black tracking-wider text-indigo-700 dark:text-indigo-400 uppercase font-mono block">
+                            🔗 Xem trước Phân bổ Thanh toán (Khấu trừ từ cũ đến mới):
+                          </span>
+                          <div className="space-y-1 max-h-[120px] overflow-y-auto pr-0.5">
+                            {(() => {
+                              let remainingPay = typedAmount;
+                              const distributionList: { key: string; allocated: number; remainingDebtAfter: number; wasDebt: number }[] = [];
+                              
+                              periodDebts.forEach(p => {
+                                if (p.debt > 0 && remainingPay > 0) {
+                                  const toAllocate = Math.min(p.debt, remainingPay);
+                                  distributionList.push({
+                                    key: p.key,
+                                    allocated: toAllocate,
+                                    wasDebt: p.debt,
+                                    remainingDebtAfter: p.debt - toAllocate
+                                  });
+                                  remainingPay -= toAllocate;
+                                }
+                              });
+
+                              if (remainingPay > 0) {
+                                const latestPeriod = periodDebts[periodDebts.length - 1];
+                                if (latestPeriod) {
+                                  const existing = distributionList.find(d => d.key === latestPeriod.key);
+                                  if (existing) {
+                                    existing.allocated += remainingPay;
+                                    existing.remainingDebtAfter = Math.max(0, existing.remainingDebtAfter - remainingPay);
+                                  } else {
+                                    distributionList.push({
+                                      key: latestPeriod.key,
+                                      allocated: remainingPay,
+                                      wasDebt: latestPeriod.debt,
+                                      remainingDebtAfter: Math.max(0, latestPeriod.debt - remainingPay)
+                                    });
+                                  }
+                                }
+                              }
+
+                              if (distributionList.length === 0) {
+                                return <p className="text-[10px] text-slate-400 italic">Không có kỳ cũ nào còn nợ, số tiền này sẽ được phân bổ vào kỳ mới nhất.</p>;
+                              }
+
+                              return distributionList.map(dist => (
+                                <div key={dist.key} className="flex justify-between items-center text-[10.5px] bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 py-1 px-2.5 rounded-lg font-mono">
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">{dist.key}:</span>
+                                  <div className="flex items-center gap-1.5 text-right">
+                                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400">-{dist.allocated.toLocaleString()}đ</span>
+                                    <span className="text-[10px] text-slate-400">
+                                      (Nợ còn: {dist.remainingDebtAfter.toLocaleString()}đ)
+                                    </span>
+                                  </div>
+                                </div>
+                              ));
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-1.5">
+                      <button
+                        type="submit"
+                        className="w-full bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 rounded-xl shadow-md cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-1.5"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Xác nhận thanh toán & Tự động trừ nợ</span>
+                      </button>
                     </div>
                   </form>
 
                   {/* Payment history list inside modal */}
                   <div className="space-y-3 pt-1">
                     <span className="text-[10px] font-black tracking-wider text-emerald-600 dark:text-emerald-450 uppercase font-mono block">
-                      📅 Lịch sử các phiếu chi thợ của kỳ này ({weekLaborPayments.length})
+                      📅 Lịch sử 10 phiếu chi thợ gần nhất ({laborPayments.length})
                     </span>
 
-                    {weekLaborPayments.length === 0 ? (
+                    {recentLaborPayments.length === 0 ? (
                       <div className="text-center py-6 bg-slate-50 dark:bg-slate-950/40 border border-dashed border-slate-200 dark:border-slate-850 rounded-2xl">
                         <p className="text-xs text-slate-400 italic">Chưa ghi nhận phiếu thanh toán thợ nào.</p>
                       </div>
                     ) : (
                       <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                        {weekLaborPayments.map((p) => (
+                        {recentLaborPayments.map((p) => (
                           <div
                             key={p.id}
                             className="flex justify-between items-center text-xs bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl px-3.5 py-2.5 shadow-3xs hover:border-indigo-300 transition"
@@ -2073,8 +2273,8 @@ export default function GoodsImportTab({
                               <p className="font-extrabold text-indigo-600 dark:text-indigo-400 font-mono text-xs sm:text-sm">
                                 -{p.amount.toLocaleString()}đ
                               </p>
-                              <p className="text-[9px] text-slate-450 dark:text-slate-500 font-medium font-sans">
-                                📅 {formatVietnameseDate(p.date)} - {p.note}
+                              <p className="text-[9px] text-slate-450 dark:text-slate-500 font-semibold font-sans">
+                                📅 {formatVietnameseDate(p.date)} - {p.note} <span className="text-indigo-550 dark:text-indigo-400">({p.weekKey})</span>
                               </p>
                             </div>
                             <div className="flex items-center gap-2 pl-2">
@@ -2814,6 +3014,229 @@ export default function GoodsImportTab({
                     className="px-4 py-1.5 bg-slate-100 hover:bg-slate-205 dark:bg-[#111c18] dark:hover:bg-[#162721] rounded-lg text-slate-700 dark:text-slate-300 font-bold transition"
                   >
                     Đóng
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Month Statistics Dialog Modal */}
+      <AnimatePresence>
+        {selectedMonthForStats && (() => {
+          const stats = getMonthStats(selectedMonthForStats);
+          const monthItems = itemsByMonth[selectedMonthForStats] || [];
+          const monthShippings = shippingsByMonth[selectedMonthForStats] || [];
+          
+          // Filter items inside modal by search query
+          const filteredMonthItems = monthItems.filter(item => 
+            item.mẫu.toLowerCase().includes(monthStatsSearchQuery.toLowerCase())
+          );
+
+          const monthLaborPayments = laborPayments.filter(
+            p => getVietnameseMonthKey(p.date) === selectedMonthForStats || p.weekKey === selectedMonthForStats
+          );
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+              <div className="absolute inset-0 cursor-pointer" onClick={() => setSelectedMonthForStats(null)} />
+              
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ duration: 0.2 }}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-3xl w-full overflow-hidden relative z-10 flex flex-col max-h-[90vh] font-sans"
+              >
+                {/* Modal Header */}
+                <div className="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <Calendar className="w-5.5 h-5.5 text-indigo-100" />
+                    <div>
+                      <h3 className="text-sm font-black tracking-tight uppercase">Thống Kê Chi Tiết Tháng</h3>
+                      <p className="text-[10px] text-indigo-200 font-bold font-mono tracking-wide uppercase mt-0.5">{selectedMonthForStats}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => exportWeekToExcel(selectedMonthForStats, monthItems)}
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-black py-1.5 px-3.5 rounded-lg flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                      title="Xuất báo cáo Excel tháng này"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>Xuất Excel</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMonthForStats(null)}
+                      className="p-1.5 hover:bg-white/10 rounded-full transition cursor-pointer"
+                    >
+                      <X className="w-4.5 h-4.5 text-white" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-slate-50/50 dark:bg-slate-950/10 text-slate-800 dark:text-slate-100">
+                  {/* Bento Grid Metrics Summary */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl shadow-3xs text-center">
+                      <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider">Tổng sản lượng</span>
+                      <span className="text-base font-black text-slate-800 dark:text-slate-100 font-mono block mt-1">{stats.totalQty.toLocaleString()} cái</span>
+                    </div>
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl shadow-3xs text-center">
+                      <span className="text-[9px] font-extrabold uppercase text-emerald-600 dark:text-emerald-450 block tracking-wider font-sans">Tiền hàng gốc</span>
+                      <span className="text-base font-black text-emerald-600 dark:text-emerald-450 font-mono block mt-1">{stats.totalAmount.toLocaleString()}đ</span>
+                    </div>
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl shadow-3xs text-center">
+                      <span className="text-[9px] font-extrabold uppercase text-rose-500 block tracking-wider font-sans">Tiền ship ròng</span>
+                      <span className="text-base font-black text-rose-500 dark:text-rose-450 font-mono block mt-1">{stats.netBackShipValue.toLocaleString()}đ</span>
+                    </div>
+                    <div className={`p-3 border rounded-xl shadow-3xs text-center transition-all ${stats.remainingLaborDebt > 0 ? 'bg-amber-50/40 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40' : 'bg-white dark:bg-slate-900 border-slate-200/60 dark:border-slate-800'}`}>
+                      <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider font-sans">Nợ thợ còn lại</span>
+                      <span className={`text-base font-black font-mono block mt-1 ${stats.remainingLaborDebt > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-450'}`}>{stats.remainingLaborDebt.toLocaleString()}đ</span>
+                    </div>
+                  </div>
+
+                  {/* Sections of the Month: Import items details list */}
+                  <div className="space-y-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-3xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-[11px] font-black uppercase text-indigo-700 dark:text-indigo-400 tracking-wider">
+                        📦 Danh sách lô hàng nhập kho ({filteredMonthItems.length})
+                      </span>
+                      {/* Search box within modal */}
+                      <input
+                        type="text"
+                        placeholder="Tìm kiếm mẫu mã..."
+                        value={monthStatsSearchQuery}
+                        onChange={(e) => setMonthStatsSearchQuery(e.target.value)}
+                        className="text-[11px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-700 dark:text-slate-250 outline-none focus:border-indigo-500 w-full sm:w-48 shadow-3xs"
+                      />
+                    </div>
+
+                    {filteredMonthItems.length === 0 ? (
+                      <p className="text-center py-6 text-xs text-slate-400 italic">Không có dữ liệu hoặc không khớp từ khoá.</p>
+                    ) : (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800/50 max-h-[250px] overflow-y-auto pr-1">
+                        {filteredMonthItems.map((item, idx) => {
+                          const itemTotal = item.sốLượng * item.đơnGiáMay;
+                          const overallTotal = itemTotal + (item.vậnChuyểnĐT_TP || 0) + (item.vậnChuyểnTP_ĐT || 0);
+                          
+                          return (
+                            <div 
+                              key={item.id}
+                              onClick={() => {
+                                setSelectedItemForModal(item);
+                                setIsDetailEditing(false);
+                              }}
+                              className="group flex justify-between items-center py-2.5 hover:bg-slate-50/50 dark:hover:bg-slate-850/50 px-2 rounded-xl transition cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <span className="text-[10px] font-mono text-slate-400 w-4 font-black">{idx + 1}</span>
+                                <div>
+                                  <span className="text-xs font-black text-slate-800 dark:text-slate-150 block">{item.mẫu}</span>
+                                  <span className="text-[9.5px] text-slate-450 dark:text-slate-500 font-mono mt-0.5 block">{formatVietnameseDate(item.ngày)}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4 text-right">
+                                <div className="text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                                  {item.sốLượng.toLocaleString()} cái
+                                </div>
+                                <div className="text-xs font-bold font-mono text-emerald-650 dark:text-emerald-450">
+                                  {overallTotal.toLocaleString()} đ
+                                </div>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-650 transition" />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Double sub-grid: Separate shipping + Payments */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Shipping column */}
+                    <div className="space-y-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-3xs flex flex-col h-[220px]">
+                      <span className="text-[11px] font-black uppercase text-indigo-700 dark:text-indigo-400 tracking-wider pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                        🚚 Phí Ship TP ➔ ĐT riêng ({monthShippings.length})
+                      </span>
+                      <div className="overflow-y-auto flex-1 pr-1 space-y-2 mt-2">
+                        {monthShippings.length === 0 ? (
+                          <p className="text-center py-6 text-[10px] text-slate-400 italic">Chưa có chuyến ship tách riêng nào.</p>
+                        ) : (
+                          monthShippings.map((ship) => (
+                            <div key={ship.id} className="p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800/60 flex justify-between items-center text-[11px]">
+                              <div className="min-w-0">
+                                <span className="font-semibold text-slate-800 dark:text-slate-200 block truncate">{ship.nộiDung}</span>
+                                <span className="text-[9px] text-slate-450 dark:text-slate-500 font-mono block mt-0.5">{formatVietnameseDate(ship.ngày)}</span>
+                              </div>
+                              <span className="font-mono font-bold text-rose-500 shrink-0">+{ship.sốTiền.toLocaleString()}đ</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Payments column */}
+                    <div className="space-y-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-3xs flex flex-col h-[220px]">
+                      <div className="flex justify-between items-center pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-[11px] font-black uppercase text-indigo-700 dark:text-indigo-400 tracking-wider">
+                          💵 Lịch sử thanh toán thợ ({monthLaborPayments.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveWeekForLaborPay('all_periods');
+                            const debt = stats.remainingLaborDebt;
+                            setLaborPayAmount(debt > 0 ? debt : '');
+                            setLaborPayNote('Thanh toán tiền công thợ ' + selectedMonthForStats);
+                            setLaborPayDate(getCurrentDateStr());
+                          }}
+                          className="text-[9px] font-black text-indigo-650 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          + Chi thợ
+                        </button>
+                      </div>
+                      <div className="overflow-y-auto flex-1 pr-1 space-y-2 mt-2">
+                        {monthLaborPayments.length === 0 ? (
+                          <p className="text-center py-6 text-[10px] text-slate-400 italic">Chưa có phiếu chi thợ nào.</p>
+                        ) : (
+                          monthLaborPayments.map((p) => (
+                            <div key={p.id} className="p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800/60 flex justify-between items-center text-[11px]">
+                              <div>
+                                <span className="font-black text-indigo-650 dark:text-indigo-400 block font-mono">-{p.amount.toLocaleString()}đ</span>
+                                <span className="text-[9px] text-slate-450 dark:text-slate-500 font-mono block mt-0.5">{formatVietnameseDate(p.date)} • {p.note}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedLaborPaymentForModal(p);
+                                  setSelectedMonthForStats(null);
+                                }}
+                                className="text-[9px] font-semibold text-indigo-650 dark:text-indigo-400 bg-indigo-55 dark:bg-slate-800 px-1.5 py-0.5 rounded cursor-pointer transition shrink-0"
+                              >
+                                Xem phiếu
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-zinc-950 shrink-0">
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold font-mono">Số dòng nhập kho: {monthItems.length}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMonthForStats(null)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2 px-6 rounded-xl shadow-md transition active:scale-98 cursor-pointer"
+                  >
+                    Đóng thống kê
                   </button>
                 </div>
               </motion.div>

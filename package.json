@@ -12,7 +12,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "start": "node dist/server.cjs",
-    "capgo-push": "node scripts/bump-version.js && npm run build && npx @capgo/cli bundle upload -c production --zip com.xuongan.quanlykho"
+    "capgo-push": "node scripts/bump-version.js && npm run build && npx @capgo/cli bundle upload -c production --zip com.xuongan.quanlykho",
+    "capgo-push:supabase": "node scripts/push-supabase.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
