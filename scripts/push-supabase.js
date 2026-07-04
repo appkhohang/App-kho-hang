@@ -7,10 +7,14 @@ import path from 'path';
 dotenv.config();
 
 function run() {
-  const supaUrl = process.env.CAPGO_SUPABASE_URL;
+  // Sanitize inputs to remove any trailing/leading spaces or newlines copied by mistake
+  const supaUrl = (process.env.CAPGO_SUPABASE_URL || '').replace(/\s+/g, '');
   // Uploading bundles requires write access to Supabase DB and Storage.
   // We check for CAPGO_SUPABASE_SERVICE_KEY first, and fall back to CAPGO_SUPABASE_ANON_KEY.
-  const supaAnonKey = process.env.CAPGO_SUPABASE_SERVICE_KEY || process.env.CAPGO_SUPABASE_ANON_KEY;
+  let supaAnonKey = process.env.CAPGO_SUPABASE_SERVICE_KEY || process.env.CAPGO_SUPABASE_ANON_KEY;
+  if (supaAnonKey) {
+    supaAnonKey = supaAnonKey.replace(/\s+/g, '');
+  }
 
   if (!supaUrl || !supaAnonKey) {
     console.error('\x1b[31m%s\x1b[0m', '❌ Lỗi: Thiếu cấu hình Supabase!');
