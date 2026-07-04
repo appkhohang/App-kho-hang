@@ -40,7 +40,7 @@ function run() {
     // 4. Gọi Capgo CLI để đóng gói và đẩy trực tiếp lên Supabase
     console.log(`\n\x1b[35m%s\x1b[0m`, `🚀 Bước 3: Đóng gói và upload bundle v${version} lên Supabase...`);
     
-    const cmd = `npx @capgo/cli bundle upload --supa-host "${supaUrl}" --supa-anon "${supaAnonKey}" -c production -b "${version}" --zip com.xuongan.quanlykho`;
+    const cmd = `npx @capgo/cli bundle upload --supa-host "${supaUrl}" --supa-anon "${supaAnonKey}" -a sb_self_hosted -c production -b "${version}" --zip com.xuongan.quanlykho`;
     
     console.log(`Chạy câu lệnh: ${cmd.substring(0, 100)}... [ANON KEY HIDDEN]`);
     
