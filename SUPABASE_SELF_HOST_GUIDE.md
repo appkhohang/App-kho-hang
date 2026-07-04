@@ -61,6 +61,22 @@ CREATE POLICY "Cho phép đọc công khai bảng channels" ON public.channels F
 CREATE POLICY "Cho phép mọi thao tác cho API Key" ON public.apps ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Cho phép mọi thao tác cho API Key" ON public.bundles ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Cho phép mọi thao tác cho API Key" ON public.channels ALL USING (true) WITH CHECK (true);
+
+-- 4. Tạo hàm kiểm tra tuân thủ 2FA (Yêu cầu bắt buộc bởi Capgo CLI v8+)
+-- Do Capgo CLI mới khi đẩy bản cập nhật lên Supabase sẽ tự động gọi hàm RPC kiểm tra 2FA để đảm bảo tính bảo mật.
+-- Trong mô hình tự lưu trữ (Self-hosted), chúng ta không cần từ chối truy cập do 2FA, do đó hàm này luôn trả về false.
+CREATE OR REPLACE FUNCTION public.reject_access_due_to_2fa_for_app(app_id text)
+RETURNS boolean AS $$
+BEGIN
+  RETURN false;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Cấp quyền thực thi hàm cho các vai trò để Capgo CLI có thể gọi RPC kiểm tra
+GRANT EXECUTE ON FUNCTION public.reject_access_due_to_2fa_for_app(text) TO public;
+GRANT EXECUTE ON FUNCTION public.reject_access_due_to_2fa_for_app(text) TO anon;
+GRANT EXECUTE ON FUNCTION public.reject_access_due_to_2fa_for_app(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.reject_access_due_to_2fa_for_app(text) TO service_role;
 ```
 
 ### 2. Cấu Hình Kho Lưu Trữ (Supabase Storage)
