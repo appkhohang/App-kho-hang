@@ -8,14 +8,19 @@ dotenv.config();
 
 function run() {
   const supaUrl = process.env.CAPGO_SUPABASE_URL;
-  const supaAnonKey = process.env.CAPGO_SUPABASE_ANON_KEY;
+  // Uploading bundles requires write access to Supabase DB and Storage.
+  // We check for CAPGO_SUPABASE_SERVICE_KEY first, and fall back to CAPGO_SUPABASE_ANON_KEY.
+  const supaAnonKey = process.env.CAPGO_SUPABASE_SERVICE_KEY || process.env.CAPGO_SUPABASE_ANON_KEY;
 
   if (!supaUrl || !supaAnonKey) {
     console.error('\x1b[31m%s\x1b[0m', '❌ Lỗi: Thiếu cấu hình Supabase!');
     console.error('Vui lòng khai báo các biến sau trong file `.env` ở thư mục gốc của bạn:');
     console.log('\x1b[36m%s\x1b[0m', 'CAPGO_SUPABASE_URL=https://your-project-id.supabase.co');
-    console.log('\x1b[36m%s\x1b[0m', 'CAPGO_SUPABASE_ANON_KEY=your-supabase-anon-key');
-    console.log('\nBạn cũng có thể khai báo chúng trực tiếp làm biến môi trường hệ thống.');
+    console.log('\x1b[36m%s\x1b[0m', 'CAPGO_SUPABASE_SERVICE_KEY=your-supabase-service-role-key');
+    console.log('\n\x1b[33m%s\x1b[0m', '💡 Lưu ý quan trọng:');
+    console.log('Khác với ứng dụng di động (chỉ cần đọc công khai bằng Anon Key),');
+    console.log('Script đẩy bản cập nhật (Upload) này cần quyền GHI dữ liệu vào database và Storage.');
+    console.log('Vì vậy, biến trên phải là mã khóa "service_role" bí mật (không được để lộ công khai).');
     process.exit(1);
   }
 

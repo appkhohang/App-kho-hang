@@ -126,15 +126,21 @@ export default config;
 Hệ thống đã được tích hợp sẵn một script tự động hóa đa nền tảng thông minh tại `/scripts/push-supabase.js`.
 
 ### 1. Khai báo thông tin trong tệp `.env`
-Mở tệp `.env` tại thư mục gốc dự án của bạn (hoặc tạo mới nếu chưa có) và bổ sung 2 cấu hình sau:
+Mở tệp `.env` tại thư mục gốc dự án của bạn (hoặc tạo mới nếu chưa có) và bổ sung cấu hình sau:
 
 ```env
-# URL dự án Supabase của bạn
+# URL dự án Supabase của bạn (lấy từ Project Settings -> API)
 CAPGO_SUPABASE_URL=https://your-project-id.supabase.co
 
-# Anon Key của dự án Supabase
-CAPGO_SUPABASE_ANON_KEY=your-actual-supabase-anon-key
+# MÃ SERVICE ROLE KEY (BẮT BUỘC để đẩy bản cập nhật)
+# Lấy từ Project Settings -> API -> service_role (khóa bí mật bắt đầu bằng eyJ...)
+# Chỉ khóa service_role mới có quyền ghi vào database và upload file ZIP lên Storage Bucket "bundles".
+CAPGO_SUPABASE_SERVICE_KEY=your-supabase-service-role-key
 ```
+
+> ⚠️ **LƯU Ý BẢO MẬT QUAN TRỌNG:**
+> - **Client-side (Ứng dụng di động)**: Trong file `capacitor.config.ts`, bạn **vẫn giữ nguyên mã khóa `anon` công khai** để đảm bảo điện thoại của người dùng cuối chỉ có quyền đọc phiên bản mới (an toàn tuyệt đối).
+> - **Upload script (Khi chạy build)**: Chỉ có script này chạy trên máy tính của bạn hoặc trên GitHub Actions mới được dùng mã khóa `service_role` để ghi đè/đẩy dữ liệu.
 
 ### 2. Tiến hành đẩy cập nhật bằng một câu lệnh
 Mỗi khi bạn sửa đổi giao diện hoặc tính năng và muốn phân phối trực tiếp tới điện thoại của thợ, chỉ cần chạy lệnh sau trên Terminal:

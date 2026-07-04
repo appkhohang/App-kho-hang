@@ -70,16 +70,21 @@ jobs:
       - name: Upload and deploy to Supabase (OTA Live Update)
         env:
           CAPGO_SUPABASE_URL: ${{ secrets.CAPGO_SUPABASE_URL }}
+          CAPGO_SUPABASE_SERVICE_KEY: ${{ secrets.CAPGO_SUPABASE_SERVICE_KEY }}
           CAPGO_SUPABASE_ANON_KEY: ${{ secrets.CAPGO_SUPABASE_ANON_KEY }}
         run: |
-          if [ -z "$CAPGO_SUPABASE_URL" ] || [ -z "$CAPGO_SUPABASE_ANON_KEY" ]; then
-            echo "::error::CAPGO_SUPABASE_URL or CAPGO_SUPABASE_ANON_KEY secret is not configured in your GitHub repository secrets! Please set these in your GitHub Settings -> Secrets and variables -> Actions to enable automatic deployments."
+          # Use CAPGO_SUPABASE_SERVICE_KEY if configured, fallback to CAPGO_SUPABASE_ANON_KEY
+          UPLOAD_KEY="${CAPGO_SUPABASE_SERVICE_KEY:-$CAPGO_SUPABASE_ANON_KEY}"
+          if [ -z "$CAPGO_SUPABASE_URL" ] || [ -z "$UPLOAD_KEY" ]; then
+            echo "::error::CAPGO_SUPABASE_URL or CAPGO_SUPABASE_SERVICE_KEY (or CAPGO_SUPABASE_ANON_KEY) secret is not configured in your GitHub repository secrets!"
+            echo "::error::Hãy tạo secret trong GitHub Settings -> Secrets and variables -> Actions"
+            echo "::error::Lưu ý quan trọng: Khóa bí mật này phải là mã khóa 'service_role' lấy từ Supabase (bắt đầu bằng eyJ...) để có đầy đủ quyền GHI dữ liệu vào database và Storage bucket."
             exit 1
           fi
           VERSION=$(node -p "require('./package.json').version")
           echo "Uploading bundle version $VERSION to Supabase..."
           EXIT_CODE=0
-          OUTPUT=$(npx @capgo/cli@latest bundle upload --supa-host "$CAPGO_SUPABASE_URL" --supa-anon "$CAPGO_SUPABASE_ANON_KEY" -c production -b "$VERSION" --zip com.xuongan.quanlykho 2>&1) || EXIT_CODE=$?
+          OUTPUT=$(npx @capgo/cli@latest bundle upload --supa-host "$CAPGO_SUPABASE_URL" --supa-anon "$UPLOAD_KEY" -c production -b "$VERSION" --zip com.xuongan.quanlykho 2>&1) || EXIT_CODE=$?
           echo "$OUTPUT"
           if [ $EXIT_CODE -ne 0 ]; then
             if echo "$OUTPUT" | grep -q "already exists"; then
@@ -87,6 +92,7 @@ jobs:
               exit 0
             else
               echo "::error::Supabase bundle upload failed with exit code $EXIT_CODE."
+              echo "::error::Nếu lỗi là 'Invalid API key or insufficient permissions', hãy đảm bảo khóa của bạn là 'service_role' key (mã khóa dịch vụ có quyền ghi), chứ không phải 'anon' key công khai chỉ có quyền đọc."
               exit $EXIT_CODE
             fi
           fi
