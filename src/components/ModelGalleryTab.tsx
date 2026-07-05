@@ -18,6 +18,7 @@ import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from 'fire
 import { B2Service, base64ToBlob } from '../utils/b2Service';
 import { compressBase64Image } from '../utils/imageUtils';
 import { useAndroidBack } from '../hooks/useAndroidBack';
+import { Share } from '@capacitor/share';
 
 // --- Lazy-loaded Image with Shimmer/Skeleton Placeholder Component ---
 function ModelImage({ 
@@ -225,6 +226,13 @@ export default function ModelGalleryTab({
   const [isZoomed, setIsZoomed] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
 
+  // Share modal states
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharingIds, setSharingIds] = useState<string[]>([]);
+  const [sharingStatus, setSharingStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [shareProgressMsg, setShareProgressMsg] = useState('');
+  const [copiedLinks, setCopiedLinks] = useState(false);
+
   // File Input Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
@@ -234,6 +242,240 @@ export default function ModelGalleryTab({
   useAndroidBack(selectedSample !== null, () => setSelectedSample(null));
   useAndroidBack(showAddModal, () => setShowAddModal(false));
   useAndroidBack(showConfig, () => setShowConfig(false));
+  useAndroidBack(showShareModal, () => setShowShareModal(false));
+
+  const handleOpenShareModal = (ids: string[]) => {
+    setSharingIds(ids);
+    setSharingStatus('idle');
+    setShareProgressMsg('');
+    setCopiedLinks(false);
+    setShowShareModal(true);
+  };
+
+  const handleCopyShareLinks = () => {
+    const selectedSamples = samples.filter(s => sharingIds.includes(s.id));
+    const links = selectedSamples
+      .map(s => {
+        if (s.b2Url) {
+          return `${s.modelName}: ${s.b2Url}`;
+        } else {
+          return `${s.modelName}: (Ảnh offline, chưa tải lên đám mây)`;
+        }
+      })
+      .join('\n');
+
+    navigator.clipboard.writeText(links)
+      .then(() => {
+        setCopiedLinks(true);
+        setTimeout(() => setCopiedLinks(false), 2000);
+      })
+      .catch(err => {
+        alert('Không thể sao chép liên kết: ' + (err instanceof Error ? err.message : String(err)));
+      });
+  };
+
+  const handleDownloadShareImages = async () => {
+    setSharingStatus('processing');
+    setShareProgressMsg('Đang chuẩn bị tải ảnh...');
+    
+    const selectedSamples = samples.filter(s => sharingIds.includes(s.id));
+    let count = 0;
+    
+    for (const sample of selectedSamples) {
+      count++;
+      setShareProgressMsg(`Đang tải ảnh ${count}/${selectedSamples.length}: ${sample.modelName}...`);
+      
+      const url = sample.b2Url || sample.localBase64;
+      if (!url) continue;
+      
+      try {
+        let downloadUrl = url;
+        
+        if (url.startsWith('http')) {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          downloadUrl = URL.createObjectURL(blob);
+        }
+        
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `${sample.modelName}_${Date.now()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        if (url.startsWith('http')) {
+          setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } catch (err) {
+        console.warn('Lỗi khi tải ảnh:', sample.modelName, err);
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.download = `${sample.modelName}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    }
+    
+    setSharingStatus('success');
+    setShareProgressMsg(`Đã tải thành công ${selectedSamples.length} ảnh! Bạn hãy mở Zalo, Messenger,... và chọn đính kèm các ảnh vừa tải về.`);
+    setTimeout(() => setSharingStatus('idle'), 4000);
+  };
+
+  const handleSystemShare = async () => {
+    setSharingStatus('processing');
+    setShareProgressMsg('Đang khởi động công cụ chia sẻ hệ thống...');
+    
+    const selectedSamples = samples.filter(s => sharingIds.includes(s.id));
+    if (selectedSamples.length === 0) return;
+    
+    if (selectedSamples.length === 1) {
+      const sample = selectedSamples[0];
+      const shareText = `Mẫu thiết kế: ${sample.modelName}\n${sample.price ? `Giá: ${sample.price.toLocaleString()}đ\n` : ''}${sample.material ? `Chất liệu: ${sample.material}\n` : ''}${sample.description ? `Ghi chú: ${sample.description}\n` : ''}`;
+      
+      try {
+        const canShareNative = await Share.canShare();
+        if (canShareNative.value) {
+          await Share.share({
+            title: `Chia sẻ mẫu ${sample.modelName}`,
+            text: shareText,
+            url: sample.b2Url || undefined,
+            dialogTitle: 'Chia sẻ mẫu thiết kế',
+          });
+          setSharingStatus('success');
+          setShareProgressMsg('Chia sẻ thành công!');
+          setTimeout(() => setSharingStatus('idle'), 2000);
+          return;
+        }
+      } catch (err) {
+        console.warn('Native single share not available:', err);
+      }
+      
+      if (navigator.share) {
+        try {
+          const shareData: ShareData = {
+            title: `Mẫu thiết kế ${sample.modelName}`,
+            text: shareText,
+          };
+          
+          if (sample.b2Url) {
+            shareData.url = sample.b2Url;
+          }
+          
+          try {
+            const url = sample.b2Url || sample.localBase64;
+            if (url) {
+              const blob = url.startsWith('data:') 
+                ? base64ToBlob(url) 
+                : await fetch(url).then(r => r.blob());
+              const file = new File([blob], `${sample.modelName}.jpg`, { type: blob.type || 'image/jpeg' });
+              if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                shareData.files = [file];
+              }
+            }
+          } catch (fErr) {
+            console.warn('Could not attach file to browser share:', fErr);
+          }
+          
+          await navigator.share(shareData);
+          setSharingStatus('success');
+          setShareProgressMsg('Chia sẻ thành công!');
+          setTimeout(() => setSharingStatus('idle'), 2000);
+          return;
+        } catch (err: any) {
+          if (err.name !== 'AbortError') {
+            console.error('Browser share error:', err);
+          } else {
+            setSharingStatus('idle');
+            return;
+          }
+        }
+      }
+    } else {
+      const shareText = `Chia sẻ ${selectedSamples.length} mẫu thiết kế từ Kho Hình Mẫu:\n` + 
+        selectedSamples.map((s, idx) => `${idx + 1}. Mẫu ${s.modelName}${s.price ? ` (${s.price.toLocaleString()}đ)` : ''}`).join('\n');
+      
+      try {
+        const canShareNative = await Share.canShare();
+        if (canShareNative.value) {
+          const linksList = selectedSamples.map(s => s.b2Url).filter(Boolean).join('\n');
+          await Share.share({
+            title: `Chia sẻ ${selectedSamples.length} mẫu thiết kế`,
+            text: `${shareText}\n\nLiên kết ảnh:\n${linksList}`,
+            dialogTitle: 'Chia sẻ các mẫu thiết kế',
+          });
+          setSharingStatus('success');
+          setShareProgressMsg('Chia sẻ thành công!');
+          setTimeout(() => setSharingStatus('idle'), 2000);
+          return;
+        }
+      } catch (err) {
+        console.warn('Native bulk share not available:', err);
+      }
+      
+      if (navigator.share) {
+        try {
+          const linksList = selectedSamples.map(s => s.b2Url).filter(Boolean).join('\n');
+          const filesToShare: File[] = [];
+          
+          try {
+            for (const s of selectedSamples) {
+              const url = s.b2Url || s.localBase64;
+              if (url) {
+                const blob = url.startsWith('data:') 
+                  ? base64ToBlob(url) 
+                  : await fetch(url).then(r => r.blob());
+                const file = new File([blob], `${s.modelName}.jpg`, { type: blob.type || 'image/jpeg' });
+                filesToShare.push(file);
+              }
+            }
+          } catch (fErr) {
+            console.warn('Could not compile files list for browser share:', fErr);
+          }
+          
+          const shareData: ShareData = {
+            title: `Chia sẻ ${selectedSamples.length} mẫu thiết kế`,
+            text: `${shareText}\n\n${linksList}`,
+          };
+          
+          if (filesToShare.length > 0 && navigator.canShare && navigator.canShare({ files: filesToShare })) {
+            shareData.files = filesToShare;
+          }
+          
+          await navigator.share(shareData);
+          setSharingStatus('success');
+          setShareProgressMsg('Chia sẻ thành công!');
+          setTimeout(() => setSharingStatus('idle'), 2000);
+          return;
+        } catch (err: any) {
+          if (err.name !== 'AbortError') {
+            console.error('Browser share error:', err);
+          } else {
+            setSharingStatus('idle');
+            return;
+          }
+        }
+      }
+    }
+    
+    // Fallback: Copy to clipboard
+    const selectedSamplesList = samples.filter(s => sharingIds.includes(s.id));
+    const linksList = selectedSamplesList.map(s => `${s.modelName}: ${s.b2Url || '(Ảnh offline)'}`).join('\n');
+    
+    try {
+      await navigator.clipboard.writeText(linksList);
+      setSharingStatus('success');
+      setShareProgressMsg('Trình duyệt không hỗ trợ chia sẻ trực tiếp. Đã tự động sao chép danh sách liên kết ảnh mẫu vào bộ nhớ tạm. Hãy dán (Ctrl+V) vào ô chat Zalo/Messenger để gửi!');
+      setTimeout(() => setSharingStatus('idle'), 5000);
+    } catch (clipErr) {
+      setSharingStatus('error');
+      setShareProgressMsg('Không hỗ trợ chia sẻ trực tiếp hoặc sao chép.');
+    }
+  };
 
   // --- Real-time Firestore Sync for Metadata ---
   useEffect(() => {
@@ -1701,6 +1943,14 @@ export default function ModelGalleryTab({
                   {filteredSamples.every(s => selectedSampleIds.includes(s.id)) ? 'Hủy chọn tất cả' : 'Chọn tất cả'}
                 </button>
                 <button 
+                  onClick={() => handleOpenShareModal(selectedSampleIds)}
+                  disabled={selectedSampleIds.length === 0}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-650 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                >
+                  <Share2 className="w-3 h-3" />
+                  Chia sẻ ({selectedSampleIds.length})
+                </button>
+                <button 
                   onClick={handleBulkDeleteSamples}
                   disabled={selectedSampleIds.length === 0 || bulkDeleting}
                   className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition font-bold text-[10px] flex items-center gap-1 cursor-pointer"
@@ -1948,6 +2198,16 @@ export default function ModelGalleryTab({
                           className="p-1.5 rounded-full bg-white text-slate-800 shadow-xs hover:scale-115 active:scale-95 transition z-10 cursor-pointer"
                         >
                           <Maximize2 className="w-3.5 h-3.5 text-slate-700" />
+                        </button>
+                        <button
+                          title="Chia sẻ ảnh"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenShareModal([sample.id]);
+                          }}
+                          className="p-1.5 rounded-full bg-white text-slate-800 shadow-xs hover:scale-115 active:scale-95 transition z-10 cursor-pointer"
+                        >
+                          <Share2 className="w-3.5 h-3.5 text-slate-700" />
                         </button>
                         <button
                           title="Xem chi tiết"
@@ -2503,6 +2763,13 @@ export default function ModelGalleryTab({
 
                 {/* Operations footer buttons */}
                 <div className="pt-6 border-t border-slate-150 dark:border-[#1c2d27] space-y-2 shrink-0">
+                  <button 
+                    onClick={() => handleOpenShareModal([selectedSample.id])}
+                    className="w-full py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer text-xs shadow-xs"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    Chia sẻ ảnh mẫu này
+                  </button>
                   <div className="flex gap-2">
                     <button 
                       onClick={(e) => handleOpenEditModal(selectedSample, e)}
@@ -2625,6 +2892,16 @@ export default function ModelGalleryTab({
                   </a>
                 )}
 
+                {/* Share Button */}
+                <button
+                  onClick={() => handleOpenShareModal([fullscreenSample.id])}
+                  className="p-1.5 rounded-lg bg-indigo-650 hover:bg-indigo-700 text-white transition cursor-pointer flex items-center justify-center gap-1 text-[10px] font-bold px-2.5"
+                  title="Chia sẻ ảnh mẫu này"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Chia sẻ</span>
+                </button>
+
                 {/* Close Button */}
                 <button
                   onClick={() => {
@@ -2717,6 +2994,166 @@ export default function ModelGalleryTab({
               </div>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* D. Share Modal Overlay */}
+      <AnimatePresence>
+        {showShareModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+            <div className="absolute inset-0" onClick={() => setShowShareModal(false)} />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-lg bg-white dark:bg-[#0e1613] rounded-2xl shadow-2xl border border-slate-200 dark:border-[#1c2d27] z-10 flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-slate-150 dark:border-[#1c2d27]/70 flex justify-between items-center bg-slate-50 dark:bg-[#111c18]/40 rounded-t-2xl">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                    <Share2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900 dark:text-white tracking-tight">
+                      CHIA SỂ HÌNH ẢNH MẪU
+                    </h3>
+                    <p className="text-[9px] text-slate-450 dark:text-slate-450 font-bold">
+                      Bạn đã chọn <span className="text-indigo-600 dark:text-indigo-400 font-mono font-black text-xs">{sharingIds.length}</span> ảnh mẫu thiết kế
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowShareModal(false)}
+                  className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-[#1a2d25] transition"
+                >
+                  <X className="w-4 h-4 text-slate-400 hover:text-slate-750" />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="p-5 overflow-y-auto space-y-4">
+                {/* Micro Thumbnail Grid of selected items */}
+                <div>
+                  <label className="block text-[9px] font-extrabold uppercase text-slate-400 font-mono mb-1.5">Ảnh mẫu đã chọn ({sharingIds.length})</label>
+                  <div className="flex flex-wrap gap-1.5 max-h-[90px] overflow-y-auto p-2 bg-slate-50 dark:bg-[#111c18]/25 rounded-xl border border-slate-150 dark:border-[#1c2d27]/40">
+                    {samples.filter(s => sharingIds.includes(s.id)).map(sample => {
+                      const imgSource = sample.b2Url || sample.localBase64;
+                      return (
+                        <div key={sample.id} className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-[#1c2d27] bg-slate-100 group shadow-xs shrink-0" title={sample.modelName}>
+                          {imgSource ? (
+                            <img src={imgSource} alt={sample.modelName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <ImageIcon className="w-4 h-4 text-slate-400 m-auto absolute inset-0" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Main Sharing Options Grid */}
+                <div className="grid grid-cols-1 gap-3.5">
+                  {/* Option 1: Copy links list */}
+                  <button
+                    onClick={handleCopyShareLinks}
+                    className="w-full text-left p-3.5 rounded-xl border border-slate-200 hover:border-indigo-500/50 dark:border-[#1c2d27] hover:bg-indigo-500/5 dark:hover:bg-indigo-950/10 transition-all group flex gap-3 cursor-pointer"
+                  >
+                    <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0 flex items-center justify-center group-hover:scale-105 transition-all">
+                      {copiedLinks ? <Check className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <span className="block text-[11px] font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors uppercase tracking-tight">
+                        {copiedLinks ? 'ĐÃ SAO CHÉP LIÊN KẾT!' : 'SAO CHÉP LIÊN KẾT ẢNH'}
+                      </span>
+                      <span className="block text-[9.5px] text-slate-450 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Sao chép danh sách link ảnh đám mây để gửi nhanh trực tiếp vào tin nhắn cho khách hàng trên Zalo, Messenger,...
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Download files directly */}
+                  <button
+                    onClick={handleDownloadShareImages}
+                    disabled={sharingStatus === 'processing'}
+                    className="w-full text-left p-3.5 rounded-xl border border-slate-200 hover:border-teal-500/50 dark:border-[#1c2d27] hover:bg-teal-500/5 dark:hover:bg-teal-950/10 transition-all group flex gap-3 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 shrink-0 flex items-center justify-center group-hover:scale-105 transition-all">
+                      <Download className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="block text-[11px] font-extrabold text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-[#10b981] transition-colors uppercase tracking-tight">
+                        TẢI ẢNH VỀ MÁY
+                      </span>
+                      <span className="block text-[9.5px] text-slate-450 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Tải tất cả file ảnh mẫu đã chọn về thiết bị của bạn. Rất thích hợp để kéo thả đăng bài hoặc gửi album trên máy tính.
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Option 3: System / Native Share */}
+                  <button
+                    onClick={handleSystemShare}
+                    disabled={sharingStatus === 'processing'}
+                    className="w-full text-left p-3.5 rounded-xl border border-slate-200 hover:border-pink-500/50 dark:border-[#1c2d27] hover:bg-pink-500/5 dark:hover:bg-pink-950/10 transition-all group flex gap-3 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="p-2.5 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 shrink-0 flex items-center justify-center group-hover:scale-105 transition-all">
+                      <Share2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="block text-[11px] font-extrabold text-slate-900 dark:text-white group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors uppercase tracking-tight">
+                        CHIA SẺ HỆ THỐNG
+                      </span>
+                      <span className="block text-[9.5px] text-slate-450 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        Sử dụng tính năng chia sẻ gốc của Điện thoại / Máy tính để chia sẻ trực tiếp qua ứng dụng Zalo, Messenger, Gmail...
+                      </span>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Progress Status Message */}
+                {sharingStatus === 'processing' && (
+                  <div className="p-3 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-center font-bold rounded-xl flex items-center justify-center gap-2 text-[10px] animate-pulse">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>{shareProgressMsg}</span>
+                  </div>
+                )}
+                {sharingStatus === 'success' && (
+                  <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-center font-bold rounded-xl text-[10.5px]">
+                    🎉 {shareProgressMsg}
+                  </div>
+                )}
+                {sharingStatus === 'error' && (
+                  <div className="p-3 bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-center font-bold rounded-xl text-[10.5px]">
+                    ⚠️ {shareProgressMsg}
+                  </div>
+                )}
+
+                {/* Tips & Guides Section */}
+                <div className="p-3 bg-slate-50 dark:bg-[#111c18]/15 rounded-xl border border-slate-150 dark:border-[#1c2d27]/40 text-[9.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <span className="block font-black text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1 flex items-center gap-1">
+                    💡 HƯỚNG DẪN GỬI CHAT CHUYÊN NGHIỆP:
+                  </span>
+                  <ul className="list-disc pl-3.5 space-y-1 font-bold">
+                    <li><b>Gửi qua Zalo trên máy tính:</b> Bấm <b>Tải ảnh về máy</b> rồi kéo thả các tệp ảnh vừa tải vào ô chat Zalo. Đây là cách nhanh nhất để gửi ảnh giữ nguyên chất lượng HD gốc.</li>
+                    <li><b>Gửi qua Điện thoại:</b> Bấm <b>Chia sẻ Hệ thống</b> và chọn ứng dụng Zalo/Messenger, sau đó chọn khách hàng hoặc nhóm muốn gửi.</li>
+                    <li><b>Gửi bằng liên kết ảnh:</b> Chọn <b>Sao chép liên kết</b> rồi dán trực tiếp (Ctrl+V) vào ô chat của khách hàng, giúp tiết kiệm dung lượng thiết bị của họ.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 border-t border-slate-150 dark:border-[#1c2d27] bg-slate-50 dark:bg-[#111c18]/40 rounded-b-2xl flex justify-end shrink-0">
+                <button 
+                  onClick={() => setShowShareModal(false)}
+                  className="px-4 py-1.5 bg-slate-200 dark:bg-[#1c2d27] hover:bg-slate-300 hover:text-slate-900 rounded-xl font-extrabold text-[11px] transition cursor-pointer"
+                >
+                  Đóng cửa sổ
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
