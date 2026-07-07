@@ -52,6 +52,25 @@ export default function GoodsImportTab({
 }: GoodsImportTabProps) {
   const isViewer = false;
 
+  // Sort items from newest to oldest
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      // Compare date string descending ("YYYY-MM-DD")
+      const dateCompare = (b.ngày || '').localeCompare(a.ngày || '');
+      if (dateCompare !== 0) return dateCompare;
+      
+      // If dates are the same, compare createdAt descending
+      const aTime = a.createdAt || 0;
+      const bTime = b.createdAt || 0;
+      if (bTime !== aTime) {
+        return bTime - aTime;
+      }
+      
+      // Fallback to id descending
+      return (b.id || '').localeCompare(a.id || '');
+    });
+  }, [items]);
+
   // React effect to auto expand the form if requested via floating action button on home
   useEffect(() => {
     if (autoExpandForm) {
@@ -67,7 +86,7 @@ export default function GoodsImportTab({
     const uniques: ImportItem[] = [];
     const seen = new Set<string>();
     // Iterate from newest to oldest
-    for (const item of items) {
+    for (const item of sortedItems) {
       if (!seen.has(item.mẫu)) {
         seen.add(item.mẫu);
         uniques.push(item);
@@ -75,7 +94,7 @@ export default function GoodsImportTab({
       }
     }
     return uniques;
-  }, [items]);
+  }, [sortedItems]);
 
   // Column selector visibility and column options
   const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
@@ -628,7 +647,7 @@ export default function GoodsImportTab({
 
   // Group items by Week for table processing
   const itemsByWeek: { [weekLabel: string]: ImportItem[] } = {};
-  items.forEach(item => {
+  sortedItems.forEach(item => {
     if (!item) return;
     const week = item.weekKey || "Tuần Không Xác Định";
     if (!itemsByWeek[week]) {
@@ -639,7 +658,7 @@ export default function GoodsImportTab({
 
   // Group items by Month for table processing
   const itemsByMonth: { [monthLabel: string]: ImportItem[] } = {};
-  items.forEach(item => {
+  sortedItems.forEach(item => {
     if (!item) return;
     const month = getVietnameseMonthKey(item.ngày);
     if (!itemsByMonth[month]) {
@@ -2326,7 +2345,7 @@ export default function GoodsImportTab({
           <Suspense fallback={null}>
             <LaborPaymentReceiptModal
               payment={selectedLaborPaymentForModal}
-              weekItems={items.filter(item => item.weekKey === selectedLaborPaymentForModal.weekKey)}
+              weekItems={sortedItems.filter(item => item.weekKey === selectedLaborPaymentForModal.weekKey)}
               allLaborPayments={laborPayments}
               onClose={() => setSelectedLaborPaymentForModal(null)}
             />
