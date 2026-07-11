@@ -1,9 +1,10 @@
 {
   "projectId": "app-kho-an",
-  "appId": "1:313507535882:web:2f8cf4434b5a8e2f6a93f3",
+  "appId": "1:313507535882:web:f73d2a3ca75fd8266a93f3",
   "apiKey": "AIzaSyDrXpcWawugXg-BAEFU585SxhvlizxQY80",
   "authDomain": "app-kho-an.firebaseapp.com",
   "storageBucket": "app-kho-an.firebasestorage.app",
   "messagingSenderId": "313507535882",
-  "measurementId": ""
+  "measurementId": "",
+  "oAuthClientId": "313507535882-288shfpf2pf2hkoa0p5imm01f5f4maai.apps.googleusercontent.com"
 }

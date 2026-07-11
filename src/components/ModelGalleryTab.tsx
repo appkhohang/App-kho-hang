@@ -10,7 +10,7 @@ import {
   Settings, Eye, Info, ChevronRight, X, AlertCircle, Sparkles, Filter, 
   Upload, Download, Copy, Check, EyeOff, Loader2, DollarSign, Tag, 
   FileText, ArrowRight, RotateCw, Trash, Calendar, Edit2, Share2, ZoomIn, ShieldCheck,
-  Maximize2, ChevronLeft, ZoomOut, LayoutGrid, Square, SquareCheck
+  Maximize2, ChevronLeft, ZoomOut, LayoutGrid, Square, SquareCheck, Users, Cloud, Lock, Unlock, RefreshCw
 } from 'lucide-react';
 import { ModelSample, B2Config, Customer } from '../types';
 import { db, getNamespaceCollection, isUsingCustomFirebase, uploadImageToFirebase, deleteImageFromFirebase } from '../utils/firebase';
@@ -19,6 +19,17 @@ import { B2Service, base64ToBlob } from '../utils/b2Service';
 import { compressBase64Image } from '../utils/imageUtils';
 import { useAndroidBack } from '../hooks/useAndroidBack';
 import { Share } from '@capacitor/share';
+import { 
+  GDriveAccount, 
+  authenticateGDriveAccount, 
+  createGDriveFolder, 
+  uploadBase64ToGDrive, 
+  deleteFileFromGDrive, 
+  getCachedAccessToken, 
+  cacheAccessToken,
+  clearCachedAccessToken,
+  getGDriveStorageQuota
+} from '../utils/gdriveService';
 
 // --- Lazy-loaded Image with Shimmer/Skeleton Placeholder Component ---
 function ModelImage({ 
@@ -139,6 +150,20 @@ export default function ModelGalleryTab({
   const [b2Status, setB2Status] = useState<'not_configured' | 'connected' | 'error'>('not_configured');
   const [b2ErrorMsg, setB2ErrorMsg] = useState('');
 
+  // --- Google Drive States ---
+  const [gdriveAccounts, setGDriveAccounts] = useState<GDriveAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_gdrive_accounts');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showGDriveModal, setShowGDriveModal] = useState(false);
+  const [linkingGDrive, setLinkingGDrive] = useState(false);
+  const [authEmailNeeded, setAuthEmailNeeded] = useState<string | null>(null);
+  const [refreshingQuotaId, setRefreshingQuotaId] = useState<string | null>(null);
+
   // B2 Storage metrics & warnings
   const [b2StorageUsed, setB2StorageUsed] = useState<number>(() => {
     return Number(localStorage.getItem('xuongan_b2_storage_used') || '0');
@@ -165,6 +190,10 @@ export default function ModelGalleryTab({
 
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
+
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
+  const [showFolderDialog, setShowFolderDialog] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
 
   // Bulk selection and deletion states
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
@@ -243,6 +272,8 @@ export default function ModelGalleryTab({
   useAndroidBack(showAddModal, () => setShowAddModal(false));
   useAndroidBack(showConfig, () => setShowConfig(false));
   useAndroidBack(showShareModal, () => setShowShareModal(false));
+  useAndroidBack(showCustomerDialog, () => setShowCustomerDialog(false));
+  useAndroidBack(showFolderDialog, () => setShowFolderDialog(false));
 
   const handleOpenShareModal = (ids: string[]) => {
     setSharingIds(ids);
@@ -501,10 +532,180 @@ export default function ModelGalleryTab({
     return () => unsubscribe();
   }, []);
 
+  // Real-time Firestore Sync for Google Drive Accounts
+  useEffect(() => {
+    const collName = getNamespaceCollection('gdrive_accounts');
+    const unsubscribe = onSnapshot(collection(db, collName), (snapshot) => {
+      const list: GDriveAccount[] = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() } as GDriveAccount);
+      });
+      // Sort by creation time descending
+      list.sort((a, b) => b.createdAt - a.createdAt);
+      setGDriveAccounts(list);
+      localStorage.setItem('xuongan_gdrive_accounts', JSON.stringify(list));
+    }, (error) => {
+      console.warn('Firestore sub error for gdrive_accounts:', error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // Sync folders to local storage
   useEffect(() => {
     localStorage.setItem('xuongan_model_folders', JSON.stringify(folders));
   }, [folders]);
+
+  // --- Google Drive Storage Actions ---
+  const handleLinkNewGDriveAccount = async () => {
+    setLinkingGDrive(true);
+    try {
+      const authResult = await authenticateGDriveAccount();
+      const folderName = `XuongAn_Kho_Mau_Det`;
+      const folderId = await createGDriveFolder(authResult.token, folderName);
+      
+      let initialQuota = null;
+      try {
+        initialQuota = await getGDriveStorageQuota(authResult.token);
+      } catch (quotaErr) {
+        console.warn('Could not fetch initial storage quota:', quotaErr);
+      }
+
+      const newAccount: GDriveAccount = {
+        id: 'gdrive_' + Date.now(),
+        email: authResult.email,
+        folderId: folderId,
+        folderName: folderName,
+        isActive: true, // Make newly linked account active automatically
+        isLocked: false,
+        createdAt: Date.now(),
+        warningThresholdGb: 14, // default warning threshold is 14 GB
+        stopUploadOnWarning: false,
+        ...(initialQuota ? {
+          storageLimit: initialQuota.limit,
+          storageUsage: initialQuota.usage,
+          lastQuotaUpdate: Date.now()
+        } : {})
+      };
+
+      // Set other accounts to active = false using a batch
+      const batch = writeBatch(db);
+      gdriveAccounts.forEach(acc => {
+        const docRef = doc(db, getNamespaceCollection('gdrive_accounts'), acc.id);
+        batch.update(docRef, { isActive: false });
+      });
+
+      // Add the new account document
+      const newDocRef = doc(db, getNamespaceCollection('gdrive_accounts'), newAccount.id);
+      batch.set(newDocRef, newAccount);
+      await batch.commit();
+
+      alert(`✨ Đã liên kết tài khoản Google Drive (${authResult.email}) và tạo thư mục "${folderName}" thành công!`);
+    } catch (err: any) {
+      console.error('Failed to link Google Drive account:', err);
+      alert(`❌ Không thể liên kết Google Drive: ${err.message}`);
+    } finally {
+      setLinkingGDrive(false);
+    }
+  };
+
+  const handleSetActiveGDriveAccount = async (selectedId: string) => {
+    try {
+      const selectedAcc = gdriveAccounts.find(acc => acc.id === selectedId);
+      if (!selectedAcc) return;
+      if (selectedAcc.isLocked) {
+        alert('⚠️ Tài khoản này đang bị khóa, không thể đặt làm thư mục tải lên hoạt động.');
+        return;
+      }
+
+      const batch = writeBatch(db);
+      gdriveAccounts.forEach(acc => {
+        const docRef = doc(db, getNamespaceCollection('gdrive_accounts'), acc.id);
+        batch.update(docRef, { isActive: acc.id === selectedId });
+      });
+      await batch.commit();
+      
+      alert(`🔄 Đã chuyển tài khoản tải lên hoạt động sang: ${selectedAcc.email}`);
+    } catch (err: any) {
+      console.error('Failed to set active account:', err);
+      alert(`Lỗi khi đổi tài khoản hoạt động: ${err.message}`);
+    }
+  };
+
+  const handleToggleLockGDriveAccount = async (accId: string, currentLocked: boolean) => {
+    try {
+      const docRef = doc(db, getNamespaceCollection('gdrive_accounts'), accId);
+      const updates: any = { isLocked: !currentLocked };
+      
+      // If we are locking the active account, make sure we deactivate it
+      if (!currentLocked) {
+        updates.isActive = false;
+      }
+      
+      await setDoc(docRef, updates, { merge: true });
+      alert(currentLocked ? '🔓 Đã mở khóa tài khoản!' : '🔒 Đã khóa tài khoản (Chỉ đọc)!');
+    } catch (err: any) {
+      console.error('Failed to toggle lock:', err);
+      alert(`Lỗi khi thay đổi trạng thái khóa: ${err.message}`);
+    }
+  };
+
+  const handleUnlinkGDriveAccount = async (accId: string, email: string) => {
+    if (!confirm(`Bạn có chắc muốn hủy liên kết tài khoản Google Drive (${email})? Ảnh đã tải lên tài khoản này vẫn xem được bình thường nhưng thông tin tài khoản này sẽ biến mất khỏi danh sách quản lý.`)) {
+      return;
+    }
+    try {
+      const docRef = doc(db, getNamespaceCollection('gdrive_accounts'), accId);
+      await deleteDoc(docRef);
+      clearCachedAccessToken(email);
+      alert('Đã xóa liên kết tài khoản Google Drive thành công.');
+    } catch (err: any) {
+      console.error('Failed to unlink account:', err);
+      alert(`Lỗi khi xóa liên kết: ${err.message}`);
+    }
+  };
+
+  const handleRefreshGDriveQuota = async (acc: GDriveAccount) => {
+    setRefreshingQuotaId(acc.id);
+    try {
+      let token = getCachedAccessToken(acc.email);
+      if (!token) {
+        const authResult = await authenticateGDriveAccount(acc.email);
+        token = authResult.token;
+      }
+      
+      const quota = await getGDriveStorageQuota(token);
+      const docRef = doc(db, getNamespaceCollection('gdrive_accounts'), acc.id);
+      await setDoc(docRef, {
+        storageLimit: quota.limit,
+        storageUsage: quota.usage,
+        lastQuotaUpdate: Date.now()
+      }, { merge: true });
+      
+      alert(`✨ Đã cập nhật dung lượng Drive (${acc.email}) thành công!`);
+    } catch (err: any) {
+      console.error('Failed to refresh GDrive quota:', err);
+      alert(`❌ Không thể cập nhật dung lượng: ${err.message}`);
+    } finally {
+      setRefreshingQuotaId(null);
+    }
+  };
+
+  const handleUpdateGDriveWarningSettings = async (
+    accId: string, 
+    warningThresholdGb: number, 
+    stopUploadOnWarning: boolean
+  ) => {
+    try {
+      const docRef = doc(db, getNamespaceCollection('gdrive_accounts'), accId);
+      await setDoc(docRef, {
+        warningThresholdGb,
+        stopUploadOnWarning
+      }, { merge: true });
+    } catch (err: any) {
+      console.error('Failed to update GDrive warning settings:', err);
+    }
+  };
 
   // --- B2 Helper Methods ---
   const formatBytes = (bytes: number, decimals = 2) => {
@@ -783,6 +984,44 @@ export default function ModelGalleryTab({
         }
       }
 
+      // --- Check & Authenticate Google Drive ---
+      const activeAccount = gdriveAccounts.find(acc => acc.isActive);
+      if (!activeAccount) {
+        alert('⚠️ Bạn chưa cấu hình tài khoản lưu trữ Google Drive hoặc chưa đặt tài khoản nào hoạt động. Vui lòng bấm vào nút "DRIVE" ở góc trên bên phải để thiết lập.');
+        return;
+      }
+
+      if (activeAccount.isLocked) {
+        alert('⚠️ Tài khoản Google Drive hiện tại đang bị khóa (Chỉ đọc). Vui lòng cấu hình tài khoản mới hoạt động để tải ảnh lên.');
+        return;
+      }
+
+      // Check storage warning & stop upload threshold
+      const warningThresholdBytes = (activeAccount.warningThresholdGb ?? 14) * 1024 * 1024 * 1024;
+      const currentUsageBytes = activeAccount.storageUsage ?? 0;
+
+      if (activeAccount.stopUploadOnWarning && currentUsageBytes >= warningThresholdBytes) {
+        const usageGb = (currentUsageBytes / (1024 * 1024 * 1024)).toFixed(2);
+        const thresholdGb = (activeAccount.warningThresholdGb ?? 14).toFixed(1);
+        alert(`❌ Ngưng tải lên: Dung lượng Drive hiện tại (${usageGb} GB) đã vượt quá mức cảnh báo ngưng cập nhật (${thresholdGb} GB) đã đặt cho tài khoản ${activeAccount.email}. Vui lòng giải phóng dung lượng Drive, tắt tùy chọn ngưng tải lên hoặc nâng giới hạn cảnh báo trong phần quản lý Drive.`);
+        return;
+      }
+
+      let token = getCachedAccessToken(activeAccount.email);
+      if (!token) {
+        try {
+          setUploadProgress('uploading');
+          setUploadStatusMsg(`Vui lòng xác thực Google Drive cho tài khoản ${activeAccount.email} trong cửa sổ pop-up vừa hiện...`);
+          const authResult = await authenticateGDriveAccount(activeAccount.email);
+          token = authResult.token;
+        } catch (authErr: any) {
+          console.error('Google Drive Auth failed:', authErr);
+          alert(`❌ Xác thực Google Drive thất bại: ${authErr.message}. Vui lòng thử lại.`);
+          setUploadProgress('idle');
+          return;
+        }
+      }
+
       setUploadProgress('compressing');
       const savedSamplesList: ModelSample[] = [];
 
@@ -824,18 +1063,19 @@ export default function ModelGalleryTab({
 
           try {
             setUploadProgress('uploading');
-            const isCustom = isUsingCustomFirebase;
-            setUploadStatusMsg(`[${stepNum}/${totalSteps}] Đang tải ảnh trực tiếp lên ${isCustom ? 'Firebase 2' : 'Firebase 1'} Cloud Storage...`);
+            setUploadStatusMsg(`[${stepNum}/${totalSteps}] Đang tải ảnh trực tiếp lên Google Drive (${activeAccount.email})...`);
             
             const cleanFileName = finalModelName.replace(/[^a-zA-Z0-9-_.]/g, '_');
-            const uploadResult = await uploadImageToFirebase(
+            const uploadResult = await uploadBase64ToGDrive(
+              token!,
               compressedBase64,
-              `${cleanFileName}_${Date.now()}.jpg`
+              `${cleanFileName}_${Date.now()}.jpg`,
+              activeAccount.folderId
             );
 
-            finalB2Url = uploadResult.fileUrl;
-            finalB2FileId = 'firebase_storage'; // Marker for firebase storage deletion
-            finalB2FilePath = uploadResult.filePath;
+            finalB2Url = uploadResult.viewUrl;
+            finalB2FileId = uploadResult.fileId;
+            finalB2FilePath = `gdrive_storage|${activeAccount.email}`;
             
             // Store highly compressed thumbnail locally
             try {
@@ -844,16 +1084,40 @@ export default function ModelGalleryTab({
               finalLocalBase64 = '';
             }
 
-            // Clean up old Firebase Storage file if editing and a new photo was uploaded
+            // Clean up old Google Drive file if editing and a new photo was uploaded
+            if (editingSample && editingSample.b2FilePath?.startsWith('gdrive_storage') && editingSample.b2FileId && i === 0) {
+              const oldEmail = editingSample.b2FilePath.split('|')[1];
+              const oldToken = getCachedAccessToken(oldEmail);
+              if (oldToken) {
+                deleteFileFromGDrive(oldToken, editingSample.b2FileId).catch(err => {
+                  console.warn('Could not clean up old Google Drive file version:', err);
+                });
+              }
+            }
+            
+            // Clean up old Firebase Storage file if it was on Firebase
             if (editingSample && editingSample.b2FilePath && editingSample.b2FileId === 'firebase_storage' && i === 0) {
               deleteImageFromFirebase(editingSample.b2FilePath).catch(err => {
                 console.warn('Could not clean up old Firebase Storage file version:', err);
               });
             }
+
+            // Refresh storage quota after successful upload and update Firestore
+            try {
+              const freshQuota = await getGDriveStorageQuota(token!);
+              const quotaDocRef = doc(db, getNamespaceCollection('gdrive_accounts'), activeAccount.id);
+              await setDoc(quotaDocRef, {
+                storageLimit: freshQuota.limit,
+                storageUsage: freshQuota.usage,
+                lastQuotaUpdate: Date.now()
+              }, { merge: true });
+            } catch (quotaErr) {
+              console.warn('Could not refresh storage quota after upload:', quotaErr);
+            }
           } catch (uploadErr: any) {
-            console.error('Firebase Storage Upload failure, falling back to database-only storage:', uploadErr);
+            console.error('Google Drive Upload failure, falling back to database-only storage:', uploadErr);
             if (totalSteps === 1) {
-              alert(`⚠️ Không thể tải lên Firebase Storage: ${uploadErr.message}. Ảnh mẫu sẽ tạm thời được lưu trữ ngoại tuyến trên thiết bị.`);
+              alert(`⚠️ Không thể tải lên Google Drive: ${uploadErr.message}. Ảnh mẫu sẽ tạm thời được lưu trữ ngoại tuyến trên thiết bị.`);
             }
             finalB2Url = '';
             finalB2FileId = '';
@@ -935,8 +1199,22 @@ export default function ModelGalleryTab({
 
     try {
       // 1. Delete on Firebase Storage or Backblaze B2 if configured
+      // 1. Delete on Firebase Storage, Backblaze B2, or Google Drive if configured
       if (sample.b2FilePath) {
-        if (sample.b2FileId === 'firebase_storage') {
+        if (sample.b2FilePath.startsWith('gdrive_storage')) {
+          const email = sample.b2FilePath.split('|')[1];
+          const token = getCachedAccessToken(email);
+          if (token && sample.b2FileId) {
+            try {
+              await deleteFileFromGDrive(token, sample.b2FileId);
+              console.log('Successfully deleted file on Google Drive:', sample.b2FileId);
+            } catch (driveErr) {
+              console.warn('Failed to delete file on Google Drive:', driveErr);
+            }
+          } else {
+            console.log('Access token not cached for Google Drive deletion of file:', sample.b2FileId);
+          }
+        } else if (sample.b2FileId === 'firebase_storage') {
           try {
             await deleteImageFromFirebase(sample.b2FilePath);
             console.log('Successfully deleted file on Firebase Storage:', sample.b2FilePath);
@@ -991,10 +1269,21 @@ export default function ModelGalleryTab({
     try {
       const selectedSamples = samples.filter(s => selectedSampleIds.includes(s.id));
       
-      // 1. Delete on Firebase Storage or Backblaze B2 for all selected samples
+      // 1. Delete on Firebase Storage, Backblaze B2, or Google Drive for all selected samples
       for (const sample of selectedSamples) {
         if (sample.b2FilePath) {
-          if (sample.b2FileId === 'firebase_storage') {
+          if (sample.b2FilePath.startsWith('gdrive_storage')) {
+            const email = sample.b2FilePath.split('|')[1];
+            const token = getCachedAccessToken(email);
+            if (token && sample.b2FileId) {
+              try {
+                await deleteFileFromGDrive(token, sample.b2FileId);
+                console.log('Successfully deleted Google Drive file in bulk:', sample.b2FileId);
+              } catch (driveErr) {
+                console.warn('Failed to delete Google Drive file in bulk:', driveErr);
+              }
+            }
+          } else if (sample.b2FileId === 'firebase_storage') {
             try {
               await deleteImageFromFirebase(sample.b2FilePath);
               console.log('Successfully deleted Firebase Storage file in bulk:', sample.b2FilePath);
@@ -1509,17 +1798,21 @@ export default function ModelGalleryTab({
           <div>
             <h1 className="text-base font-black tracking-tight uppercase text-slate-900 dark:text-white">Kho hình mẫu</h1>
             <p className="text-[10px] text-slate-400 dark:text-[#657f76]">
-              Lưu trữ mẫu rập dệt, catalog, ảnh thợ may dệt trực tiếp lên <span className="font-bold text-indigo-600 dark:text-indigo-450">Firebase Cloud Storage</span> và đồng bộ thời gian thực.
+              Lưu trữ mẫu rập dệt, catalog, ảnh thợ may dệt trực tiếp lên <span className="font-bold text-blue-600 dark:text-blue-450">Google Drive</span> và đồng bộ thời gian thực.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Status Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono font-bold text-[10px] bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
-            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-            Lưu trữ: {isUsingCustomFirebase ? 'Firebase 2 (Riêng)' : 'Firebase 1 (Mặc định)'}
-          </div>
+          {/* Google Drive Status & Config Button */}
+          <button 
+            onClick={() => setShowGDriveModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono font-bold text-[10px] bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition cursor-pointer"
+            title="Quản lý tài khoản lưu trữ Google Drive"
+          >
+            <Cloud className="w-3.5 h-3.5 text-blue-500" />
+            <span>Drive: {gdriveAccounts.length > 0 ? (gdriveAccounts.find(a => a.isActive)?.email || 'Chưa chọn TK') : 'Chưa liên kết'}</span>
+          </button>
 
           {/* Plus icon button inside the header */}
           <button 
@@ -1538,234 +1831,98 @@ export default function ModelGalleryTab({
         {/* Sidebar categories / folders */}
         <div className="space-y-3 lg:col-span-1">
           
-          {/* A. Thư mục Khách hàng Sidebar Section */}
+          {/* Custom Compact Categories & Customer Dialog Selectors */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#0c1310] border border-slate-200/60 dark:border-[#1c2d27]/60 shadow-xs space-y-3">
-            <div className="flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27]/50 pb-2">
-              <span className="font-extrabold uppercase font-mono tracking-wider flex items-center gap-1.5 text-indigo-600 dark:text-[#818cf8]">
-                <span>👤</span>
-                Khách hàng
+            <div className="flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-[#1c2d27]/40">
+              <span className="font-mono text-[9.5px] font-extrabold uppercase text-slate-400 dark:text-[#657f76] tracking-wider flex items-center gap-1">
+                <Filter className="w-3.5 h-3.5" />
+                Bộ lọc & Phân loại
               </span>
-              <button 
-                onClick={() => setShowAddCustomer(!showAddCustomer)}
-                className="p-1 rounded-lg bg-slate-50 dark:bg-[#111c18] hover:bg-slate-100 dark:hover:bg-[#1a2d25] transition border border-slate-250/50 dark:border-[#1c2d27]/50 text-indigo-600 dark:text-[#818cf8] cursor-pointer flex items-center justify-center"
-                title="Tạo thư mục khách mới"
-              >
-                <FolderPlus className="w-3.5 h-3.5" />
-              </button>
             </div>
 
-            {/* Inline create Customer folder */}
-            <AnimatePresence>
-              {showAddCustomer && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-1.5 pb-2 border-b border-dashed border-slate-200 dark:border-[#1c2d27] overflow-hidden"
-                >
-                  <input 
-                    type="text"
-                    value={newCustomerName}
-                    onChange={e => setNewCustomerName(e.target.value)}
-                    placeholder="Tên khách hàng mới..."
-                    onKeyDown={e => e.key === 'Enter' && handleAddCustomerFolder()}
-                    className="w-full px-2.5 py-1.5 border rounded-lg focus:outline-hidden focus:border-indigo-500 text-[11px] dark:bg-[#0e1613] dark:border-[#1c2d27]"
-                  />
-                  <div className="flex justify-end gap-1.5 text-[10px]">
-                    <button 
-                      onClick={() => setShowAddCustomer(false)}
-                      className="px-2.5 py-1 bg-slate-100 dark:bg-[#111c18] rounded-md font-bold text-slate-500 hover:bg-slate-150 cursor-pointer"
-                    >
-                      Hủy
-                    </button>
-                    <button 
-                      onClick={handleAddCustomerFolder}
-                      className="px-3 py-1 bg-indigo-600 text-white rounded-md font-extrabold hover:bg-indigo-700 cursor-pointer"
-                    >
-                      Tạo
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* Customer Selector Icon Button */}
               <button
-                onClick={() => {
-                  setSelectedCustomer(null);
-                  setCurrentLevel('customers');
-                }}
-                className={`w-full text-left px-3 py-1.5 rounded-xl font-bold flex justify-between items-center transition cursor-pointer ${
-                  selectedCustomer === null 
-                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-[#818cf8]' 
-                    : 'hover:bg-slate-50 dark:hover:bg-[#111c18]/50'
+                onClick={() => setShowCustomerDialog(true)}
+                className={`relative group p-3 rounded-2xl border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                  selectedCustomer !== null
+                    ? 'bg-indigo-50/70 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-[#818cf8]'
+                    : 'bg-slate-50/50 hover:bg-slate-50 dark:bg-[#111c18]/20 dark:hover:bg-[#111c18]/45 border-slate-150 dark:border-[#1c2d27]/60 text-slate-500 dark:text-slate-400'
                 }`}
+                title="Bấm để chọn thư mục khách hàng"
               >
-                <span>📂 Tất cả khách hàng</span>
-                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
-                  {samples.length}
+                <div className={`p-2.5 rounded-xl transition-all ${
+                  selectedCustomer !== null
+                    ? 'bg-indigo-500/15 text-indigo-600 dark:text-[#818cf8]'
+                    : 'bg-slate-100 dark:bg-[#0e1613] text-slate-400'
+                } mb-1.5 group-hover:scale-115 duration-250`}>
+                  <Users className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wide truncate max-w-full">
+                  Khách hàng
                 </span>
+                <span className="text-[9px] font-bold text-slate-400 dark:text-[#556b62] mt-0.5 truncate max-w-full">
+                  {selectedCustomer || 'Tất cả khách'}
+                </span>
+                {selectedCustomer !== null && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1.5 rounded-full bg-indigo-650 text-white font-mono text-[9px] font-black flex items-center justify-center shadow-xs">
+                    {samples.filter(s => {
+                      const cName = s.customerName || 'Khách hàng chung';
+                      return cName.toLowerCase().trim() === selectedCustomer.toLowerCase().trim();
+                    }).length}
+                  </span>
+                )}
               </button>
 
-              {customerFolders.map(folder => {
-                const count = samples.filter(s => {
-                  const cName = s.customerName || 'Khách hàng chung';
-                  return cName.toLowerCase().trim() === folder.toLowerCase().trim();
-                }).length;
-
-                const isSelected = selectedCustomer?.toLowerCase().trim() === folder.toLowerCase().trim();
-
-                return (
-                  <div 
-                    key={folder}
-                    className={`group w-full rounded-xl flex justify-between items-center transition ${
-                      isSelected 
-                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-[#818cf8]' 
-                        : 'hover:bg-slate-50 dark:hover:bg-[#111c18]/50'
-                    }`}
-                  >
-                    <button
-                      onClick={() => enterCustomer(folder)}
-                      className="flex-1 text-left px-3 py-1.5 font-bold flex justify-between items-center cursor-pointer min-w-0"
-                    >
-                      <span className="truncate">👤 {folder}</span>
-                    </button>
-                    
-                    <div className="flex items-center gap-1 pr-2 shrink-0">
-                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
-                        {count}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+              {/* Folder Selector Icon Button */}
+              <button
+                onClick={() => setShowFolderDialog(true)}
+                className={`relative group p-3 rounded-2xl border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                  selectedFolder !== 'all'
+                    ? 'bg-teal-50/70 dark:bg-teal-950/20 border-teal-200 dark:border-teal-900/50 text-teal-600 dark:text-[#10b981]'
+                    : 'bg-slate-50/50 hover:bg-slate-50 dark:bg-[#111c18]/20 dark:hover:bg-[#111c18]/45 border-slate-150 dark:border-[#1c2d27]/60 text-slate-500 dark:text-slate-400'
+                }`}
+                title="Bấm để chọn nhóm phân loại mẫu"
+              >
+                <div className={`p-2.5 rounded-xl transition-all ${
+                  selectedFolder !== 'all'
+                    ? 'bg-teal-500/15 text-teal-600 dark:text-[#10b981]'
+                    : 'bg-slate-100 dark:bg-[#0e1613] text-slate-400'
+                } mb-1.5 group-hover:scale-115 duration-250`}>
+                  <Folder className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wide truncate max-w-full">
+                  Phân loại
+                </span>
+                <span className="text-[9px] font-bold text-slate-400 dark:text-[#556b62] mt-0.5 truncate max-w-full">
+                  {selectedFolder === 'all' ? 'Tất cả nhóm' : selectedFolder}
+                </span>
+                {selectedFolder !== 'all' && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1.5 rounded-full bg-teal-650 text-white font-mono text-[9px] font-black flex items-center justify-center shadow-xs">
+                    {folderStats[selectedFolder] || 0}
+                  </span>
+                )}
+              </button>
             </div>
-          </div>
-
-          {/* B. Nhóm phân loại Sidebar Section (Original Folders) */}
-          <div className="p-4 rounded-2xl bg-white dark:bg-[#0c1310] border border-slate-200/60 dark:border-[#1c2d27]/60 shadow-xs space-y-3.5">
-            <div className="flex justify-between items-center border-b border-slate-150 dark:border-[#1c2d27]/50 pb-2">
-              <span className="font-extrabold uppercase font-mono tracking-wider flex items-center gap-1.5 text-teal-600 dark:text-[#10b981]">
-                <Folder className="w-4 h-4 text-amber-500" />
-                Nhóm phân loại
-              </span>
-              <div className="flex items-center gap-1">
-                {/* Delete Folder Mode Toggle */}
-                <button 
-                  onClick={() => setIsDeleteFolderMode(!isDeleteFolderMode)}
-                  className={`p-1.5 rounded-lg transition border cursor-pointer flex items-center justify-center ${
-                    isDeleteFolderMode 
-                      ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 shadow-xs' 
-                      : 'bg-slate-50 dark:bg-[#111c18] hover:bg-slate-100 dark:hover:bg-[#1a2d25] border-slate-250/50 dark:border-[#1c2d27]/50 text-slate-500 dark:text-slate-400'
-                  }`}
-                  title={isDeleteFolderMode ? "Tắt chế độ xóa thư mục" : "Bật chế độ xóa thư mục"}
+            
+            {/* Quick action helper/clear filters */}
+            {(selectedCustomer !== null || selectedFolder !== 'all') && (
+              <div className="pt-2 border-t border-dashed border-slate-100 dark:border-[#1c2d27]/40 flex justify-between items-center">
+                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider font-mono">
+                  Đang lọc mẫu dệt
+                </span>
+                <button
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setSelectedFolder('all');
+                    setCurrentLevel('customers');
+                  }}
+                  className="text-[8.5px] font-black text-rose-500 hover:text-rose-600 transition cursor-pointer flex items-center gap-0.5 hover:underline uppercase"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Add Folder Button */}
-                <button 
-                  onClick={() => setShowAddFolder(!showAddFolder)}
-                  className="p-1.5 rounded-lg bg-slate-50 dark:bg-[#111c18] hover:bg-slate-100 dark:hover:bg-[#1a2d25] transition border border-slate-250/50 dark:border-[#1c2d27]/50 text-teal-600 dark:text-[#10b981] cursor-pointer flex items-center justify-center"
-                  title="Thêm thư mục mới"
-                >
-                  <FolderPlus className="w-3.5 h-3.5" />
+                  <X className="w-2.5 h-2.5" /> Xóa bộ lọc
                 </button>
               </div>
-            </div>
-
-            {/* Inline create folder */}
-            <AnimatePresence>
-              {showAddFolder && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-1.5 pb-2 border-b border-dashed border-slate-200 dark:border-[#1c2d27]"
-                >
-                  <input 
-                    type="text"
-                    value={newFolderName}
-                    onChange={e => setNewFolderName(e.target.value)}
-                    placeholder="Nhập tên thư mục mới..."
-                    onKeyDown={e => e.key === 'Enter' && handleAddFolder()}
-                    className="w-full px-2.5 py-1.5 border rounded-lg focus:outline-hidden focus:border-teal-500 text-[11px] dark:bg-[#0e1613] dark:border-[#1c2d27]"
-                  />
-                  <div className="flex justify-end gap-1.5 text-[10px]">
-                    <button 
-                      onClick={() => setShowAddFolder(false)}
-                      className="px-2.5 py-1 bg-slate-100 dark:bg-[#111c18] rounded-md font-bold text-slate-500 hover:bg-slate-150"
-                    >
-                      Hủy
-                    </button>
-                    <button 
-                      onClick={handleAddFolder}
-                      className="px-3 py-1 bg-teal-600 text-white rounded-md font-extrabold hover:bg-teal-700"
-                    >
-                      Thêm
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="space-y-1 max-h-[180px] overflow-y-auto pr-1">
-              <button
-                onClick={() => setSelectedFolder('all')}
-                className={`w-full text-left px-3 py-1.5 rounded-xl font-bold flex justify-between items-center transition cursor-pointer ${
-                  selectedFolder === 'all' 
-                    ? 'bg-teal-500/10 text-teal-600 dark:text-[#10b981]' 
-                    : 'hover:bg-slate-50 dark:hover:bg-[#111c18]/50'
-                }`}
-              >
-                <span>📁 Tất cả mẫu thiết kế</span>
-                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
-                  {samples.length}
-                </span>
-              </button>
-
-              {folders.map(folder => {
-                const count = folderStats[folder] || 0;
-                return (
-                  <div 
-                    key={folder}
-                    className={`group w-full rounded-xl flex justify-between items-center transition ${
-                      selectedFolder === folder 
-                        ? 'bg-teal-500/10 text-teal-600 dark:text-[#10b981]' 
-                        : isDeleteFolderMode && folder !== 'Chưa phân loại'
-                          ? 'bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/20'
-                          : 'hover:bg-slate-50 dark:hover:bg-[#111c18]/50'
-                    }`}
-                  >
-                    <button
-                      onClick={() => setSelectedFolder(folder)}
-                      className="flex-1 text-left px-3 py-1.5 font-bold flex justify-between items-center cursor-pointer min-w-0"
-                    >
-                      <span className="truncate">📂 {folder}</span>
-                    </button>
-                    
-                    <div className="flex items-center gap-1 pr-2 shrink-0">
-                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#111c18] text-slate-500">
-                        {count}
-                      </span>
-                      {folder !== 'Chưa phân loại' && (
-                        <button 
-                          onClick={(e) => handleDeleteFolder(folder, e)}
-                          className={`p-1 rounded-md text-rose-500 hover:bg-rose-500/15 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer ${
-                            isDeleteFolderMode 
-                              ? 'opacity-100 bg-rose-500/10 scale-110 ring-1 ring-rose-500/30' 
-                              : 'opacity-0 group-hover:opacity-100'
-                          }`}
-                          title="Xóa thư mục"
-                        >
-                          <Trash className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            )}
           </div>
         </div>
 
@@ -3150,6 +3307,614 @@ export default function ModelGalleryTab({
                   className="px-4 py-1.5 bg-slate-200 dark:bg-[#1c2d27] hover:bg-slate-300 hover:text-slate-900 rounded-xl font-extrabold text-[11px] transition cursor-pointer"
                 >
                   Đóng cửa sổ
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Customer Selector Dialog Overlay */}
+      <AnimatePresence>
+        {showCustomerDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"
+              onClick={() => setShowCustomerDialog(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-md h-[75vh] flex flex-col bg-white dark:bg-[#0c1310] border border-slate-200 dark:border-[#1c2d27] rounded-3xl shadow-2xl overflow-hidden z-10"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-slate-150 dark:border-[#1c2d27]/70 flex items-center justify-between bg-slate-50/50 dark:bg-[#111c18]/10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-indigo-500/10 text-indigo-600 dark:text-[#818cf8] rounded-xl">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-sm">Danh sách Khách hàng</h3>
+                    <p className="text-[10px] text-slate-450 dark:text-[#556b62]">
+                      Chọn một khách hàng để lọc kho mẫu dệt
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCustomerDialog(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1a2d25] text-slate-400 hover:text-slate-600 dark:text-[#556b62] dark:hover:text-[#a3b8cc] transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Search & Add Customer Bar */}
+              <div className="p-4 border-b border-dashed border-slate-150 dark:border-[#1c2d27]/60 space-y-3 shrink-0 bg-slate-50/20 dark:bg-[#111c18]/5">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customerSearchQuery}
+                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                    placeholder="Tìm kiếm khách hàng..."
+                    className="w-full pl-8 pr-3 py-2 border border-slate-200 dark:border-[#1c2d27]/70 rounded-xl text-xs focus:outline-hidden focus:border-indigo-500 dark:bg-[#0e1613]"
+                  />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-455 text-xs">🔍</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCustomerName}
+                    onChange={(e) => setNewCustomerName(e.target.value)}
+                    placeholder="Thêm khách hàng mới..."
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddCustomerFolder()}
+                    className="flex-1 px-3 py-1.5 border border-dashed border-slate-200 dark:border-[#1c2d27]/70 rounded-xl text-xs focus:outline-hidden focus:border-indigo-500 dark:bg-[#0e1613]"
+                  />
+                  <button
+                    onClick={handleAddCustomerFolder}
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tạo
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable Customer List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
+                <button
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setCurrentLevel('customers');
+                    setShowCustomerDialog(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 rounded-2xl font-bold flex justify-between items-center transition cursor-pointer border ${
+                    selectedCustomer === null
+                      ? 'bg-indigo-50 border-indigo-200 text-indigo-650 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-[#818cf8]'
+                      : 'bg-slate-50/50 hover:bg-slate-100 dark:bg-[#111c18]/20 dark:hover:bg-[#111c18]/40 border-slate-100 dark:border-transparent text-slate-600 dark:text-slate-350'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    👥 Tất cả khách hàng
+                  </span>
+                  <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-slate-200/60 dark:bg-[#111c18] text-slate-500">
+                    {samples.length} mẫu
+                  </span>
+                </button>
+
+                <div className="h-px bg-slate-100 dark:bg-[#1c2d27]/40 my-2" />
+
+                {(() => {
+                  const filtered = customerFolders.filter(f => 
+                    f.toLowerCase().includes(customerSearchQuery.toLowerCase())
+                  );
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-center py-10 text-slate-400 dark:text-[#556b62] text-xs font-bold">
+                        Không tìm thấy khách hàng nào khớp
+                      </div>
+                    );
+                  }
+
+                  return filtered.map(folder => {
+                    const count = samples.filter(s => {
+                      const cName = s.customerName || 'Khách hàng chung';
+                      return cName.toLowerCase().trim() === folder.toLowerCase().trim();
+                    }).length;
+
+                    const isSelected = selectedCustomer?.toLowerCase().trim() === folder.toLowerCase().trim();
+
+                    return (
+                      <button
+                        key={folder}
+                        onClick={() => {
+                          enterCustomer(folder);
+                          setShowCustomerDialog(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 rounded-2xl font-bold flex justify-between items-center transition cursor-pointer border ${
+                          isSelected
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-650 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-[#818cf8]'
+                            : 'bg-slate-50/50 hover:bg-slate-100 dark:bg-[#111c18]/20 dark:hover:bg-[#111c18]/40 border-slate-100 dark:border-transparent text-slate-600 dark:text-slate-350'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2 truncate">
+                          👤 {folder}
+                        </span>
+                        <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-slate-200/60 dark:bg-[#111c18] text-slate-450 font-bold shrink-0">
+                          {count} mẫu
+                        </span>
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 border-t border-slate-150 dark:border-[#1c2d27] bg-slate-50 dark:bg-[#111c18]/30 flex justify-end shrink-0">
+                <button
+                  onClick={() => setShowCustomerDialog(false)}
+                  className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-[#1c2d27] dark:hover:bg-[#253e33] rounded-xl font-extrabold text-xs transition cursor-pointer text-slate-700 dark:text-slate-300"
+                >
+                  Đóng
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Category Folder Selector Dialog Overlay */}
+      <AnimatePresence>
+        {showFolderDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"
+              onClick={() => setShowFolderDialog(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-md h-[75vh] flex flex-col bg-white dark:bg-[#0c1310] border border-slate-200 dark:border-[#1c2d27] rounded-3xl shadow-2xl overflow-hidden z-10"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-slate-150 dark:border-[#1c2d27]/70 flex items-center justify-between bg-slate-50/50 dark:bg-[#111c18]/10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-teal-500/10 text-teal-600 dark:text-[#10b981] rounded-xl">
+                    <Folder className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-sm">Nhóm phân loại mẫu</h3>
+                    <p className="text-[10px] text-slate-450 dark:text-[#556b62]">
+                      Chọn hoặc quản lý nhóm phân loại mẫu dệt
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {/* Delete Mode Toggle inside modal */}
+                  <button 
+                    onClick={() => setIsDeleteFolderMode(!isDeleteFolderMode)}
+                    className={`p-1.5 rounded-lg transition border cursor-pointer flex items-center justify-center ${
+                      isDeleteFolderMode 
+                        ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 shadow-xs scale-105' 
+                        : 'bg-slate-50 dark:bg-[#111c18] hover:bg-slate-100 dark:hover:bg-[#1a2d25] border-slate-200/50 dark:border-[#1c2d27]/50 text-slate-400 hover:text-rose-500'
+                    }`}
+                    title={isDeleteFolderMode ? "Tắt chế độ xóa thư mục" : "Bật chế độ xóa thư mục"}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setShowFolderDialog(false)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1a2d25] text-slate-400 hover:text-slate-600 dark:text-[#556b62] dark:hover:text-[#a3b8cc] transition cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Add Folder Section inside Modal */}
+              <div className="p-4 border-b border-dashed border-slate-150 dark:border-[#1c2d27]/60 space-y-2 shrink-0 bg-slate-50/20 dark:bg-[#111c18]/5">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    placeholder="Thêm nhóm mới (ví dụ: Áo thun, Đầm váy...)"
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddFolder()}
+                    className="flex-1 px-3 py-1.5 border border-dashed border-slate-200 dark:border-[#1c2d27]/70 rounded-xl text-xs focus:outline-hidden focus:border-teal-500 dark:bg-[#0e1613]"
+                  />
+                  <button
+                    onClick={handleAddFolder}
+                    className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Thêm
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable Folder List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
+                <button
+                  onClick={() => {
+                    setSelectedFolder('all');
+                    setShowFolderDialog(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 rounded-2xl font-bold flex justify-between items-center transition cursor-pointer border ${
+                    selectedFolder === 'all'
+                      ? 'bg-teal-50 border-teal-200 text-teal-600 dark:bg-teal-950/20 dark:border-teal-900/40 dark:text-[#10b981]'
+                      : 'bg-slate-50/50 hover:bg-slate-100 dark:bg-[#111c18]/20 dark:hover:bg-[#111c18]/40 border-slate-100 dark:border-transparent text-slate-600 dark:text-slate-350'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span>📁</span> Tất cả mẫu thiết kế
+                  </span>
+                  <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-slate-200/60 dark:bg-[#111c18] text-slate-500">
+                    {samples.length} mẫu
+                  </span>
+                </button>
+
+                <div className="h-px bg-slate-100 dark:bg-[#1c2d27]/40 my-2" />
+
+                {folders.map(folder => {
+                  const count = folderStats[folder] || 0;
+                  const isSelected = selectedFolder === folder;
+
+                  return (
+                    <div
+                      key={folder}
+                      className={`w-full rounded-2xl flex justify-between items-center transition border ${
+                        isSelected
+                          ? 'bg-teal-50 border-teal-200 text-teal-600 dark:bg-teal-950/20 dark:border-teal-900/40 dark:text-[#10b981]'
+                          : isDeleteFolderMode && folder !== 'Chưa phân loại'
+                            ? 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/20 text-rose-600'
+                            : 'bg-slate-50/50 hover:bg-slate-100 dark:bg-[#111c18]/20 dark:hover:bg-[#111c18]/40 border-slate-100 dark:border-transparent text-slate-600 dark:text-slate-350'
+                      }`}
+                    >
+                      <button
+                        onClick={() => {
+                          setSelectedFolder(folder);
+                          setShowFolderDialog(false);
+                        }}
+                        className="flex-1 text-left px-4 py-2.5 font-bold flex justify-between items-center cursor-pointer min-w-0"
+                      >
+                        <span className="truncate flex items-center gap-2">
+                          <span>📂</span> {folder}
+                        </span>
+                      </button>
+
+                      <div className="flex items-center gap-1.5 pr-3 shrink-0">
+                        <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-slate-200/60 dark:bg-[#111c18] text-slate-450 font-bold">
+                          {count}
+                        </span>
+                        {folder !== 'Chưa phân loại' && (
+                          <button 
+                            onClick={(e) => handleDeleteFolder(folder, e)}
+                            className={`p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/15 hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                              isDeleteFolderMode 
+                                ? 'opacity-100 bg-rose-500/10 ring-1 ring-rose-500/30' 
+                                : 'opacity-30 hover:opacity-100'
+                            }`}
+                            title="Xóa thư mục"
+                          >
+                            <Trash className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 border-t border-slate-150 dark:border-[#1c2d27] bg-slate-50 dark:bg-[#111c18]/30 flex justify-end shrink-0">
+                <button
+                  onClick={() => setShowFolderDialog(false)}
+                  className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-[#1c2d27] dark:hover:bg-[#253e33] rounded-xl font-extrabold text-xs transition cursor-pointer text-slate-700 dark:text-slate-300"
+                >
+                  Đóng
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Google Drive Storage Manager Dialog Overlay */}
+      <AnimatePresence>
+        {showGDriveModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"
+              onClick={() => setShowGDriveModal(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-lg h-[80vh] flex flex-col bg-white dark:bg-[#0c1310] border border-slate-200 dark:border-[#1c2d27] rounded-3xl shadow-2xl overflow-hidden z-10"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-slate-150 dark:border-[#1c2d27]/70 flex items-center justify-between bg-slate-50/50 dark:bg-[#111c18]/10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-[#60a5fa] rounded-xl">
+                    <Cloud className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-sm">Cấu hình Google Drive</h3>
+                    <p className="text-[10px] text-slate-450 dark:text-[#556b62]">
+                      Quản lý tài khoản và thư mục lưu trữ ảnh mẫu dệt
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowGDriveModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1a2d25] text-slate-400 hover:text-slate-600 dark:text-[#556b62] dark:hover:text-[#a3b8cc] transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 overflow-y-auto space-y-4 flex-1 text-left">
+                {/* Description and storage explanation */}
+                <div className="p-4 rounded-2xl bg-blue-50/40 dark:bg-blue-950/10 border border-blue-100/50 dark:border-blue-900/20 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                  <p className="font-extrabold text-blue-800 dark:text-[#60a5fa] mb-1 font-sans">
+                    💡 Hướng dẫn xoay vòng tài khoản (Khi đầy bộ nhớ):
+                  </p>
+                  <p>
+                    Khi tài khoản hiện tại đầy dung lượng (15 GB miễn phí), bạn chỉ cần nhấn <b>"Khóa tài khoản"</b>. 
+                    Sau đó bấm <b>"Thêm tài khoản Google Drive mới"</b> để đăng nhập tài khoản Google thứ 2, thứ 3,... 
+                    Hệ thống sẽ tạo thư mục mới và tự động sử dụng tài khoản mới để lưu ảnh tiếp theo.
+                  </p>
+                  <p className="mt-1">
+                    Các ảnh đã lưu trên tài khoản cũ <b>vẫn hiển thị và tải xuống bình thường</b> vì chúng đã được chia sẻ công khai!
+                  </p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[9.5px] font-extrabold uppercase text-slate-400 dark:text-[#657f76] tracking-wider">
+                      Danh sách tài khoản ({gdriveAccounts.length})
+                    </span>
+                  </div>
+
+                  {gdriveAccounts.length === 0 ? (
+                    <div className="p-8 text-center border-2 border-dashed border-slate-200 dark:border-[#1c2d27]/60 rounded-2xl">
+                      <Cloud className="w-8 h-8 text-slate-350 dark:text-[#253e33] mx-auto mb-2" />
+                      <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Chưa có tài khoản Google Drive nào được liên kết</p>
+                      <p className="text-[10px] text-slate-400 dark:text-[#556b62] mt-0.5">Bấm nút bên dưới để đăng nhập và bắt đầu sử dụng</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {gdriveAccounts.map((acc) => (
+                        <div 
+                          key={acc.id}
+                          className={`p-4 rounded-2xl border transition-all space-y-3.5 ${
+                            acc.isActive 
+                              ? 'bg-emerald-50/20 dark:bg-[#111c18]/15 border-emerald-500/30 dark:border-emerald-500/30' 
+                              : acc.isLocked
+                                ? 'bg-amber-50/10 dark:bg-amber-950/5 border-amber-500/20 dark:border-amber-900/30 opacity-75'
+                                : 'bg-slate-50/50 dark:bg-[#111c18]/5 border-slate-150 dark:border-[#1c2d27]/40'
+                          }`}
+                        >
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200 truncate">{acc.email}</span>
+                                {acc.isActive && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[8px] font-black uppercase tracking-wider shrink-0">
+                                    Đang hoạt động
+                                  </span>
+                                )}
+                                {acc.isLocked && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono text-[8px] font-black uppercase tracking-wider shrink-0">
+                                    Đã khóa (Chỉ đọc)
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9.5px] text-slate-400 dark:text-[#556b62] font-mono flex items-center gap-1">
+                                <span>📁 Thư mục:</span>
+                                <span className="font-bold underline text-blue-500 truncate max-w-[150px]">{acc.folderName}</span>
+                                <span className="text-slate-300 dark:text-[#1c2d27]">|</span>
+                                <span className="shrink-0">ID: {acc.folderId.substring(0, 8)}...</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0 self-end md:self-auto">
+                              {!acc.isActive && !acc.isLocked && (
+                                <button
+                                  onClick={() => handleSetActiveGDriveAccount(acc.id)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] tracking-wide transition cursor-pointer"
+                                >
+                                  Sử dụng tải lên
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleRefreshGDriveQuota(acc)}
+                                disabled={refreshingQuotaId === acc.id}
+                                className="p-1.5 rounded-lg transition-all border bg-slate-100 hover:bg-slate-200 dark:bg-[#1a2d25] dark:hover:bg-[#253e33] border-slate-200 dark:border-[#1c2d27] text-slate-500 dark:text-[#a3b8cc] cursor-pointer"
+                                title="Cập nhật dung lượng bộ nhớ"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${refreshingQuotaId === acc.id ? 'animate-spin' : ''}`} />
+                              </button>
+
+                              <button
+                                onClick={() => handleToggleLockGDriveAccount(acc.id, acc.isLocked)}
+                                className={`p-1.5 rounded-lg transition-all border cursor-pointer ${
+                                  acc.isLocked
+                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25'
+                                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-[#1a2d25] dark:hover:bg-[#253e33] border-slate-200 dark:border-[#1c2d27] text-slate-500 dark:text-[#a3b8cc]'
+                                }`}
+                                title={acc.isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản (Chỉ đọc)'}
+                              >
+                                {acc.isLocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                              </button>
+
+                              <button
+                                onClick={() => handleUnlinkGDriveAccount(acc.id, acc.email)}
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-500 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                                title="Hủy liên kết tài khoản"
+                              >
+                                <Trash className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Storage & Limits Section */}
+                          <div className="pt-2 border-t border-dashed border-slate-200 dark:border-[#1c2d27] space-y-2 text-xs">
+                            {/* Storage usage display */}
+                            <div className="flex justify-between items-center text-[10px] text-slate-550 dark:text-[#657f76]">
+                              <span className="font-bold uppercase tracking-wider font-sans">
+                                Dung lượng bộ nhớ:
+                              </span>
+                              <span>
+                                {acc.storageUsage !== undefined && acc.storageLimit !== undefined ? (
+                                  <>
+                                    <span className="font-extrabold text-slate-700 dark:text-slate-300">
+                                      {(acc.storageUsage / (1024 * 1024 * 1024)).toFixed(2)} GB
+                                    </span>
+                                    <span> / </span>
+                                    <span>
+                                      {(acc.storageLimit / (1024 * 1024 * 1024)).toFixed(1)} GB
+                                    </span>
+                                    <span className="font-bold ml-1.5 px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-900">
+                                      {((acc.storageUsage / acc.storageLimit) * 100).toFixed(1)}%
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="italic text-slate-400">Chưa tải dữ liệu bộ nhớ</span>
+                                )}
+                              </span>
+                            </div>
+
+                            {/* Progress Bar */}
+                            {acc.storageUsage !== undefined && acc.storageLimit !== undefined && (
+                              <div className="w-full bg-slate-100 dark:bg-slate-900 h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-300 ${
+                                    (acc.storageUsage / (1024 * 1024 * 1024)) >= (acc.warningThresholdGb ?? 14)
+                                      ? 'bg-rose-500' 
+                                      : (acc.storageUsage / acc.storageLimit) >= 0.8
+                                        ? 'bg-amber-500' 
+                                        : 'bg-emerald-500'
+                                  }`}
+                                  style={{ width: `${Math.min(100, (acc.storageUsage / acc.storageLimit) * 100)}%` }}
+                                />
+                              </div>
+                            )}
+
+                            {/* Warning threshold settings panel */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1.5">
+                              {/* Warning limit in GB */}
+                              <div className="space-y-1">
+                                <label className="block text-[10px] font-bold text-slate-500 dark:text-[#556b62]">
+                                  Mức cảnh báo bộ nhớ (GB)
+                                </label>
+                                <div className="flex items-center gap-1.5">
+                                  <input 
+                                    type="number"
+                                    min="1"
+                                    max="10000"
+                                    value={acc.warningThresholdGb ?? 14}
+                                    onChange={(e) => {
+                                      const val = Math.max(1, Number(e.target.value));
+                                      handleUpdateGDriveWarningSettings(acc.id, val, !!acc.stopUploadOnWarning);
+                                    }}
+                                    className="w-full text-[11px] border border-slate-200 dark:border-[#1c2d27] rounded-lg px-2 py-1 bg-slate-50/50 dark:bg-[#111c18]/20 text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500"
+                                  />
+                                  <span className="text-[10px] text-slate-400 shrink-0 font-mono">GB</span>
+                                </div>
+                              </div>
+
+                              {/* Stop updates checkbox */}
+                              <div className="flex items-center gap-2 sm:pt-4">
+                                <input 
+                                  type="checkbox"
+                                  id={`stop_${acc.id}`}
+                                  checked={!!acc.stopUploadOnWarning}
+                                  onChange={(e) => {
+                                    handleUpdateGDriveWarningSettings(acc.id, acc.warningThresholdGb ?? 14, e.target.checked);
+                                  }}
+                                  className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 dark:bg-[#111c18]/20 border-slate-300 dark:border-[#1c2d27] cursor-pointer"
+                                />
+                                <label 
+                                  htmlFor={`stop_${acc.id}`}
+                                  className="text-[10px] font-medium text-slate-650 dark:text-[#8ba39a] leading-tight cursor-pointer select-none"
+                                >
+                                  Ngưng tải lên khi vượt ngưỡng cảnh báo
+                                </label>
+                              </div>
+                            </div>
+
+                            {/* Display visual warning if exceeded */}
+                            {acc.storageUsage !== undefined && acc.storageLimit !== undefined && (acc.storageUsage / (1024 * 1024 * 1024)) >= (acc.warningThresholdGb ?? 14) && (
+                              <div className={`p-2 rounded-xl text-[10px] leading-snug flex items-start gap-1.5 ${
+                                acc.stopUploadOnWarning 
+                                  ? 'bg-rose-500/10 text-rose-650 dark:text-rose-400 border border-rose-500/20' 
+                                  : 'bg-amber-500/10 text-amber-650 dark:text-amber-400 border border-amber-500/20'
+                              }`}>
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="font-bold">Cảnh báo: </span>
+                                  <span>Dung lượng đã vượt mức {(acc.warningThresholdGb ?? 14)} GB.</span>
+                                  {acc.stopUploadOnWarning ? (
+                                    <span className="font-extrabold block mt-0.5">⚠️ ĐÃ KHÓA TẢI LÊN cho tài khoản này!</span>
+                                  ) : (
+                                    <span className="block mt-0.5">Bạn nên khóa tài khoản này và liên kết tài khoản mới.</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-150 dark:border-[#1c2d27] bg-slate-50 dark:bg-[#111c18]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 rounded-b-3xl">
+                <button
+                  onClick={handleLinkNewGDriveAccount}
+                  disabled={linkingGDrive}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-blue-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  {linkingGDrive ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang liên kết...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 font-black" />
+                      <span>Thêm tài khoản Google Drive mới</span>
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  onClick={() => setShowGDriveModal(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-[#1c2d27] dark:hover:bg-[#253e33] rounded-xl font-extrabold text-xs transition cursor-pointer text-slate-700 dark:text-slate-300"
+                >
+                  Đóng
                 </button>
               </div>
             </motion.div>
