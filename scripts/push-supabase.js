@@ -7,8 +7,8 @@ import path from 'path';
 dotenv.config();
 
 function run() {
-  // Sanitize inputs to remove any trailing/leading spaces or newlines copied by mistake
-  let supaUrl = (process.env.CAPGO_SUPABASE_URL || '').replace(/\s+/g, '');
+  // Sanitize inputs to remove any spaces, tabs, newlines, or quotes copied by mistake
+  let supaUrl = (process.env.CAPGO_SUPABASE_URL || '').replace(/[\s"']/g, '');
   if (supaUrl) {
     if (!/^https?:\/\//i.test(supaUrl)) {
       supaUrl = 'https://' + supaUrl;
@@ -20,7 +20,7 @@ function run() {
   // We check for CAPGO_SUPABASE_SERVICE_KEY first, and fall back to CAPGO_SUPABASE_ANON_KEY.
   let supaAnonKey = process.env.CAPGO_SUPABASE_SERVICE_KEY || process.env.CAPGO_SUPABASE_ANON_KEY;
   if (supaAnonKey) {
-    supaAnonKey = supaAnonKey.replace(/\s+/g, '');
+    supaAnonKey = supaAnonKey.replace(/[\s"']/g, '');
   }
 
   if (!supaUrl || !supaAnonKey) {
