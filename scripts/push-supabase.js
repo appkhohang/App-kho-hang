@@ -49,9 +49,10 @@ function run() {
     const version = pkg.version;
 
     // 4. Gọi Capgo CLI để đóng gói và đẩy trực tiếp lên Supabase
-    console.log(`\n\x1b[35m%s\x1b[0m`, `🚀 Bước 3: Đóng gói và upload bundle v${version} lên Supabase...`);
+    console.log(`\n\x1b[35m%s\x1b[0m`, `🚀 Bước 3: Vá Capgo CLI và tiến hành upload bundle v${version} lên Supabase...`);
+    execSync('node scripts/patch-capgo.js', { stdio: 'inherit' });
     
-    const cmd = `npx @capgo/cli bundle upload --supa-host "${supaUrl}" --supa-anon "${supaAnonKey}" -a sb_self_hosted -c production -b "${version}" --zip com.xuongan.quanlykho`;
+    const cmd = `npx capgo bundle upload --supa-host "${supaUrl}" --supa-anon "${supaAnonKey}" -a sb_self_hosted -c production -b "${version}" --zip com.xuongan.quanlykho --verbose`;
     
     console.log(`Chạy câu lệnh: ${cmd.substring(0, 100)}... [ANON KEY HIDDEN]`);
     

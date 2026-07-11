@@ -96,9 +96,12 @@ jobs:
             exit 1
           fi
           VERSION=$(node -p "require('./package.json').version")
+          echo "Patching Capgo CLI to handle relative Supabase upload URLs..."
+          node scripts/patch-capgo.js
+          
           echo "Uploading bundle version $VERSION to Supabase..."
           EXIT_CODE=0
-          OUTPUT=$(npx @capgo/cli@latest bundle upload --supa-host "$CAPGO_SUPABASE_URL" --supa-anon "$UPLOAD_KEY" -a sb_self_hosted -c production -b "$VERSION" --zip com.xuongan.quanlykho 2>&1) || EXIT_CODE=$?
+          OUTPUT=$(npx capgo bundle upload --supa-host "$CAPGO_SUPABASE_URL" --supa-anon "$UPLOAD_KEY" -a sb_self_hosted -c production -b "$VERSION" --zip com.xuongan.quanlykho --verbose 2>&1) || EXIT_CODE=$?
           echo "$OUTPUT"
           if [ $EXIT_CODE -ne 0 ]; then
             if echo "$OUTPUT" | grep -q "already exists"; then
