@@ -489,7 +489,7 @@ export default function App() {
   };
 
   // File input reference for database restoration upload
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // References for automated database auto-backup to LocalStorage
   const isBackupMountedRef = useRef<boolean>(false);
@@ -811,7 +811,7 @@ export default function App() {
   });
 
   // Route protection and dynamic redirection based on page level permissions
-  React.useEffect(() => {
+  useEffect(() => {
     if (authState.isAuthenticated && allowedTabs.length > 0) {
       const validTabs = allowedTabs.filter(t => t !== 'loading');
       if (validTabs.length > 0 && activeTab !== 'notifications' && !validTabs.includes(activeTab)) {
@@ -1025,7 +1025,7 @@ export default function App() {
   }, []);
 
   // Back navigation on mobile phones block
-  const isPoppingState = React.useRef(false);
+  const isPoppingState = useRef(false);
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {

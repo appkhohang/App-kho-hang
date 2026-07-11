@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Download, X, Camera, CheckCircle, FileText, User, Calendar, Receipt, DollarSign, Sparkles, Plus, Share2, AlertCircle, Copy } from 'lucide-react';
 import { Bill, Customer, PaymentRecord } from '../types';
@@ -49,7 +49,7 @@ export default function InvoiceDetailModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [blobObjectUrl, setBlobObjectUrl] = useState<string>('');
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!exportedBlob) {
       setBlobObjectUrl('');
       return;

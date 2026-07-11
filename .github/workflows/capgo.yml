@@ -80,6 +80,15 @@ jobs:
           CAPGO_SUPABASE_URL=$(echo "$CAPGO_SUPABASE_URL" | tr -d '[:space:]')
           UPLOAD_KEY=$(echo "$UPLOAD_KEY" | tr -d '[:space:]')
           
+          if [ -n "$CAPGO_SUPABASE_URL" ]; then
+            # Prepend https:// if protocol is missing
+            if [[ ! "$CAPGO_SUPABASE_URL" =~ ^https?:// ]]; then
+              CAPGO_SUPABASE_URL="https://$CAPGO_SUPABASE_URL"
+            fi
+            # Remove trailing slashes
+            CAPGO_SUPABASE_URL="${CAPGO_SUPABASE_URL%/}"
+          fi
+          
           if [ -z "$CAPGO_SUPABASE_URL" ] || [ -z "$UPLOAD_KEY" ]; then
             echo "::error::CAPGO_SUPABASE_URL or CAPGO_SUPABASE_SERVICE_KEY (or CAPGO_SUPABASE_ANON_KEY) secret is not configured in your GitHub repository secrets!"
             echo "::error::Hãy tạo secret trong GitHub Settings -> Secrets and variables -> Actions"

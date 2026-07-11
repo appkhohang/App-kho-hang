@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, Sun, Moon, Smartphone, Download, Upload, Trash2, HelpCircle, FileText, CalendarCheck, Shield, ShieldCheck, Database, Cloud, Info, Lock, Key, Eye, EyeOff, UserPlus, Users, ToggleLeft, ToggleRight, UserX, Check, Palette, ChevronDown, ChevronUp, Link, Share2, RefreshCw, Camera, MapPin, HardDrive, Calculator, AlertTriangle, ArrowUpCircle, X, ChevronRight, Bell, Globe } from 'lucide-react';
 import { AppSettings, ImportItem, Customer, UserProfile, Bill, CURRENT_VERSION, AppUpdateInfo } from '../types';
@@ -56,7 +56,7 @@ export default function SettingsTab({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<any>(null);
-  const [showCloudInfo, setShowCloudInfo] = React.useState(false);
+  const [showCloudInfo, setShowCloudInfo] = useState(false);
 
   // States of collapsible sections (defaulting to false / collapsed for tidiness)
   const [isDbOpen, setIsDbOpen] = useState(false);
@@ -116,7 +116,7 @@ export default function SettingsTab({
     return Number(localStorage.getItem('xuongan_b2_storage_used') || '0');
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     const checkB2 = () => {
       try {
         const saved = localStorage.getItem('xuongan_b2_config');
@@ -140,7 +140,7 @@ export default function SettingsTab({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchLatestVersion = async () => {
       try {
         const res = await fetch('/version.json?t=' + Date.now());
@@ -212,7 +212,7 @@ export default function SettingsTab({
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isUpdatesOpen) {
       loadCapgoDetails();
     }
@@ -367,7 +367,7 @@ export default function SettingsTab({
     }
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handleUpdate = () => {
       try {
         const saved = localStorage.getItem("xuongan_database_auto_backups");
@@ -381,7 +381,7 @@ export default function SettingsTab({
   }, []);
 
   // Dynamic Leaflet Map setup and markers loop
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isGpsOpen) {
       if (mapRef.current) {
         try {
@@ -583,7 +583,7 @@ export default function SettingsTab({
   useAndroidBack(showDetailedInfo, () => setShowDetailedInfo(false));
 
   // Storage size calculation logic
-  const storageStats = React.useMemo(() => {
+  const storageStats = useMemo(() => {
     // 1. Calculate Bills pure text size
     const billsWithoutPhotos = bills.map(({ photo, ...rest }) => rest);
     const billsTextRaw = JSON.stringify(billsWithoutPhotos);
