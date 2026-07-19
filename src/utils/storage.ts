@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, LoginNotification, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport } from '../types';
+import { ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, LoginNotification, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, HourlyAttendance } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey } from './dateUtils';
 
 // Seed initial data starts empty to remove mock templates (Bỏ giới thiệu mẫu)
@@ -115,6 +115,7 @@ export interface DatabasePackage {
   productionBatches?: ProductionBatch[];
   materialReimports?: MaterialReimport[];
   materialLogs?: any[];
+  hourlyAttendance?: HourlyAttendance[];
   settings: AppSettings;
   version: string;
   exportedAt: string;
@@ -136,6 +137,7 @@ export function exportDatabasePackage(): void {
     productionBatches: getSavedState("xuongan_production_batches", []),
     materialReimports: getSavedState("xuongan_material_reimports", []),
     materialLogs: getSavedState("xuongan_material_logs", []),
+    hourlyAttendance: getSavedState("xuongan_hourly_attendance", []),
     settings: getSavedState("xuongan_settings", { theme: 'light', currencySymbol: 'đ', exportFormat: 'xlsx' }),
     version: "1.2",
     exportedAt: new Date().toISOString()
@@ -192,6 +194,7 @@ export function importDatabasePackage(jsonContent: string): boolean {
     saveState("xuongan_production_batches", data.productionBatches || []);
     saveState("xuongan_material_reimports", data.materialReimports || []);
     saveState("xuongan_material_logs", data.materialLogs || []);
+    saveState("xuongan_hourly_attendance", data.hourlyAttendance || []);
 
     if (data.settings) {
       saveState("xuongan_settings", data.settings);

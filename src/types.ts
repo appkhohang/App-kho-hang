@@ -228,7 +228,7 @@ export interface UserProfile {
   lastLocationTime?: string; // Thời gian cập nhật vị trí gần nhất
 }
 
-export const CURRENT_VERSION = '1.0.74';
+export const CURRENT_VERSION = '1.0.76';
 
 export interface AppUpdateInfo {
   version: string;
@@ -259,6 +259,26 @@ export interface ModelSample {
   description?: string; // Ghi chú mô tả mẫu
   createdAt: number;
   updatedAt?: number;
+}
+
+export interface HourlyAttendance {
+  id: string;
+  workerId: string;
+  workerName: string;
+  date: string; // YYYY-MM-DD
+  checkInTime?: string; // HH:mm
+  checkOutTime?: string; // HH:mm
+  hourlyRate: number; // Đơn giá mỗi giờ (đ/giờ)
+  hoursWorked: number; // Số giờ làm việc (hỗ trợ số thập phân, e.g. 7.5)
+  totalAmount: number; // Tổng tiền = hoursWorked * hourlyRate
+  notes?: string;
+  weekKey: string; // Phân nhóm theo tuần (e.g. "Tuần 22 - Tháng 05")
+  createdAt: number;
+  updatedBy?: string;
+  updatedAt?: number;
+  overtimeHours?: number; // Số giờ tăng ca
+  overtimeMultiplier?: number; // Hệ số tăng ca (VD: 1.5)
+  isOvertimeApplied?: boolean; // Có áp dụng tính tăng ca hay không
 }
 
 

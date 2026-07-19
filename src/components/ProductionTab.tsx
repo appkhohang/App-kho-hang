@@ -165,6 +165,10 @@ export default function ProductionTab({
   const [selectedTaskIdsForNewWorker, setSelectedTaskIdsForNewWorker] = useState<string[]>([]);
   const [isEditingWorkerTasks, setIsEditingWorkerTasks] = useState(false);
   const [editingWorkerTaskIds, setEditingWorkerTaskIds] = useState<string[]>([]);
+  const [useMonthlySalaryForRate, setUseMonthlySalaryForRate] = useState<boolean>(false);
+  const [workerMonthlySalary, setWorkerMonthlySalary] = useState<string>('5000000');
+  const [workerMonthlyDays, setWorkerMonthlyDays] = useState<string>('26');
+  const [workerMonthlyHours, setWorkerMonthlyHours] = useState<string>('8');
 
   // Active Worker personal page states
   const [workerActiveTab, setWorkerActiveTab] = useState<'jobs' | 'payments'>('jobs');
@@ -325,17 +329,47 @@ export default function ProductionTab({
       alert('Vui lòng nhập tên thợ!');
       return;
     }
+    const workerId = 'wk_' + Date.now();
     const newWorker: Worker = {
-      id: 'wk_' + Date.now(),
+      id: workerId,
       name: workerName.trim(),
       phone: workerPhone.trim() || undefined,
       createdAt: Date.now(),
       taskIds: selectedTaskIdsForNewWorker
     };
+
+    if (useMonthlySalaryForRate) {
+      const m = Number(workerMonthlySalary) || 0;
+      const d = Number(workerMonthlyDays) || 26;
+      const h = Number(workerMonthlyHours) || 8;
+      const totalHours = d * h;
+      const rate = totalHours > 0 ? Math.round(m / totalHours) : 0;
+
+      // Save to worker rates
+      try {
+        const savedRates = localStorage.getItem('xuongan_worker_hourly_rates');
+        const rates = savedRates ? JSON.parse(savedRates) : {};
+        rates[workerId] = rate;
+        localStorage.setItem('xuongan_worker_hourly_rates', JSON.stringify(rates));
+
+        // Save to worker monthly salaries config
+        const savedSalaries = localStorage.getItem('xuongan_worker_monthly_salaries');
+        const salaries = savedSalaries ? JSON.parse(savedSalaries) : {};
+        salaries[workerId] = { monthlySalary: m, days: d, hours: h };
+        localStorage.setItem('xuongan_worker_monthly_salaries', JSON.stringify(salaries));
+      } catch (err) {
+        console.error('Failed to save worker salary configs:', err);
+      }
+    }
+
     setWorkers([...workers, newWorker]);
     setWorkerName('');
     setWorkerPhone('');
     setSelectedTaskIdsForNewWorker([]);
+    setUseMonthlySalaryForRate(false);
+    setWorkerMonthlySalary('5000000');
+    setWorkerMonthlyDays('26');
+    setWorkerMonthlyHours('8');
     setShowAddWorker(false);
   };
 
@@ -3913,9 +3947,9 @@ export default function ProductionTab({
                             checked={isChecked}
                             onChange={() => {
                               if (isChecked) {
-                                setSelectedTaskIdsForNewWorker(selectedTaskIdsForNewWorker.filter(id => id !== task.id));
+                                  setSelectedTaskIdsForNewWorker(selectedTaskIdsForNewWorker.filter(id => id !== task.id));
                               } else {
-                                setSelectedTaskIdsForNewWorker([...selectedTaskIdsForNewWorker, task.id]);
+                                  setSelectedTaskIdsForNewWorker([...selectedTaskIdsForNewWorker, task.id]);
                               }
                             }}
                             className="mt-0.5 rounded border-slate-300 text-indigo-600 accent-indigo-600 cursor-pointer"
@@ -3924,6 +3958,98 @@ export default function ProductionTab({
                         </label>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+
+              {/* Cấu hình lương tháng quy ước để tự động tính đơn giá công */}
+              <div className="border-t border-slate-150 dark:border-slate-800 pt-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={useMonthlySalaryForRate}
+                    onChange={(e) => setUseMonthlySalaryForRate(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 accent-indigo-600 cursor-pointer w-4 h-4"
+                  />
+                  <span className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wide font-mono flex items-center gap-1">
+                    Đặt lương tháng quy ước <span className="text-[10px] text-indigo-500 font-bold font-sans capitalize">(tự tính đơn giá giờ)</span>
+                  </span>
+                </label>
+
+                {useMonthlySalaryForRate && (
+                  <div className="mt-3 bg-indigo-50/40 dark:bg-indigo-950/20 p-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 space-y-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                        Mức lương tháng quy ước (đ)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="50000"
+                          value={workerMonthlySalary}
+                          onChange={(e) => setWorkerMonthlySalary(e.target.value)}
+                          placeholder="Ví dụ: 5000000"
+                          className="w-full pl-3 pr-8 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-zinc-950 text-xs font-black font-mono focus:outline-none focus:border-indigo-500 dark:text-white"
+                        />
+                        <span className="absolute right-3 top-2 text-slate-400 dark:text-slate-500 font-black text-[10px] font-mono">đ</span>
+                      </div>
+                      {Number(workerMonthlySalary) > 0 && (
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block">
+                          Mức lương: <strong className="text-slate-700 dark:text-slate-300">{Number(workerMonthlySalary).toLocaleString()} đ/tháng</strong>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                          Số ngày làm/tháng
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={workerMonthlyDays}
+                          onChange={(e) => setWorkerMonthlyDays(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-zinc-950 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
+                          Số giờ làm/ngày
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="24"
+                          value={workerMonthlyHours}
+                          onChange={(e) => setWorkerMonthlyHours(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-zinc-950 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Live calculation */}
+                    {(() => {
+                      const m = Number(workerMonthlySalary) || 0;
+                      const d = Number(workerMonthlyDays) || 26;
+                      const h = Number(workerMonthlyHours) || 8;
+                      const totalHours = d * h;
+                      const rate = totalHours > 0 ? Math.round(m / totalHours) : 0;
+                      return (
+                        <div className="bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-[10.5px] leading-relaxed">
+                          <span className="block font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-wider font-mono text-[9px]">
+                            Đơn giá giờ tự động quy đổi:
+                          </span>
+                          <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 font-mono block">
+                            {rate.toLocaleString()} đ/giờ
+                          </span>
+                          <span className="text-slate-400 font-normal block text-[9.5px]">
+                            (Lấy lương chia cho {totalHours} giờ làm tiêu chuẩn/tháng)
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

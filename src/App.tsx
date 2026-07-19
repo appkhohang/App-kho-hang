@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode, FolderPlus, ExternalLink, Sparkles, Share2, Globe } from 'lucide-react';
+import { LogOut, User, Bell, Shield, ShieldCheck, Menu, Info, RefreshCw, Layers, CheckCircle2, X, BarChart3, Database, Sun, Moon, HelpCircle, Download, Upload, AlertCircle, Trash2, Settings, FileSpreadsheet, Smartphone, Scissors, Home, TrendingUp, ShoppingCart, FileText, Factory, Calendar, DollarSign, ChevronRight, Palette, Image, Plus, Edit, ArrowUpDown, Boxes, Receipt, Package, ArrowRight, CheckSquare, Square, Users, Check, Filter, QrCode, FolderPlus, ExternalLink, Sparkles, Share2, Globe, Clock } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 
 // Statically imported child components/tabs to prevent hook errors and version mismatch bugs
@@ -21,7 +21,8 @@ import InvoicesTab from './components/InvoicesTab';
 import ReportInventoryDetail from './components/ReportInventoryDetail';
 import FloatingStats from './components/FloatingStats';
 import CameraCapture from './components/CameraCapture';
-import { CURRENT_VERSION, ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo, ModelSample } from './types';
+import HourlyAttendanceTab from './components/HourlyAttendanceTab';
+import { CURRENT_VERSION, ImportItem, LaborPayment, Customer, Bill, PaymentRecord, AuthState, AppSettings, TpDtShippingItem, ModelOperationBreakdown, Worker, WorkerJob, RawMaterial, ModelMaterialRecipe, ProductionBatch, MaterialReimport, LoginNotification, TaskType, UserProfile, AppUpdateInfo, ModelSample, HourlyAttendance } from './types';
 import { initLocalStorage, getSavedState, saveState, importDatabasePackage, exportDatabasePackage, DatabasePackage } from './utils/storage';
 import { downloadAllFromCloud, pushAllLocalStateToCloud } from './utils/syncService';
 import { useRealtimeSync } from './utils/realtimeSync';
@@ -257,6 +258,7 @@ export default function App() {
   const [productionBatches, setProductionBatches] = useState<ProductionBatch[]>(() => getSavedArray("xuongan_production_batches", []));
   const [materialReimports, setMaterialReimports] = useState<MaterialReimport[]>(() => getSavedArray("xuongan_material_reimports", []));
   const [materialLogs, setMaterialLogs] = useState<any[]>(() => getSavedArray("xuongan_material_logs", []));
+  const [hourlyAttendance, setHourlyAttendance] = useState<HourlyAttendance[]>(() => getSavedArray("xuongan_hourly_attendance", []));
   const [productionSubTab, setProductionSubTab] = useState<'breakdown' | 'materials'>('breakdown');
   const [invoiceSelectedCustomerId, setInvoiceSelectedCustomerId] = useState<string>('');
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => getSavedArray("xuongan_user_profiles", []));
@@ -346,7 +348,7 @@ export default function App() {
 
 
   // Active Tab state
-  const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery' | 'inventory' | 'profit_estimator' | 'model_gallery'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'import' | 'invoices' | 'production' | 'report' | 'settings' | 'notifications' | 'gallery' | 'inventory' | 'profit_estimator' | 'model_gallery' | 'hourly_attendance'>('home');
   const [isModelGalleryQuickEdit, setIsModelGalleryQuickEdit] = useState(false);
   
   // States for Notifications multi-select and account filtering
@@ -357,6 +359,8 @@ export default function App() {
   // Quick transition states from Home FAB
   const [autoExpandImportForm, setAutoExpandImportForm] = useState(false);
   const [autoOpenCreateBill, setAutoOpenCreateBill] = useState(false);
+  const [autoOpenManualAttendance, setAutoOpenManualAttendance] = useState(false);
+  const [hourlyAttendanceSubTab, setHourlyAttendanceSubTab] = useState<'clock' | 'history' | 'payroll'>('clock');
   const [isHomeFabOpen, setIsHomeFabOpen] = useState(false);
   
   // Mobile hamburger drawer state
@@ -672,7 +676,7 @@ export default function App() {
 
   const getUserAllowedTabs = (): string[] => {
     const email = authState.email?.toLowerCase().trim();
-    const allTabs = ['home', 'import', 'invoices', 'production', 'inventory', 'report', 'settings', 'gallery', 'profit_estimator', 'model_gallery'];
+    const allTabs = ['home', 'import', 'invoices', 'production', 'inventory', 'report', 'settings', 'gallery', 'profit_estimator', 'model_gallery', 'hourly_attendance'];
     if (!email) {
       return ['home'];
     }
@@ -800,6 +804,7 @@ export default function App() {
     materialLogs, setMaterialLogs,
     tasks, setTasks,
     userProfiles, setUserProfiles,
+    hourlyAttendance, setHourlyAttendance,
     settings, setSettings,
     isAuthenticated: authState.isAuthenticated,
     userEmail: authState.email,
@@ -889,6 +894,10 @@ export default function App() {
           setUserProfiles(cloudData.userProfiles);
           saveState("xuongan_user_profiles", cloudData.userProfiles);
         }
+        if (cloudData.hourlyAttendance && cloudData.hourlyAttendance.length > 0) {
+          setHourlyAttendance(cloudData.hourlyAttendance);
+          saveState("xuongan_hourly_attendance", cloudData.hourlyAttendance);
+        }
         if (cloudData.settings) {
           setSettings(cloudData.settings as any);
           saveState("xuongan_settings", cloudData.settings);
@@ -962,6 +971,7 @@ export default function App() {
         loginNotifications: authState.loginNotifications || [],
         tasks,
         userProfiles,
+        hourlyAttendance,
         settings
       });
       const nowStr = new Date().toLocaleTimeString('vi-VN') + " " + new Date().toLocaleDateString('vi-VN');
@@ -1139,6 +1149,7 @@ export default function App() {
     materialRecipes: materialRecipes,
     productionBatches: productionBatches,
     materialReimports: materialReimports,
+    hourlyAttendance: hourlyAttendance,
     settings: settings
   };
 
@@ -1158,6 +1169,7 @@ export default function App() {
         materialRecipes: materialRecipes,
         productionBatches: productionBatches,
         materialReimports: materialReimports,
+        hourlyAttendance: hourlyAttendance,
         settings: settings
       };
 
@@ -1175,6 +1187,7 @@ export default function App() {
         materialRecipes: source.materialRecipes,
         productionBatches: source.productionBatches,
         materialReimports: source.materialReimports,
+        hourlyAttendance: source.hourlyAttendance,
         settings: source.settings,
         version: "1.2",
         exportedAt: new Date().toISOString()
@@ -1349,6 +1362,10 @@ export default function App() {
   useEffect(() => {
     saveState("xuongan_workers", workers);
   }, [workers]);
+
+  useEffect(() => {
+    saveState("xuongan_hourly_attendance", hourlyAttendance);
+  }, [hourlyAttendance]);
 
   useEffect(() => {
     saveState("xuongan_tasks", tasks);
@@ -2699,6 +2716,62 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* Card 8: Chấm công theo giờ */}
+          {allowedTabs.includes('hourly_attendance') && (
+            <motion.div 
+              id="home_card_hourly_attendance"
+              onClick={() => setActiveTab('hourly_attendance')}
+              whileHover={{ 
+                scale: 1.015,
+                y: -4,
+                boxShadow: "0 20px 25px -5px rgba(99, 102, 241, 0.12), 0 8px 10px -6px rgba(99, 102, 241, 0.12)"
+              }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative bg-white dark:bg-[#0f1224] text-slate-800 dark:text-white rounded-2xl p-5 border border-slate-150/80 dark:border-slate-900/60 hover:border-indigo-500/50 dark:hover:border-[#6366f1]/40 transition-all duration-300 cursor-pointer flex flex-col justify-between h-[175px] shadow-xs hover:shadow-lg hover:shadow-indigo-500/5 col-span-1"
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Calendar className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="truncate min-w-0 pr-1 text-left">
+                    <h3 className="font-extrabold text-slate-800 dark:text-white text-[13px] md:text-[15px] tracking-tight truncate leading-tight">6. Chấm Công Giờ</h3>
+                    <p className="text-[9.5px] md:text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate hidden sm:block">Chấm công, tính lương theo giờ</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5" />
+              </div>
+
+              {/* Mobile/Tablet mini description line */}
+              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-tight truncate sm:hidden -mt-1.5 text-left">
+                Ghi nhận giờ làm việc của nhân viên
+              </p>
+
+              <div className="border-t border-slate-100 dark:border-slate-800/40 my-1 w-full" />
+
+              <div className="flex justify-between items-end text-left">
+                <div>
+                  <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white font-mono leading-none">
+                    {hourlyAttendance.filter(a => {
+                      const today = new Date();
+                      const y = today.getFullYear();
+                      const m = String(today.getMonth() + 1).padStart(2, '0');
+                      const d = String(today.getDate()).padStart(2, '0');
+                      return a.date === `${y}-${m}-${d}`;
+                    }).length} <span className="text-xs font-bold text-slate-450 dark:text-slate-400 font-sans">lượt hôm nay</span>
+                  </p>
+                  <p className="text-[9.5px] md:text-[10.5px] font-bold text-indigo-600 dark:text-indigo-400 mt-1.5 font-sans whitespace-nowrap">Tổng {hourlyAttendance.length} bản ghi</p>
+                </div>
+                
+                {/* View Details Button with Icon */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-100 dark:border-indigo-500/25 transition-all duration-300 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/20 group-hover:border-indigo-250 dark:group-hover:border-indigo-500/40 text-[9.5px] md:text-[10.5px] font-black uppercase tracking-wider shrink-0">
+                  <span className="hidden sm:inline">Chấm công</span>
+                  <Calendar className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* Custom Feature Categories dynamically created by user */}
           {customHomeFeatures.map((feat) => {
             const isChecked = enabledHomeFeatures.includes(feat.id);
@@ -2818,94 +2891,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Floating Action Button (FAB) with speed dial quick options */}
-        {/* Backdrop overlay for speed dial */}
-        {isHomeFabOpen && (
-          <div 
-            className="fixed inset-0 z-45 bg-slate-950/45 backdrop-blur-[2px] transition-opacity"
-            onClick={() => setIsHomeFabOpen(false)}
-          />
-        )}
-
-        <div className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-55 flex flex-col items-end gap-3 font-sans">
-          <AnimatePresence>
-            {isHomeFabOpen && (
-              <div className="flex flex-col items-end gap-3.5 pb-1 select-none">
-                {/* Option 1: Nhập hàng mới */}
-                {allowedTabs.includes('import') && (
-                  <motion.button
-                    initial={{ opacity: 0, y: 15, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 15, scale: 0.9 }}
-                    onClick={() => {
-                      setIsHomeFabOpen(false);
-                      setAutoExpandImportForm(true);
-                      setActiveTab('import');
-                    }}
-                    className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-[#10b981] hover:bg-[#059669] text-white text-xs font-black shadow-2xl border border-emerald-450/20 active:scale-95 transition cursor-pointer"
-                  >
-                    <ShoppingCart className="w-4 h-4 text-white" />
-                    <span>Nhập hàng mới</span>
-                  </motion.button>
-                )}
-
-                {/* Option 2: Viết bill hóa đơn */}
-                {allowedTabs.includes('invoices') && (
-                  <motion.button
-                    initial={{ opacity: 0, y: 15, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 15, scale: 0.9 }}
-                    onClick={() => {
-                      setIsHomeFabOpen(false);
-                      setAutoOpenCreateBill(true);
-                      setActiveTab('invoices');
-                    }}
-                    className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-2xl border border-indigo-500/20 active:scale-95 transition cursor-pointer"
-                  >
-                    <FileText className="w-4 h-4 text-white" />
-                    <span>Viết bill hóa đơn</span>
-                  </motion.button>
-                )}
-
-                {/* Option 3: Thêm ảnh mẫu */}
-                {allowedTabs.includes('model_gallery') && (
-                  <motion.button
-                    initial={{ opacity: 0, y: 15, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 15, scale: 0.9 }}
-                    onClick={() => {
-                      setIsHomeFabOpen(false);
-                      setIsQuickAddModelOpen(true);
-                    }}
-                    className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-black shadow-2xl border border-teal-500/20 active:scale-95 transition cursor-pointer"
-                  >
-                    <Image className="w-4 h-4 text-white animate-pulse" />
-                    <span>Thêm ảnh mẫu</span>
-                  </motion.button>
-                )}
-              </div>
-            )}
-          </AnimatePresence>
-
-          {/* Main Floating Trigger Button with pulsing indicator */}
-          <motion.button
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsHomeFabOpen(!isHomeFabOpen)}
-            className="w-14 h-14 rounded-full bg-linear-to-tr from-[#415ef4] to-[#6366f1] text-white flex items-center justify-center shadow-2xl shadow-indigo-550/20 border border-indigo-500/25 cursor-pointer active:scale-95 transition relative group"
-            title="Tác vụ nhanh"
-          >
-            {/* Pulsing ring effect to attract focus */}
-            <span className="absolute inset-0 rounded-full bg-indigo-500/20 animate-ping pointer-events-none group-hover:bg-indigo-500/25" />
-            
-            <motion.div
-              animate={{ rotate: isHomeFabOpen ? 135 : 0 }}
-              transition={{ type: "spring", stiffness: 260, damping: 20 }}
-            >
-              <Plus className="w-7 h-7 font-black" />
-            </motion.div>
-          </motion.button>
-        </div>
       </div>
     );
   };
@@ -3060,6 +3045,16 @@ export default function App() {
                   >
                     <DollarSign className="w-3.5 h-3.5 text-indigo-505" />
                     <span>5. Giá Thành & Lợi Nhuận Bộ Đồ</span>
+                  </button>
+                )}
+                {allowedTabs.includes('hourly_attendance') && (
+                  <button
+                    id="tab_hourly_attendance_btn"
+                    onClick={() => setActiveTab('hourly_attendance')}
+                    className={`py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition cursor-pointer ${activeTab === 'hourly_attendance' ? 'bg-white dark:bg-slate-800 text-brand-primary shadow-xs font-bold border border-slate-200/60 dark:border-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>6. Chấm Công Giờ</span>
                   </button>
                 )}
                 {allowedTabs.includes('report') && (
@@ -3409,7 +3404,23 @@ export default function App() {
                            </button>
                          )}
 
-                         {/* Tab Model Gallery button link */}
+                          {/* Tab 6 button link - Chấm Công Giờ */}
+                          {allowedTabs.includes("hourly_attendance") && (
+                            <button
+                              onClick={() => {
+                                setActiveTab("hourly_attendance");
+                                setIsMobileMenuOpen(false);
+                              }}
+                              className={`p-2.5 rounded-xl transition flex flex-col items-center text-center gap-1.5 cursor-pointer select-none border text-xs font-bold leading-tight ${activeTab === "hourly_attendance" ? "bg-indigo-50/90 border-indigo-200 text-indigo-750 dark:bg-indigo-950/40 dark:border-indigo-900/40 dark:text-indigo-300" : "bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-650 dark:text-slate-400 font-bold"}`}
+                            >
+                              <div className={`p-1.5 rounded-lg flex items-center justify-center ${activeTab === "hourly_attendance" ? "bg-indigo-600 text-white shadow-xs" : "bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-slate-400"}`}>
+                                <Calendar className="w-4 h-4 text-indigo-500" />
+                              </div>
+                              <span>{t("Chấm công giờ", "Attendance")}</span>
+                            </button>
+                          )}
+
+                                                  {/* Tab Model Gallery button link */}
                          {allowedTabs.includes('model_gallery') && (
                            <button
                              onClick={() => {
@@ -4329,6 +4340,29 @@ export default function App() {
               </motion.div>
             </div>
 
+            <div className={activeTab === 'hourly_attendance' ? '' : 'hidden'}>
+              <motion.div
+                animate={activeTab === 'hourly_attendance' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <HourlyAttendanceTab
+                    hourlyAttendance={hourlyAttendance}
+                    setHourlyAttendance={setHourlyAttendance}
+                    workers={workers}
+                    setWorkers={setWorkers}
+                    settings={settings}
+                    userRole={userRole}
+                    activeSubTab={hourlyAttendanceSubTab}
+                    onActiveSubTabChange={setHourlyAttendanceSubTab}
+                    autoOpenManualAttendance={autoOpenManualAttendance}
+                    setAutoOpenManualAttendance={setAutoOpenManualAttendance}
+                  />
+                </Suspense>
+              </motion.div>
+            </div>
+
             <div className={activeTab === 'notifications' ? 'space-y-4 max-w-2xl mx-auto font-sans pb-12' : 'hidden'}>
               <motion.div
                 animate={activeTab === 'notifications' ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
@@ -4702,6 +4736,118 @@ export default function App() {
               <p className="text-[10px] text-slate-400/80 dark:text-slate-550 font-mono">Bảo mật đa tầng TLS 1.3 | AES-256 mã hóa cục bộ | Khôi phục chuyển máy liền mạch.</p>
             </div>
           </footer>
+
+          {/* Floating Action Button (FAB) with speed dial quick options */}
+          {/* Backdrop overlay for speed dial */}
+          {activeTab === 'home' && isHomeFabOpen && (
+            <div 
+              className="fixed inset-0 z-45 bg-slate-950/45 backdrop-blur-[2px] transition-opacity"
+              onClick={() => setIsHomeFabOpen(false)}
+            />
+          )}
+
+          {activeTab === 'home' && (
+            <div className="fixed right-6 md:right-8 z-55 flex flex-col items-end gap-3 font-sans transition-all duration-300 bottom-24 md:bottom-8">
+              <AnimatePresence>
+                {isHomeFabOpen && (
+                  <div className="flex flex-col items-end gap-3.5 pb-1 select-none">
+                    {/* Option 1: Nhập hàng mới */}
+                    {allowedTabs.includes('import') && (
+                      <motion.button
+                        initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 15, scale: 0.9 }}
+                        onClick={() => {
+                          setIsHomeFabOpen(false);
+                          setAutoExpandImportForm(true);
+                          setActiveTab('import');
+                        }}
+                        className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-[#10b981] hover:bg-[#059669] text-white text-xs font-black shadow-2xl border border-emerald-450/20 active:scale-95 transition cursor-pointer"
+                      >
+                        <ShoppingCart className="w-4 h-4 text-white" />
+                        <span>Nhập hàng mới</span>
+                      </motion.button>
+                    )}
+
+                    {/* Option 2: Viết bill hóa đơn */}
+                    {allowedTabs.includes('invoices') && (
+                      <motion.button
+                        initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 15, scale: 0.9 }}
+                        onClick={() => {
+                          setIsHomeFabOpen(false);
+                          setAutoOpenCreateBill(true);
+                          setActiveTab('invoices');
+                        }}
+                        className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-2xl border border-indigo-500/20 active:scale-95 transition cursor-pointer"
+                      >
+                        <FileText className="w-4 h-4 text-white" />
+                        <span>Viết bill hóa đơn</span>
+                      </motion.button>
+                    )}
+
+                    {/* Option 3: Thêm ảnh mẫu */}
+                    {allowedTabs.includes('model_gallery') && (
+                      <motion.button
+                        initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 15, scale: 0.9 }}
+                        onClick={() => {
+                          setIsHomeFabOpen(false);
+                          setIsQuickAddModelOpen(true);
+                        }}
+                        className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-black shadow-2xl border border-teal-500/20 active:scale-95 transition cursor-pointer"
+                      >
+                        <Image className="w-4 h-4 text-white animate-pulse" />
+                        <span>Thêm ảnh mẫu</span>
+                      </motion.button>
+                    )}
+
+                    {/* Option 4: Ghi nhận ca nhanh */}
+                    {allowedTabs.includes('hourly_attendance') && (
+                      <motion.button
+                        initial={{ opacity: 0, y: 15, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 15, scale: 0.9 }}
+                        onClick={() => {
+                          setIsHomeFabOpen(false);
+                          setHourlyAttendanceSubTab('clock');
+                          setAutoOpenManualAttendance(true);
+                          setActiveTab('hourly_attendance');
+                        }}
+                        className="flex items-center gap-2.5 px-4.5 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-2xl border border-amber-450/20 active:scale-95 transition cursor-pointer"
+                      >
+                        <Clock className="w-4 h-4 text-white animate-pulse" />
+                        <span>Ghi nhận ca nhanh</span>
+                      </motion.button>
+                    )}
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* Main Floating Trigger Button with pulsing indicator */}
+              <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  setIsHomeFabOpen(!isHomeFabOpen);
+                }}
+                className="w-14 h-14 rounded-full bg-linear-to-tr from-[#415ef4] to-[#6366f1] text-white flex items-center justify-center shadow-2xl shadow-indigo-550/20 border border-indigo-500/25 cursor-pointer active:scale-95 transition relative group"
+                title="Tác vụ nhanh"
+              >
+                {/* Pulsing ring effect to attract focus */}
+                <span className="absolute inset-0 rounded-full bg-indigo-500/20 animate-ping pointer-events-none group-hover:bg-indigo-500/25" />
+                
+                <motion.div
+                  animate={{ rotate: isHomeFabOpen ? 135 : 0 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                >
+                  <Plus className="w-7 h-7 font-black" />
+                </motion.div>
+              </motion.button>
+            </div>
+          )}
         </div>
       )}
 

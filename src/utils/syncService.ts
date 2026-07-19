@@ -30,7 +30,8 @@ import {
   LoginNotification, 
   AppSettings,
   TaskType,
-  UserProfile
+  UserProfile,
+  HourlyAttendance
 } from '../types';
 
 // Map of local keys to remote collections
@@ -51,7 +52,8 @@ export const COLLECTION_MAP = {
   materialLogs: 'material_logs',
   loginNotifications: 'login_notifications',
   tasks: 'tasks',
-  userProfiles: 'user_profiles'
+  userProfiles: 'user_profiles',
+  hourlyAttendance: 'hourly_attendance'
 };
 
 /**
@@ -206,7 +208,8 @@ export async function downloadAllFromCloud() {
       materialLogs,
       loginNotifications,
       tasks,
-      userProfiles
+      userProfiles,
+      hourlyAttendance
     ] = await Promise.all([
       downloadCollectionFromCloud<ImportItem>('import_items'),
       downloadCollectionFromCloud<LaborPayment>('labor_payments'),
@@ -226,7 +229,8 @@ export async function downloadAllFromCloud() {
       downloadCollectionFromCloud<TaskType>('tasks'),
       isMasterOrAdmin
         ? downloadCollectionFromCloud<UserProfile>('user_profiles')
-        : Promise.resolve([])
+        : Promise.resolve([]),
+      downloadCollectionFromCloud<HourlyAttendance>('hourly_attendance')
     ]);
 
     // Pull settings if exist
@@ -258,6 +262,7 @@ export async function downloadAllFromCloud() {
       loginNotifications,
       tasks,
       userProfiles,
+      hourlyAttendance,
       settings: appSettings,
       exportedAt: new Date().toISOString()
     };
@@ -287,6 +292,7 @@ export async function pushAllLocalStateToCloud(localData: {
   loginNotifications: LoginNotification[];
   tasks: TaskType[];
   userProfiles: UserProfile[];
+  hourlyAttendance: HourlyAttendance[];
   settings: AppSettings;
 }) {
   if (!isUserAdmin()) {
@@ -319,7 +325,8 @@ export async function pushAllLocalStateToCloud(localData: {
       uploadCollectionToCloud('material_logs', localData.materialLogs || []),
       uploadCollectionToCloud('login_notifications', localData.loginNotifications.slice(0, 100)), // cap to prevent write spikes
       uploadCollectionToCloud('tasks', localData.tasks),
-      uploadCollectionToCloud('user_profiles', localData.userProfiles)
+      uploadCollectionToCloud('user_profiles', localData.userProfiles),
+      uploadCollectionToCloud('hourly_attendance', localData.hourlyAttendance || [])
     ]);
   } catch (error) {
     throw error;

@@ -135,15 +135,85 @@ export default function GoodsImportTab({
   };
 
   // Input fields state
-  const [mẫu, setMẫu] = useState('');
-  const [sốLượng, setSốLượng] = useState<number | ''>('');
-  const [đơnGiáMay, setĐơnGiáMay] = useState<number | ''>('');
-  const [shipĐT_TP, setShipĐT_TP] = useState<number | ''>('');
+  const [goodsRows, setGoodsRows] = useState<{
+    id: string;
+    mẫu: string;
+    sốLượng: number | '';
+    đơnGiáMay: number | '';
+    shipĐT_TP: number | '';
+  }[]>([
+    { id: 'row-1', mẫu: '', sốLượng: '', đơnGiáMay: '', shipĐT_TP: '' }
+  ]);
   const [shipTP_ĐT, setShipTP_ĐT] = useState<number | ''>('');
   const [ngàyNhập, setNgàyNhập] = useState(getCurrentDateStr());
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [importPhoto, setImportPhoto] = useState<string | null>(null);
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
+
+  const updateRowField = (id: string, field: 'mẫu' | 'sốLượng' | 'đơnGiáMay' | 'shipĐT_TP', value: any) => {
+    setGoodsRows(prev => prev.map(row => {
+      if (row.id === id) {
+        return { ...row, [field]: value };
+      }
+      return row;
+    }));
+  };
+
+  const addEmptyRow = () => {
+    setGoodsRows(prev => [
+      ...prev,
+      { id: 'row-' + Date.now(), mẫu: '', sốLượng: '', đơnGiáMay: '', shipĐT_TP: '' }
+    ]);
+  };
+
+  const removeRow = (id: string) => {
+    if (goodsRows.length === 1) {
+      setGoodsRows([{ id: 'row-' + Date.now(), mẫu: '', sốLượng: '', đơnGiáMay: '', shipĐT_TP: '' }]);
+    } else {
+      setGoodsRows(prev => prev.filter(row => row.id !== id));
+    }
+  };
+
+  const calculatedGrandTotal = useMemo(() => {
+    return goodsRows.reduce((sum, row) => {
+      const qty = Number(row.sốLượng || 0);
+      const price = Number(row.đơnGiáMay || 0);
+      return sum + (qty * price);
+    }, 0);
+  }, [goodsRows]);
+
+  const totalQtyFilled = useMemo(() => {
+    return goodsRows.reduce((sum, row) => sum + Number(row.sốLượng || 0), 0);
+  }, [goodsRows]);
+
+  const handleQuickActionClick = (item: ImportItem) => {
+    setGoodsRows(prev => {
+      const lastRow = prev[prev.length - 1];
+      const isLastRowEmpty = lastRow && !lastRow.mẫu.trim() && lastRow.sốLượng === '' && lastRow.đơnGiáMay === '' && lastRow.shipĐT_TP === '';
+      
+      if (isLastRowEmpty) {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...lastRow,
+          mẫu: item.mẫu,
+          đơnGiáMay: item.đơnGiáMay,
+          shipĐT_TP: item.vậnChuyểnĐT_TP || '',
+        };
+        return updated;
+      } else {
+        return [
+          ...prev,
+          {
+            id: 'row-' + Date.now(),
+            mẫu: item.mẫu,
+            sốLượng: '',
+            đơnGiáMay: item.đơnGiáMay,
+            shipĐT_TP: item.vậnChuyểnĐT_TP || '',
+          }
+        ];
+      }
+    });
+  };
 
   // Form toggle state for adding either sewn items or separate cargo shipments
   const [activeFormType, setActiveFormType] = useState<'goods' | 'shipping'>('goods');
@@ -435,32 +505,55 @@ export default function GoodsImportTab({
       alert("⚠️ Bạn đang đăng nhập với vai trò CHỈ XEM, không có quyền nhập hàng mới!");
       return;
     }
-    if (!mẫu && !sốLượng && !đơnGiáMay && !shipĐT_TP && !shipTP_ĐT && !importPhoto) {
-      alert("Vui lòng nhập ít nhất một ô thông tin (Tên mẫu, Số lượng, Đơn giá hoặc Ảnh)!");
+
+    // Filter out rows that are completely empty
+    const validRows = goodsRows.filter(row => 
+      row.mẫu.trim() || row.sốLượng !== '' || row.đơnGiáMay !== '' || row.shipĐT_TP !== ''
+    );
+
+    if (validRows.length === 0 && !importPhoto) {
+      alert("Vui lòng nhập thông tin cho ít nhất một dòng hàng!");
       return;
     }
 
-    const newItem: ImportItem = {
-      id: "imp-" + Date.now(),
-      mẫu: mẫu || "Mẫu chưa đặt tên",
-      sốLượng: sốLượng !== '' ? Number(sốLượng) : 0,
-      đơnGiáMay: đơnGiáMay !== '' ? Number(đơnGiáMay) : 0,
-      vậnChuyểnĐT_TP: Number(shipĐT_TP || 0),
-      vậnChuyểnTP_ĐT: Number(shipTP_ĐT || 0),
-      ngày: ngàyNhập,
-      weekKey: getVietnameseWeekKey(ngàyNhập),
-      createdAt: Date.now(),
-      photo: importPhoto || undefined
-    };
+    // Create ImportItem for each valid row
+    const baseTimestamp = Date.now();
+    const newItems: ImportItem[] = validRows.map((row, idx) => {
+      return {
+        id: "imp-" + (baseTimestamp + idx),
+        mẫu: row.mẫu.trim() || "Mẫu chưa đặt tên",
+        sốLượng: row.sốLượng !== '' ? Number(row.sốLượng) : 0,
+        đơnGiáMay: row.đơnGiáMay !== '' ? Number(row.đơnGiáMay) : 0,
+        vậnChuyểnĐT_TP: Number(row.shipĐT_TP || 0),
+        vậnChuyểnTP_ĐT: 0,
+        ngày: ngàyNhập,
+        weekKey: getVietnameseWeekKey(ngàyNhập),
+        createdAt: baseTimestamp + idx,
+        photo: importPhoto || undefined
+      };
+    });
 
-    setItems(prev => [newItem, ...prev]);
+    if (newItems.length > 0) {
+      setItems(prev => [...newItems, ...prev]);
+    } else if (importPhoto) {
+      // If only photo is captured but no rows, create a fallback item
+      const fallbackItem: ImportItem = {
+        id: "imp-" + baseTimestamp,
+        mẫu: "Hàng chụp ảnh",
+        sốLượng: 0,
+        đơnGiáMay: 0,
+        vậnChuyểnĐT_TP: 0,
+        vậnChuyểnTP_ĐT: 0,
+        ngày: ngàyNhập,
+        weekKey: getVietnameseWeekKey(ngàyNhập),
+        createdAt: baseTimestamp,
+        photo: importPhoto
+      };
+      setItems(prev => [fallbackItem, ...prev]);
+    }
 
     // Reset Form
-    setMẫu('');
-    setSốLượng('');
-    setĐơnGiáMay('');
-    setShipĐT_TP('');
-    setShipTP_ĐT('');
+    setGoodsRows([{ id: 'row-' + Date.now(), mẫu: '', sốLượng: '', đơnGiáMay: '', shipĐT_TP: '' }]);
     setNgàyNhập(getCurrentDateStr());
     setImportPhoto(null);
   };
@@ -1013,14 +1106,9 @@ export default function GoodsImportTab({
                             <button
                               key={item.id}
                               type="button"
-                              onClick={() => {
-                                setMẫu(item.mẫu);
-                                setĐơnGiáMay(item.đơnGiáMay);
-                                setShipĐT_TP(item.vậnChuyểnĐT_TP || '');
-                                setShipTP_ĐT(item.vậnChuyểnTP_ĐT || '');
-                              }}
+                              onClick={() => handleQuickActionClick(item)}
                               className="flex items-center gap-1.5 py-1 px-2 bg-white dark:bg-slate-900 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20 border border-slate-200 dark:border-slate-850 hover:border-indigo-400 dark:hover:border-indigo-850 rounded-lg text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-450 transition cursor-pointer text-left shadow-2xs"
-                              title={`Click để tự động nhập Mẫu ${item.mẫu} với đơn giá ${item.đơnGiáMay.toLocaleString()} đ`}
+                              title={`Click để thêm nhanh Mẫu ${item.mẫu} với đơn giá ${item.đơnGiáMay.toLocaleString()} đ`}
                             >
                               <span className="font-semibold">{item.mẫu}</span>
                               <span className="text-slate-350 dark:text-slate-650">|</span>
@@ -1033,69 +1121,119 @@ export default function GoodsImportTab({
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div>
-                        <div className="flex justify-between items-center mb-1.5">
-                          <label className="block text-xs font-medium text-slate-450 dark:text-slate-400">Mẫu mã sản phẩm</label>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="VD: Đầm Hoa Vintage"
-                          value={mẫu}
-                          onChange={e => setMẫu(e.target.value)}
-                          className="w-full text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-sans shadow-2xs"
-                        />
-                      </div>
+                    {/* DYNAMIC MULTI-ROW ITEMS INPUT */}
+                    <div className="space-y-4">
+                      {goodsRows.map((row, idx) => {
+                        const isSingleRow = goodsRows.length === 1;
+                        const rowNum = idx + 1;
+                        const itemTotal = Number(row.sốLượng || 0) * Number(row.đơnGiáMay || 0);
 
-                      <div>
-                        <label className="block text-xs font-medium text-slate-455 dark:text-slate-400 mb-1.5">Số lượng may (chiếc)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          placeholder="VD: 500"
-                          value={sốLượng}
-                          onChange={e => setSốLượng(e.target.value === '' ? '' : Number(e.target.value))}
-                          className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
-                        />
-                      </div>
+                        return (
+                          <div 
+                            key={row.id} 
+                            className="bg-slate-50/50 dark:bg-slate-950/20 p-4 rounded-xl border border-slate-150 dark:border-slate-800/60 relative space-y-3 transition-all hover:shadow-xs"
+                          >
+                            <div className="flex justify-between items-center pb-1 border-b border-slate-100 dark:border-slate-800/40">
+                              <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-450 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                                <span className="w-4 h-4 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-[9px] font-extrabold">{rowNum}</span>
+                                Mặt Hàng #{rowNum}
+                              </span>
+                              {!isSingleRow && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeRow(row.id)}
+                                  className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 rounded-lg transition cursor-pointer hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
+                                  title="Xóa dòng hàng này"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
 
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">Đơn giá may (đ / chiếc)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          placeholder="VD: 15000"
-                          value={đơnGiáMay}
-                          onChange={e => setĐơnGiáMay(e.target.value === '' ? '' : Number(e.target.value))}
-                          className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
-                        />
-                      </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Mẫu mã sản phẩm</label>
+                                <input
+                                  type="text"
+                                  placeholder="VD: Đầm Hoa Vintage"
+                                  value={row.mẫu}
+                                  onChange={e => updateRowField(row.id, 'mẫu', e.target.value)}
+                                  className="w-full text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-sans shadow-2xs"
+                                />
+                              </div>
 
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 font-sans">ĐT ➔ TP Ship sản lượng (đ)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          placeholder="Vận chuyển lên TP (ĐT -> TP)"
-                          value={shipĐT_TP}
-                          onChange={e => setShipĐT_TP(e.target.value === '' ? '' : Number(e.target.value))}
-                          className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-2 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
-                        />
-                      </div>
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Số lượng may (chiếc)</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  placeholder="VD: 500"
+                                  value={row.sốLượng}
+                                  onChange={e => updateRowField(row.id, 'sốLượng', e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Đơn giá may (đ / chiếc)</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  placeholder="VD: 15000"
+                                  value={row.đơnGiáMay}
+                                  onChange={e => updateRowField(row.id, 'đơnGiáMay', e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">ĐT ➔ TP Ship sản lượng (đ)</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  placeholder="Vận chuyển lên TP (ĐT -> TP)"
+                                  value={row.shipĐT_TP}
+                                  onChange={e => updateRowField(row.id, 'shipĐT_TP', e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full text-xs bg-white dark:bg-black border border-slate-200 dark:border-slate-800 py-1.5 px-3 rounded-lg text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 font-mono"
+                                />
+                              </div>
+                            </div>
+
+                            {itemTotal > 0 && (
+                              <div className="flex justify-end items-center text-[11px] font-medium text-slate-400 dark:text-slate-500 font-sans gap-1 pt-1">
+                                <span>Thành tiền dòng này: </span>
+                                <span className="font-mono font-bold text-slate-600 dark:text-slate-350 bg-slate-200/50 dark:bg-slate-800/80 px-2 py-0.5 rounded">
+                                  {itemTotal.toLocaleString()} đ
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
+                    {/* ADD NEW ROW BUTTON - DASHED STYLING */}
+                    <button
+                      type="button"
+                      onClick={addEmptyRow}
+                      className="w-full py-3.5 text-center border-2 border-dashed border-indigo-200 hover:border-indigo-500 dark:border-indigo-950 dark:hover:border-indigo-800 rounded-xl text-xs font-black text-indigo-650 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 transition duration-200 cursor-pointer flex items-center justify-center gap-2 group/btn"
+                    >
+                      <Plus className="w-4 h-4 stroke-[3.5] text-indigo-500 group-hover/btn:scale-110 transition-transform" />
+                      <span>THÊM HÀNG MẪU MÃ, SỐ LƯỢNG, ĐƠN GIÁ MỚI</span>
+                    </button>
+
                     {/* Real-time calculated subtotal badge for faster verification */}
-                    {Number(sốLượng) > 0 && Number(đơnGiáMay) > 0 && (
+                    {calculatedGrandTotal > 0 && (
                       <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 animate-fadeIn">
                         <div className="flex items-center gap-2">
                           <span className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-600 dark:text-emerald-400 shrink-0">💵</span>
                           <div>
-                            <p className="text-[10px] uppercase font-black text-slate-400 dark:text-slate-500">Thành tiền hàng tự động tính</p>
-                            <p className="text-[11px] text-slate-600 dark:text-slate-350 font-medium">Hệ thống nhân nhẩm: {Number(sốLượng).toLocaleString()} chiếc × {Number(đơnGiáMay).toLocaleString()} đ/chiếc</p>
+                            <p className="text-[10px] uppercase font-black text-slate-400 dark:text-slate-500">Tổng cộng tạm tính</p>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-350 font-medium">Hệ thống tổng hợp: {totalQtyFilled.toLocaleString()} chiếc trong {goodsRows.length} dòng hàng</p>
                           </div>
                         </div>
                         <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/15 whitespace-nowrap self-start sm:self-center">
-                          {(Number(sốLượng) * Number(đơnGiáMay)).toLocaleString()} đ
+                          {calculatedGrandTotal.toLocaleString()} đ
                         </span>
                       </div>
                     )}

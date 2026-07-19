@@ -159,6 +159,9 @@ export interface RealtimeSyncProps {
   userProfiles: any[];
   setUserProfiles: React.Dispatch<React.SetStateAction<any[]>>;
 
+  hourlyAttendance: any[];
+  setHourlyAttendance: React.Dispatch<React.SetStateAction<any[]>>;
+
   settings: any;
   setSettings: React.Dispatch<React.SetStateAction<any>>;
 
@@ -188,6 +191,7 @@ export function useRealtimeSync({
   materialLogs, setMaterialLogs,
   tasks, setTasks,
   userProfiles, setUserProfiles,
+  hourlyAttendance, setHourlyAttendance,
   settings, setSettings,
   isAuthenticated,
   userEmail,
@@ -217,7 +221,8 @@ export function useRealtimeSync({
     materialReimports: materialReimports,
     materialLogs: materialLogs,
     tasks: tasks,
-    userProfiles: userProfiles
+    userProfiles: userProfiles,
+    hourlyAttendance: hourlyAttendance
   };
 
   // Track listeners initialization state to prevent auto-pushing local data before initial cloud load
@@ -261,7 +266,8 @@ export function useRealtimeSync({
       { key: 'materialReimports', colName: COLLECTION_MAP.materialReimports, setter: setMaterialReimports },
       { key: 'materialLogs', colName: COLLECTION_MAP.materialLogs, setter: setMaterialLogs },
       { key: 'tasks', colName: COLLECTION_MAP.tasks, setter: setTasks },
-      { key: 'userProfiles', colName: COLLECTION_MAP.userProfiles, setter: setUserProfiles }
+      { key: 'userProfiles', colName: COLLECTION_MAP.userProfiles, setter: setUserProfiles },
+      { key: 'hourlyAttendance', colName: COLLECTION_MAP.hourlyAttendance, setter: setHourlyAttendance }
     ];
 
     // Setup listener for each collection
@@ -537,6 +543,7 @@ export function useRealtimeSync({
   useEffect(() => { syncLocalToCloud('materialLogs', COLLECTION_MAP.materialLogs, materialLogs); }, [materialLogs]);
   useEffect(() => { syncLocalToCloud('tasks', COLLECTION_MAP.tasks, tasks); }, [tasks]);
   useEffect(() => { syncLocalToCloud('userProfiles', COLLECTION_MAP.userProfiles, userProfiles); }, [userProfiles]);
+  useEffect(() => { syncLocalToCloud('hourlyAttendance', COLLECTION_MAP.hourlyAttendance, hourlyAttendance); }, [hourlyAttendance]);
 
   // Sync settings when they update locally (excluding echoes)
   useEffect(() => {
