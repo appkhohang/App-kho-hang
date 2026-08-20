@@ -25,6 +25,17 @@ export interface TpDtShippingItem {
   createdAt: number;
 }
 
+export interface SettlementCycle {
+  id: string;
+  name: string;
+  cutoffTimestamp: number;
+  settledDate: string;
+  totalGoodsAmount: number;
+  totalNetShip: number;
+  totalLaborPaid: number;
+  note?: string;
+}
+
 export interface LaborPayment {
   id: string;
   weekKey: string; // Attribute to which week

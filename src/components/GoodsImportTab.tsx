@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Table, Trash2, Edit2, Check, X, FileSpreadsheet, Settings, Sun, Moon, Database, BarChart3, HelpCircle, Download, Upload, AlertCircle, ShoppingBag, Sparkles, Truck, Wallet, Filter, SlidersHorizontal, Camera, ChevronRight, Info, Calendar, CheckSquare, TrendingUp, History } from 'lucide-react';
-import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem } from '../types';
+import { ImportItem, LaborPayment, AppSettings, TpDtShippingItem, SettlementCycle } from '../types';
 import { getCurrentDateStr, getVietnameseWeekKey, formatVietnameseDate, getVietnameseMonthKey } from '../utils/dateUtils';
 import { exportDatabasePackage } from '../utils/storage';
 import { useAndroidBack } from '../hooks/useAndroidBack';
@@ -250,6 +250,153 @@ export default function GoodsImportTab({
   const [showShipCostBreakdown, setShowShipCostBreakdown] = useState(false);
   const [showRemainingBalanceBreakdown, setShowRemainingBalanceBreakdown] = useState(false);
 
+  // Settlement cycle state for tracking paid batches vs new import statistics
+  const [settlementCycles, setSettlementCycles] = useState<SettlementCycle[]>(() => {
+    try {
+      const saved = localStorage.getItem('xuongan_settlement_cycles');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('xuongan_settlement_cycles', JSON.stringify(settlementCycles));
+    } catch (e) {
+      console.error("Failed to save settlement cycles", e);
+    }
+  }, [settlementCycles]);
+
+  const [selectedCycleId, setSelectedCycleId] = useState<string>('active');
+
+  // Calculate cutoff timestamp of last settled cycle
+  const lastCutoffTimestamp = useMemo(() => {
+    if (settlementCycles.length === 0) return 0;
+    return Math.max(...settlementCycles.map(c => c.cutoffTimestamp || 0));
+  }, [settlementCycles]);
+
+  // Helper to determine timestamp
+  const getItemTime = (i: { createdAt?: number; ngày?: string; date?: string }) => {
+    if (i.createdAt && i.createdAt > 0) return i.createdAt;
+    const dateStr = i.ngày || i.date;
+    if (dateStr) {
+      const parsed = new Date(dateStr).getTime();
+      if (!isNaN(parsed)) return parsed;
+    }
+    return 0;
+  };
+
+  // Scope items, shippings, and labor payments according to selectedCycleId
+  const cycleItems = useMemo(() => {
+    if (selectedCycleId === 'all') {
+      return sortedItems;
+    }
+    if (selectedCycleId === 'active') {
+      return sortedItems.filter(item => getItemTime(item) > lastCutoffTimestamp);
+    }
+    const sortedCycles = [...settlementCycles].sort((a, b) => a.cutoffTimestamp - b.cutoffTimestamp);
+    const cycleIdx = sortedCycles.findIndex(c => c.id === selectedCycleId);
+    if (cycleIdx === -1) return sortedItems;
+
+    const startCutoff = cycleIdx > 0 ? sortedCycles[cycleIdx - 1].cutoffTimestamp : 0;
+    const endCutoff = sortedCycles[cycleIdx].cutoffTimestamp;
+
+    return sortedItems.filter(item => {
+      const t = getItemTime(item);
+      return t > startCutoff && t <= endCutoff;
+    });
+  }, [sortedItems, selectedCycleId, lastCutoffTimestamp, settlementCycles]);
+
+  const cycleShippings = useMemo(() => {
+    if (selectedCycleId === 'all') {
+      return tpDtShippings;
+    }
+    if (selectedCycleId === 'active') {
+      return tpDtShippings.filter(ship => getItemTime(ship) > lastCutoffTimestamp);
+    }
+    const sortedCycles = [...settlementCycles].sort((a, b) => a.cutoffTimestamp - b.cutoffTimestamp);
+    const cycleIdx = sortedCycles.findIndex(c => c.id === selectedCycleId);
+    if (cycleIdx === -1) return tpDtShippings;
+
+    const startCutoff = cycleIdx > 0 ? sortedCycles[cycleIdx - 1].cutoffTimestamp : 0;
+    const endCutoff = sortedCycles[cycleIdx].cutoffTimestamp;
+
+    return tpDtShippings.filter(ship => {
+      const t = getItemTime(ship);
+      return t > startCutoff && t <= endCutoff;
+    });
+  }, [tpDtShippings, selectedCycleId, lastCutoffTimestamp, settlementCycles]);
+
+  const cycleLaborPayments = useMemo(() => {
+    if (selectedCycleId === 'all') {
+      return laborPayments;
+    }
+    if (selectedCycleId === 'active') {
+      return laborPayments.filter(p => getItemTime(p) > lastCutoffTimestamp);
+    }
+    const sortedCycles = [...settlementCycles].sort((a, b) => a.cutoffTimestamp - b.cutoffTimestamp);
+    const cycleIdx = sortedCycles.findIndex(c => c.id === selectedCycleId);
+    if (cycleIdx === -1) return laborPayments;
+
+    const startCutoff = cycleIdx > 0 ? sortedCycles[cycleIdx - 1].cutoffTimestamp : 0;
+    const endCutoff = sortedCycles[cycleIdx].cutoffTimestamp;
+
+    return laborPayments.filter(p => {
+      const t = getItemTime(p);
+      return t > startCutoff && t <= endCutoff;
+    });
+  }, [laborPayments, selectedCycleId, lastCutoffTimestamp, settlementCycles]);
+
+  // Handle settling current active cycle
+  const handleSettleCurrentCycle = (customNote?: string) => {
+    if (isViewer) {
+      alert("⚠️ Bạn đang đăng nhập với vai trò CHỈ XEM, không có quyền chốt đợt!");
+      return;
+    }
+
+    const activeItems = sortedItems.filter(i => getItemTime(i) > lastCutoffTimestamp);
+    const activeShippings = tpDtShippings.filter(s => getItemTime(s) > lastCutoffTimestamp);
+    const activePayments = laborPayments.filter(p => getItemTime(p) > lastCutoffTimestamp);
+
+    if (activeItems.length === 0 && activeShippings.length === 0 && activePayments.length === 0) {
+      alert("⚠️ Đợt hiện tại chưa có dữ liệu nhập kho mới để chốt!");
+      return;
+    }
+
+    const now = Date.now();
+    const cycleNum = settlementCycles.length + 1;
+    const cycleName = `Đợt #${cycleNum} - Chốt ngày ${formatVietnameseDate(getCurrentDateStr())}`;
+
+    const goodsAmt = activeItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+    const dtTp = activeItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+    const legacyTpDt = activeItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
+    const separateTpDt = activeShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+    const netShip = (legacyTpDt + separateTpDt) - dtTp;
+    const totalPaid = activePayments.reduce((acc, p) => acc + p.amount, 0);
+
+    const newCycle: SettlementCycle = {
+      id: `cycle-${now}`,
+      name: cycleName,
+      cutoffTimestamp: now,
+      settledDate: getCurrentDateStr(),
+      totalGoodsAmount: goodsAmt,
+      totalNetShip: netShip,
+      totalLaborPaid: totalPaid,
+      note: customNote || "Đã chốt và đánh dấu hoàn tất thanh toán"
+    };
+
+    setSettlementCycles(prev => [...prev, newCycle]);
+    setSelectedCycleId('active');
+  };
+
+  const handleDeleteSettlementCycle = (cycleId: string) => {
+    if (confirm("Bạn có chắc chắn muốn xóa/hủy chốt đợt này không? Dữ liệu của đợt này sẽ được gộp trở lại danh sách hiện tại.")) {
+      setSettlementCycles(prev => prev.filter(c => c.id !== cycleId));
+      setSelectedCycleId('active');
+    }
+  };
+
   // Selected week filter ('all' or a specific weekKey string) - Controlled with fallback
   const [localWeekFilter, setLocalWeekFilter] = useState<string>('all');
   const selectedWeekFilter = externalWeekFilter !== undefined ? externalWeekFilter : localWeekFilter;
@@ -267,7 +414,7 @@ export default function GoodsImportTab({
   // Get unique years that have import items
   const yearsWithData = useMemo(() => {
     const yearsSet = new Set<string>();
-    items.forEach(item => {
+    cycleItems.forEach(item => {
       if (item && item.ngày) {
         const parts = item.ngày.split('-');
         if (parts[0]) {
@@ -275,8 +422,11 @@ export default function GoodsImportTab({
         }
       }
     });
+    if (yearsSet.size === 0) {
+      yearsSet.add(new Date().getFullYear().toString());
+    }
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
-  }, [items]);
+  }, [cycleItems]);
 
   // Set selectedYear default to the latest year
   useEffect(() => {
@@ -398,14 +548,28 @@ export default function GoodsImportTab({
       const kItems = groupData[k] || [];
       const kAmt = kItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
       
+      const kShippings = isWeekMode
+        ? (shippingsByWeek[k] || [])
+        : (shippingsByMonth[k] || []);
+      
+      // ship ĐT ➔ TP
+      const dtTp = kItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+      
+      // ship TP ➔ ĐT (bao gồm TP_ĐT trên dòng & ngoài)
+      const legacyTpDt = kItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
+      const separateTpDt = kShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+      const netShip = (legacyTpDt + separateTpDt) - dtTp;
+
+      const totalPeriodCost = kAmt + netShip;
+      
       const kPayments = isWeekMode
-        ? laborPayments.filter(p => p.weekKey === k)
-        : laborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
+        ? cycleLaborPayments.filter(p => p.weekKey === k)
+        : cycleLaborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
       const kPaid = kPayments.reduce((acc, p) => acc + p.amount, 0);
       
       return {
         key: k,
-        debt: kAmt - kPaid
+        debt: totalPeriodCost - kPaid
       };
     });
 
@@ -740,7 +904,7 @@ export default function GoodsImportTab({
 
   // Group items by Week for table processing
   const itemsByWeek: { [weekLabel: string]: ImportItem[] } = {};
-  sortedItems.forEach(item => {
+  cycleItems.forEach(item => {
     if (!item) return;
     const week = item.weekKey || "Tuần Không Xác Định";
     if (!itemsByWeek[week]) {
@@ -751,7 +915,7 @@ export default function GoodsImportTab({
 
   // Group items by Month for table processing
   const itemsByMonth: { [monthLabel: string]: ImportItem[] } = {};
-  sortedItems.forEach(item => {
+  cycleItems.forEach(item => {
     if (!item) return;
     const month = getVietnameseMonthKey(item.ngày);
     if (!itemsByMonth[month]) {
@@ -762,7 +926,7 @@ export default function GoodsImportTab({
 
   // Group independent shippings by Week
   const shippingsByWeek: { [weekLabel: string]: TpDtShippingItem[] } = {};
-  tpDtShippings.forEach(ship => {
+  cycleShippings.forEach(ship => {
     if (!ship) return;
     const week = ship.weekKey || "Tuần Không Xác Định";
     if (!shippingsByWeek[week]) {
@@ -773,7 +937,7 @@ export default function GoodsImportTab({
 
   // Group independent shippings by Month
   const shippingsByMonth: { [monthLabel: string]: TpDtShippingItem[] } = {};
-  tpDtShippings.forEach(ship => {
+  cycleShippings.forEach(ship => {
     if (!ship) return;
     const month = getVietnameseMonthKey(ship.ngày);
     if (!shippingsByMonth[month]) {
@@ -796,11 +960,11 @@ export default function GoodsImportTab({
     const totalShipTP_ĐT = legacyShipTP_ĐT + separateShipTP_ĐT;
     const netBackShipValue = totalShipTP_ĐT - totalShipĐT_TP;
 
-    const monthLaborPayments = laborPayments.filter(
+    const monthLaborPayments = cycleLaborPayments.filter(
       p => getVietnameseMonthKey(p.date) === monthKey || p.weekKey === monthKey
     );
     const totalLaborPaid = monthLaborPayments.reduce((acc, p) => acc + p.amount, 0);
-    const remainingLaborDebt = totalAmount - totalLaborPaid;
+    const remainingLaborDebt = totalAmount + netBackShipValue - totalLaborPaid;
     const totalMonthAmount = totalAmount + netBackShipValue;
 
     return {
@@ -865,8 +1029,8 @@ export default function GoodsImportTab({
 
       // Total Labor Paid
       const weekLaborPayments = isWeekMode 
-        ? laborPayments.filter(p => p.weekKey === label)
-        : laborPayments.filter(p => getVietnameseMonthKey(p.date) === label || p.weekKey === label);
+        ? cycleLaborPayments.filter(p => p.weekKey === label)
+        : cycleLaborPayments.filter(p => getVietnameseMonthKey(p.date) === label || p.weekKey === label);
 
       const groupLaborPaid = weekLaborPayments.reduce((acc, p) => acc + p.amount, 0);
       totalLaborPaid += groupLaborPaid;
@@ -885,7 +1049,7 @@ export default function GoodsImportTab({
       totalLaborPaid,
       totalCost: totalBaseGoodsAmount
     };
-  }, [items, tpDtShippings, laborPayments, filterMode, selectedWeekFilter, selectedMonthFilter, selectedYear, itemsByWeek, itemsByMonth, shippingsByWeek, shippingsByMonth]);
+  }, [cycleItems, cycleShippings, cycleLaborPayments, filterMode, selectedWeekFilter, selectedMonthFilter, selectedYear, itemsByWeek, itemsByMonth, shippingsByWeek, shippingsByMonth]);
 
   // Reusable helper to open labor payment window for the current filtered time period
   const handleOpenLaborPay = () => {
@@ -905,11 +1069,26 @@ export default function GoodsImportTab({
     sortedKeys.forEach(k => {
       const kItems = groupData[k] || [];
       const kAmt = kItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
+      
+      const kShippings = isWeekMode
+        ? (shippingsByWeek[k] || [])
+        : (shippingsByMonth[k] || []);
+      
+      // ship ĐT ➔ TP
+      const dtTp = kItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+      
+      // ship TP ➔ ĐT (bao gồm TP_ĐT trên dòng & ngoài)
+      const legacyTpDt = kItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
+      const separateTpDt = kShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+      const netShip = (legacyTpDt + separateTpDt) - dtTp;
+
+      const totalPeriodCost = kAmt + netShip;
+
       const kPayments = isWeekMode
-        ? laborPayments.filter(p => p.weekKey === k)
-        : laborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
+        ? cycleLaborPayments.filter(p => p.weekKey === k)
+        : cycleLaborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
       const kPaid = kPayments.reduce((acc, p) => acc + p.amount, 0);
-      const kDebt = kAmt - kPaid;
+      const kDebt = totalPeriodCost - kPaid;
       if (kDebt > 0) {
         totalRemainingDebtAllPeriods += kDebt;
       }
@@ -1343,6 +1522,105 @@ export default function GoodsImportTab({
           </div>
         )}
       </AnimatePresence>
+
+      {/* KHU VỰC QUẢN LÝ ĐỢT THANH TOÁN VÀ LỊCH SỬ THỐNG KÊ (SEPARATE SETTLEMENT CYCLES) */}
+      {(items.length > 0 || settlementCycles.length > 0) && (
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 p-4 rounded-2xl shadow-lg text-white space-y-3 font-sans">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 shrink-0">
+                <History className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-indigo-200">
+                    KỲ / ĐỢT THỐNG KÊ CÔNG NỢ THỢ
+                  </span>
+                  {settlementCycles.length > 0 && (
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-extrabold px-2 py-0.5 rounded-full">
+                      {settlementCycles.length} đợt đã chốt
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-300 font-medium mt-0.5">
+                  {selectedCycleId === 'active' 
+                    ? "Đang hiển thị đợt mới hiện tại (tự động tách riêng khi có đơn hàng mới sau chốt)."
+                    : selectedCycleId === 'all'
+                    ? "Đang hiển thị toàn bộ lịch sử gộp tất cả các đợt."
+                    : `Đang xem lịch sử đợt đã chốt: ${settlementCycles.find(c => c.id === selectedCycleId)?.name}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              <select
+                value={selectedCycleId}
+                onChange={(e) => setSelectedCycleId(e.target.value)}
+                className="bg-slate-950 border border-indigo-400/40 text-indigo-100 text-xs font-black py-2 px-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner cursor-pointer"
+              >
+                <option value="active">🟢 Đợt mới hiện tại (Sau chốt)</option>
+                {settlementCycles.map((c, idx) => (
+                  <option key={c.id} value={c.id}>
+                    📁 Đợt #{idx + 1} ({formatVietnameseDate(c.settledDate)}) - {c.totalGoodsAmount.toLocaleString()}đ
+                  </option>
+                ))}
+                <option value="all">🌐 Tất cả các đợt (Toàn bộ)</option>
+              </select>
+
+              {selectedCycleId === 'active' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("📌 Bạn có chắc chắn muốn CHỐT & ĐÁNH DẤU ĐÃ THANH TOÁN đợt hiện tại không?\n\nSau khi chốt, các đơn nhập hàng mới phát sinh tiếp theo sẽ được tự động hiển thị ở trang thống kê đợt mới tách biệt hoàn toàn với đợt cũ.")) {
+                      handleSettleCurrentCycle();
+                    }
+                  }}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black py-2 px-3.5 rounded-xl shadow-md transition cursor-pointer active:scale-95"
+                  title="Chốt đợt thanh toán hiện tại để chuẩn bị trang thống kê riêng cho các đơn hàng mới tiếp theo"
+                >
+                  <CheckSquare className="w-4 h-4 text-white" />
+                  <span>Chốt đợt & Đánh dấu đã trả</span>
+                </button>
+              )}
+
+              {selectedCycleId !== 'active' && selectedCycleId !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSettlementCycle(selectedCycleId)}
+                  className="flex items-center gap-1 bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-extrabold py-2 px-3 rounded-xl shadow-xs transition cursor-pointer"
+                  title="Xóa đợt chốt này để gộp lại dữ liệu vào danh sách chung"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Hủy chốt đợt này</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* THÔNG BÁO KHI ĐỢT MỚI HIỆN TẠI ĐÃ CHỐT XONG VÀ CHỜ ĐƠN NHẬP MỚI */}
+      {selectedCycleId === 'active' && cycleItems.length === 0 && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 p-5 rounded-2xl text-center space-y-2.5 my-2 font-sans shadow-sm">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 shadow-inner">
+            <CheckSquare className="w-6 h-6" />
+          </div>
+          <h4 className="font-black text-emerald-800 dark:text-emerald-300 text-sm uppercase tracking-wide">
+            ĐÃ CHỐT & THANH TOÁN XONG ĐỢT CÔNG NỢ HIỆN TẠI
+          </h4>
+          <p className="text-xs text-slate-600 dark:text-slate-300 max-w-lg mx-auto leading-relaxed font-medium">
+            Tất cả chi phí thợ đợt vừa rồi đã được đánh dấu thanh toán hoàn tất. 
+            Khi bạn nhập <strong className="text-indigo-600 dark:text-indigo-400">đơn nhập hàng mới</strong> ở biểu mẫu phía trên, hệ thống sẽ hiển thị <strong>trang thống kê đợt mới</strong> hoàn toàn không đụng đến lịch sử cũ.
+          </p>
+          {settlementCycles.length > 0 && (
+            <div className="pt-2">
+              <span className="inline-block text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                💡 Sử dụng ô chọn "Kỳ / Đợt thống kê" ở trên để xem lại lịch sử các đợt đã chốt trước đây.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {items.length > 0 && (
         <div className="space-y-4">
@@ -1822,7 +2100,7 @@ export default function GoodsImportTab({
                 <YearGroupedMonthHistory
                   itemsByMonth={itemsByMonth}
                   shippingsByMonth={shippingsByMonth}
-                  laborPayments={laborPayments}
+                  laborPayments={cycleLaborPayments}
                   yearsWithData={yearsWithData}
                   selectedYear={selectedYear}
                   setSelectedYear={setSelectedYear}
@@ -1875,11 +2153,11 @@ export default function GoodsImportTab({
 
               // Labor computations
               const weekLaborPayments = isWeekMode 
-                ? laborPayments.filter(p => p.weekKey === weekLabel)
-                : laborPayments.filter(p => getVietnameseMonthKey(p.date) === weekLabel || p.weekKey === weekLabel);
+                ? cycleLaborPayments.filter(p => p.weekKey === weekLabel)
+                : cycleLaborPayments.filter(p => getVietnameseMonthKey(p.date) === weekLabel || p.weekKey === weekLabel);
 
               const totalLaborPaid = weekLaborPayments.reduce((acc, p) => acc + p.amount, 0);
-              const remainingLaborDebt = cleanTotalAmount - totalLaborPaid;
+              const remainingLaborDebt = cleanTotalAmount + netBackShipValue - totalLaborPaid;
               const totalWeekAmount = totalAmount + netBackShipValue;
 
               return (
@@ -2213,23 +2491,43 @@ export default function GoodsImportTab({
             const kItems = groupData[k] || [];
             const kAmt = kItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
             
+            const kShippings = isWeekMode
+              ? (shippingsByWeek[k] || [])
+              : (shippingsByMonth[k] || []);
+            
+            // ship ĐT ➔ TP
+            const dtTp = kItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+            
+            // ship TP ➔ ĐT (bao gồm TP_ĐT trên dòng & ngoài)
+            const legacyTpDt = kItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
+            const separateTpDt = kShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+            const netShip = (legacyTpDt + separateTpDt) - dtTp;
+
+            const totalPeriodCost = kAmt + netShip;
+
             const kPayments = isWeekMode
-              ? laborPayments.filter(p => p.weekKey === k)
-              : laborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
+              ? cycleLaborPayments.filter(p => p.weekKey === k)
+              : cycleLaborPayments.filter(p => getVietnameseMonthKey(p.date) === k || p.weekKey === k);
             const kPaid = kPayments.reduce((acc, p) => acc + p.amount, 0);
             
             return {
               key: k,
-              debt: kAmt - kPaid
+              debt: totalPeriodCost - kPaid
             };
           });
 
-          const totalAmountAll = items.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0);
-          const totalLaborPaidAll = laborPayments.reduce((acc, p) => acc + p.amount, 0);
+          // Total shipping of all items in active cycle
+          const totalShipDtTpAll = cycleItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnĐT_TP || 0), 0);
+          const legacyShipTpDtAll = cycleItems.reduce((acc, curr) => acc + (curr?.vậnChuyểnTP_ĐT || 0), 0);
+          const separateShipTpDtAll = cycleShippings.reduce((acc, curr) => acc + curr.sốTiền, 0);
+          const totalShipAll = (legacyShipTpDtAll + separateShipTpDtAll) - totalShipDtTpAll;
+
+          const totalAmountAll = cycleItems.reduce((acc, curr) => acc + ((curr?.sốLượng || 0) * (curr?.đơnGiáMay || 0)), 0) + totalShipAll;
+          const totalLaborPaidAll = cycleLaborPayments.reduce((acc, p) => acc + p.amount, 0);
           const totalRemainingDebtAllPeriods = Math.max(0, totalAmountAll - totalLaborPaidAll);
 
           const typedAmount = Number(laborPayAmount) || 0;
-          const recentLaborPayments = laborPayments.slice(0, 10);
+          const recentLaborPayments = cycleLaborPayments.slice(0, 10);
 
           return (
             <div className="fixed inset-0 z-55 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
@@ -2398,7 +2696,7 @@ export default function GoodsImportTab({
                       )}
                     </div>
 
-                    <div className="pt-1.5">
+                    <div className="pt-1.5 space-y-2">
                       <button
                         type="submit"
                         className="w-full bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 rounded-xl shadow-md cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-1.5"
@@ -2406,13 +2704,29 @@ export default function GoodsImportTab({
                         <Check className="w-4 h-4" />
                         <span>Xác nhận thanh toán & Tự động trừ nợ</span>
                       </button>
+
+                      {selectedCycleId === 'active' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm("📌 Bạn có chắc chắn muốn CHỐT & ĐÁNH DẤU ĐÃ THANH TOÁN đợt hiện tại không?\n\nKhi chốt, đợt hiện tại sẽ được đánh dấu hoàn tất. Khi có đơn nhập hàng mới tiếp theo, hệ thống sẽ tự động tạo trang thống kê đợt mới tách biệt hoàn toàn.")) {
+                              handleSettleCurrentCycle("Đã chốt từ cửa sổ thanh toán thợ");
+                              setActiveWeekForLaborPay(null);
+                            }
+                          }}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2 rounded-xl shadow-sm cursor-pointer transition flex items-center justify-center gap-1.5"
+                        >
+                          <CheckSquare className="w-4 h-4 text-white" />
+                          <span>Chốt đợt & Ngưng thống kê đợt này (Chuẩn bị đợt mới)</span>
+                        </button>
+                      )}
                     </div>
                   </form>
 
                   {/* Payment history list inside modal */}
                   <div className="space-y-3 pt-1">
                     <span className="text-[10px] font-black tracking-wider text-emerald-600 dark:text-emerald-450 uppercase font-mono block">
-                      📅 Lịch sử 10 phiếu chi thợ gần nhất ({laborPayments.length})
+                      📅 Lịch sử 10 phiếu chi thợ gần nhất ({cycleLaborPayments.length})
                     </span>
 
                     {recentLaborPayments.length === 0 ? (
@@ -3083,8 +3397,8 @@ export default function GoodsImportTab({
 
           // Gather active labor payments
           const activeLaborPayments = isWeekMode 
-            ? laborPayments.filter(p => p.weekKey === currentFilterValue || currentFilterValue === 'all')
-            : laborPayments.filter(p => getVietnameseMonthKey(p.date) === currentFilterValue || p.weekKey === currentFilterValue || currentFilterValue === 'all');
+            ? cycleLaborPayments.filter(p => p.weekKey === currentFilterValue || currentFilterValue === 'all')
+            : cycleLaborPayments.filter(p => getVietnameseMonthKey(p.date) === currentFilterValue || p.weekKey === currentFilterValue || currentFilterValue === 'all');
 
           const sortedLaborPayments = activeLaborPayments.sort((a, b) => b.createdAt - a.createdAt);
 
@@ -3191,7 +3505,7 @@ export default function GoodsImportTab({
             item.mẫu.toLowerCase().includes(monthStatsSearchQuery.toLowerCase())
           );
 
-          const monthLaborPayments = laborPayments.filter(
+          const monthLaborPayments = cycleLaborPayments.filter(
             p => getVietnameseMonthKey(p.date) === selectedMonthForStats || p.weekKey === selectedMonthForStats
           );
 
